@@ -95,3 +95,15 @@ def test_db_id_differs_for_different_targets():
     a = db_id_for("postgresql://user:secret@host/db")
     b = db_id_for("postgresql://user:secret@otherhost/db")
     assert a != b
+
+
+def test_identifier_escaping():
+    db_mgr_mysql = DatabaseManager()
+    db_mgr_mysql.dialect = "mysql"
+    assert db_mgr_mysql._q("normal") == "`normal`"
+    assert db_mgr_mysql._q("table`name") == "`table``name`"
+
+    db_mgr_other = DatabaseManager()
+    db_mgr_other.dialect = "postgresql"
+    assert db_mgr_other._q("normal") == '"normal"'
+    assert db_mgr_other._q('table"name') == '"table""name"'
