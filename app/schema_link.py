@@ -18,11 +18,12 @@ def link_relevant_tables(question, schema, glossary, retrieved, max_tables):
     q_tokens = _tokens(question)
     for g in glossary:
         q_tokens |= _tokens(g.get("term","")) | _tokens(g.get("maps_to",""))
+    table_patterns = {t: re.compile(r"\b"+re.escape(t.lower())+r"\b") for t in all_tables}
     verified_tables = set()
     for ex in retrieved:
         sql_low = (ex.get("sql","") or "").lower()
         for t in all_tables:
-            if re.search(r"\b"+re.escape(t.lower())+r"\b", sql_low):
+            if table_patterns[t].search(sql_low):
                 verified_tables.add(t)
     scores = {}
     for t, info in schema.items():
