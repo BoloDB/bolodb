@@ -39,10 +39,15 @@ class OllamaProvider(LLMProvider):
         r = await self.health_check()
         return r.get("models",[])
 
-class ClaudeProvider(LLMProvider):
-    name = "claude"; DEFAULT = "claude-haiku-4-5-20251001"
+class APIKeyProvider(LLMProvider):
+    DEFAULT = ""
     def __init__(self, api_key, model=""):
         self.api_key = api_key; self.model = model or self.DEFAULT
+    async def health_check(self):
+        return {"ok":bool(self.api_key),"models":[self.model] if self.api_key else []}
+
+class ClaudeProvider(APIKeyProvider):
+    name = "claude"; DEFAULT = "claude-haiku-4-5-20251001"
     async def complete(self, system, user, json_mode=False):
         if json_mode: system += "\n\nRespond with ONLY a valid JSON object, no other text."
         async with httpx.AsyncClient(timeout=60) as c:
@@ -51,13 +56,9 @@ class ClaudeProvider(LLMProvider):
                 json={"model":self.model,"max_tokens":1500,"system":system,"messages":[{"role":"user","content":user}]})
             r.raise_for_status()
             return r.json()["content"][0]["text"]
-    async def health_check(self):
-        return {"ok":bool(self.api_key),"models":[self.model] if self.api_key else []}
 
-class OpenAIProvider(LLMProvider):
+class OpenAIProvider(APIKeyProvider):
     name = "openai"; DEFAULT = "gpt-4o-mini"
-    def __init__(self, api_key, model=""):
-        self.api_key = api_key; self.model = model or self.DEFAULT
     async def complete(self, system, user, json_mode=False):
         body = {"model":self.model,"temperature":0.05,"max_tokens":1500,
                 "messages":[{"role":"system","content":system},{"role":"user","content":user}]}
@@ -67,13 +68,9 @@ class OpenAIProvider(LLMProvider):
                 headers={"Authorization":f"Bearer {self.api_key}"}, json=body)
             r.raise_for_status()
             return r.json()["choices"][0]["message"]["content"]
-    async def health_check(self):
-        return {"ok":bool(self.api_key),"models":[self.model] if self.api_key else []}
 
-class GroqProvider(LLMProvider):
+class GroqProvider(APIKeyProvider):
     name = "groq"; DEFAULT = "llama-3.3-70b-versatile"
-    def __init__(self, api_key, model=""):
-        self.api_key = api_key; self.model = model or self.DEFAULT
     async def complete(self, system, user, json_mode=False):
         body = {"model":self.model,"temperature":0.05,"max_tokens":1500,
                 "messages":[{"role":"system","content":system},{"role":"user","content":user}]}
@@ -83,8 +80,6 @@ class GroqProvider(LLMProvider):
                 headers={"Authorization":f"Bearer {self.api_key}"}, json=body)
             r.raise_for_status()
             return r.json()["choices"][0]["message"]["content"]
-    async def health_check(self):
-        return {"ok":bool(self.api_key),"models":[self.model] if self.api_key else []}
 
 def create_provider(cfg):
     p = cfg.get("provider","ollama"); model = cfg.get("model",""); keys = cfg.get("api_keys",{})
