@@ -9,14 +9,12 @@ def parse_json(text):
     return json.loads(s)
 
 class LLMProvider(ABC):
-    name = "base"
     @abstractmethod
     async def complete(self, system, user, json_mode=False): ...
     @abstractmethod
     async def health_check(self): ...
 
 class OllamaProvider(LLMProvider):
-    name = "ollama"
     def __init__(self, model="bolodb-sql", base_url="http://localhost:11434"):
         self.model = model or "bolodb-sql"; self.base_url = base_url.rstrip("/")
     async def complete(self, system, user, json_mode=False):
@@ -40,7 +38,7 @@ class OllamaProvider(LLMProvider):
         return r.get("models",[])
 
 class ClaudeProvider(LLMProvider):
-    name = "claude"; DEFAULT = "claude-haiku-4-5-20251001"
+    DEFAULT = "claude-haiku-4-5-20251001"
     def __init__(self, api_key, model=""):
         self.api_key = api_key; self.model = model or self.DEFAULT
     async def complete(self, system, user, json_mode=False):
@@ -55,7 +53,7 @@ class ClaudeProvider(LLMProvider):
         return {"ok":bool(self.api_key),"models":[self.model] if self.api_key else []}
 
 class OpenAIProvider(LLMProvider):
-    name = "openai"; DEFAULT = "gpt-4o-mini"
+    DEFAULT = "gpt-4o-mini"
     def __init__(self, api_key, model=""):
         self.api_key = api_key; self.model = model or self.DEFAULT
     async def complete(self, system, user, json_mode=False):
@@ -71,7 +69,7 @@ class OpenAIProvider(LLMProvider):
         return {"ok":bool(self.api_key),"models":[self.model] if self.api_key else []}
 
 class GroqProvider(LLMProvider):
-    name = "groq"; DEFAULT = "llama-3.3-70b-versatile"
+    DEFAULT = "llama-3.3-70b-versatile"
     def __init__(self, api_key, model=""):
         self.api_key = api_key; self.model = model or self.DEFAULT
     async def complete(self, system, user, json_mode=False):
