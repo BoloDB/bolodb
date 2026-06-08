@@ -1,11 +1,9 @@
 """Database connection, schema introspection (guarded), read-only execution."""
-import hashlib, re
+import hashlib
 from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.exc import SQLAlchemyError
-
-WRITE_KEYWORDS = re.compile(
-    r"\b(INSERT|UPDATE|DELETE|DROP|ALTER|CREATE|TRUNCATE|REPLACE|GRANT|REVOKE|"
-    r"ATTACH|DETACH|EXEC|EXECUTE|MERGE|PRAGMA|VACUUM|CALL|INTO)\b", re.IGNORECASE)
+import sqlglot
+import sqlglot.expressions as exp
 
 def sanitize_url(url):
     if "@" not in url: return url
@@ -106,11 +104,47 @@ class DatabaseManager:
     def execute(self, sql):
         cleaned = sql.strip().rstrip(";").strip()
         if self.readonly:
-            first = cleaned.split()[0].upper() if cleaned else ""
-            if first not in ("SELECT","WITH","EXPLAIN"):
-                return {"error":"Only SELECT queries are allowed (read-only mode).","sql":cleaned}
-            if ";" in cleaned or WRITE_KEYWORDS.search(cleaned):
-                return {"error":"Only read-only SELECT queries are allowed.","sql":cleaned}
+            try:
+                # Map sqlalchemy dialect names to sqlglot dialect names
+                current_dialect = getattr(self, "dialect", None)
+                engine_dialect = getattr(self.engine, "name", current_dialect)
+                dialect_map = {"postgresql": "postgres", "mssql": "tsql"}
+                glot_dialect = dialect_map.get(engine_dialect, engine_dialect)
+
+                stmts = sqlglot.parse(cleaned, dialect=glot_dialect)
+
+                if len(stmts) > 1:
+                    return {"error": "Multiple statements are not allowed.", "sql": cleaned}
+                if not stmts or stmts[0] is None:
+                    return {"error": "Empty statement.", "sql": cleaned}
+
+                stmt = stmts[0]
+
+                # Verify root node type
+                if type(stmt).__name__ not in ("Select", "Union", "Explain"):
+                    if type(stmt).__name__ == "Command" and str(stmt.this).upper() == "EXPLAIN":
+                        pass
+                    else:
+                        return {"error": "Only SELECT queries are allowed (read-only mode).", "sql": cleaned}
+
+                # Verify no modifying nodes inside the AST
+                modifying_types = (
+                    exp.Insert, exp.Update, exp.Delete,
+                    exp.Create, exp.Drop, exp.Alter,
+                    exp.Command
+                )
+                for node in stmt.find_all(modifying_types):
+                    if type(node).__name__ == "Command" and str(node.this).upper() == "EXPLAIN":
+                        continue
+                    return {"error": "Only read-only SELECT queries are allowed.", "sql": cleaned}
+
+                # Verify no INTO clauses
+                for _ in stmt.find_all(exp.Into):
+                     return {"error": "SELECT INTO is not allowed.", "sql": cleaned}
+
+            except sqlglot.errors.ParseError as e:
+                return {"error": f"Could not parse SQL: {e}", "sql": cleaned}
+
         try:
             with self.engine.connect() as conn:
                 res = conn.execute(text(cleaned))
