@@ -27,7 +27,6 @@ class VerifyReq(BaseModel): question: str; sql: str; restatement: str = ""
 class FeedbackReq(BaseModel):
     query_id: str = ""; verdict: str; reason: str = ""
     question: str = ""; sql: str = ""; restatement: str = ""
-class RawSQLReq(BaseModel): sql: str
 class GlossaryItem(BaseModel): term: str; maps_to: str = ""; sql_hint: str = ""
 class SaveOnboardReq(BaseModel):
     glossary: list[GlossaryItem] = []
@@ -176,13 +175,6 @@ def create_app(initial_db_url="", readonly=True):
         _need_db(db)
         kb.add_verified(db.db_id, req.question, req.sql, req.restatement)
         return {"ok":True,"trust":kb.trust_level(db.db_id)}
-
-    @app.post("/api/execute")
-    async def execute(req: RawSQLReq):
-        _need_db(db)
-        res = db.execute(req.sql)
-        if "error" in res: raise HTTPException(400, res["error"])
-        return res
 
     @app.get("/", response_class=HTMLResponse)
     async def root():
