@@ -1,5 +1,6 @@
 """FastAPI application."""
 from pathlib import Path
+import anyio
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
@@ -186,8 +187,8 @@ def create_app(initial_db_url="", readonly=True):
 
     @app.get("/", response_class=HTMLResponse)
     async def root():
-        idx = STATIC / "index.html"
-        if idx.exists(): return HTMLResponse(idx.read_text(encoding="utf-8"))
+        idx = anyio.Path(STATIC / "index.html")
+        if await idx.exists(): return HTMLResponse(await idx.read_text(encoding="utf-8"))
         return HTMLResponse("<h1>BoloDB running</h1>")
 
     if STATIC.exists():
