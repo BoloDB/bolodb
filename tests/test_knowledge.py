@@ -1,8 +1,31 @@
 """Tests for verified-answer storage, similarity retrieval, and trust levels."""
 import pytest
-from app.knowledge import KnowledgeBase
+from app.knowledge import KnowledgeBase, _tokens, _similarity
 
 DB_ID = "testdb"
+
+
+def test_tokens():
+    assert _tokens(None) == set()
+    assert _tokens("") == set()
+    assert _tokens("A") == set()  # Single character ignored
+    assert _tokens("Hello World!") == {"hello", "world"}
+    assert _tokens("user_id = 123") == {"user", "id", "123"}
+    assert _tokens("mixedCase123 and-some_punctuation...") == {"mixedcase123", "and", "some", "punctuation"}
+
+
+def test_similarity():
+    assert _similarity("hello world", "hello world") == 1.0
+    assert _similarity("Hello World", "hello world") == 1.0  # Case insensitive
+    assert _similarity("", "") == 0.4  # jaccard is 0, seq is 1.0 -> 0.4
+
+    # Order independence reduces seq match but keeps jaccard high
+    sim_ordered = _similarity("hello world", "world hello")
+    assert 0.6 <= sim_ordered <= 0.8
+
+    # Completely different strings have very low similarity
+    sim_diff = _similarity("hello world", "abc xyz")
+    assert sim_diff < 0.1
 
 
 @pytest.fixture
