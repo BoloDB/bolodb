@@ -1,7 +1,10 @@
 """Database connection, schema introspection (guarded), read-only execution."""
 import hashlib, re
+import logging
 from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.exc import SQLAlchemyError
+
+logger = logging.getLogger(__name__)
 
 WRITE_KEYWORDS = re.compile(
     r"\b(INSERT|UPDATE|DELETE|DROP|ALTER|CREATE|TRUNCATE|REPLACE|GRANT|REVOKE|"
@@ -59,7 +62,9 @@ class DatabaseManager:
                            for fk in inspector.get_foreign_keys(tbl)]
                     columns = [{"name":c["name"],"type":str(c["type"]),"primary_key":c["name"] in pk}
                                for c in cols_raw]
-                except Exception: continue
+                except Exception as e:
+                    logger.warning("Error inspecting columns for %s: %s", tbl, e)
+                    continue
                 try:
                     res = conn.execute(text(f"SELECT * FROM {self._q(tbl)} LIMIT {self.sample_rows}"))
                     names = list(res.keys())
@@ -67,10 +72,14 @@ class DatabaseManager:
                     for r in samples:
                         for k,v in r.items():
                             if isinstance(v,str) and len(v)>50: r[k]=v[:47]+"..."
-                except Exception: samples = []
+                except Exception as e:
+                    logger.warning("Error fetching samples for %s: %s", tbl, e)
+                    samples = []
                 try:
                     rc = conn.execute(text(f"SELECT COUNT(*) FROM {self._q(tbl)}")).scalar()
-                except Exception: rc = None
+                except Exception as e:
+                    logger.warning("Error fetching row count for %s: %s", tbl, e)
+                    rc = None
                 low_card = {}
                 if rc is None or rc <= BIG:
                     for c in columns:
@@ -80,7 +89,9 @@ class DatabaseManager:
                                 dv = conn.execute(text(f"SELECT DISTINCT {self._q(c['name'])} FROM {self._q(tbl)} LIMIT 12")).fetchall()
                                 vals = [row[0] for row in dv if row[0] is not None]
                                 if 0 < len(vals) <= 8: low_card[c["name"]] = vals
-                            except Exception: pass
+                            except Exception as e:
+                                logger.warning("Error fetching distinct values for %s.%s: %s", tbl, c['name'], e)
+                                pass
                 schema[tbl] = {"columns":columns,"foreign_keys":fks,"sample_rows":samples,
                                "row_count":rc,"distinct_values":low_card}
         self._schema_cache = schema
