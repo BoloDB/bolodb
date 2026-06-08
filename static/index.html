@@ -1811,7 +1811,7 @@ Object.assign(window, { AnswerCard });
 /* ============================================================
    BoloDB — Ask screen (sidebar + conversation + input + settings)
    ============================================================ */
-function AskScreen({ engine, setEngine, verifiedCount, onVerify, toast, realSchema, dbInfo }) {
+function AskScreen({ engine, setEngine, modelName, setModelName, verifiedCount, onVerify, toast, realSchema, dbInfo }) {
   const B = window.BOLO;
   const dbLabel = dbInfo ? (dbInfo.url||"").split("/").pop()||dbInfo.dialect : "TechStore";
   const tableCount = dbInfo ? dbInfo.tables : 5;
@@ -1874,7 +1874,7 @@ function AskScreen({ engine, setEngine, verifiedCount, onVerify, toast, realSche
 
   return (
     <div className="page" style={{display:"flex",height:"100%"}}>
-      <Sidebar engine={engine} verifiedCount={verifiedCount} onSettings={()=>setSettingsOpen(true)} schema={realSchema} dbInfo={dbInfo}/>
+      <Sidebar engine={engine} modelName={modelName} verifiedCount={verifiedCount} onSettings={()=>setSettingsOpen(true)} schema={realSchema} dbInfo={dbInfo}/>
 
       {/* main */}
       <div style={{flex:1,display:"flex",flexDirection:"column",minWidth:0,position:"relative"}}>
@@ -1927,7 +1927,7 @@ function AskScreen({ engine, setEngine, verifiedCount, onVerify, toast, realSche
         {toast && <TrustToast toast={toast}/>}
       </div>
 
-      {settingsOpen && <Settings engine={engine} setEngine={setEngine} onClose={()=>setSettingsOpen(false)}/>}
+      {settingsOpen && <Settings engine={engine} setEngine={setEngine} modelName={modelName} setModelName={setModelName} onClose={()=>setSettingsOpen(false)}/>}
     </div>
   );
 }
@@ -1957,7 +1957,7 @@ function Empty({ trust, onPick }) {
 }
 
 /* ---------- sidebar ---------- */
-function Sidebar({ engine, verifiedCount, onSettings, schema, dbInfo }) {
+function Sidebar({ engine, modelName, verifiedCount, onSettings, schema, dbInfo }) {
   const B = window.BOLO;
   const trust = B.trustFor(verifiedCount);
   const prov = B.providers.find(p=>p.id===engine);
@@ -2030,7 +2030,7 @@ function Sidebar({ engine, verifiedCount, onSettings, schema, dbInfo }) {
             <div style={{fontWeight:700,fontSize:13,display:"flex",alignItems:"center",gap:6}}>{prov.name}
               {engine==="ollama" && <span style={{fontSize:10,fontWeight:700,color:"var(--brand)"}}>private</span>}
             </div>
-            <div className="mono" style={{fontSize:11,color:"var(--faint)",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{prov.model}</div>
+            <div className="mono" style={{fontSize:11,color:"var(--faint)",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{modelName||prov.model}</div>
           </div>
           <Ico.gear style={{color:"var(--faint)",flexShrink:0}}/>
         </button>
@@ -2070,10 +2070,10 @@ function TrustToast({ toast }) {
 }
 
 /* ---------- settings modal ---------- */
-function Settings({ engine, setEngine, onClose }) {
+function Settings({ engine, setEngine, modelName, setModelName, onClose }) {
   const B = window.BOLO;
   const [sel,setSel] = React.useState(engine);
-  const [localModel,setLocalModel] = React.useState("llama3.2");
+  const [localModel,setLocalModel] = React.useState(modelName||"llama3.2");
   const [apiKey,setApiKey] = React.useState("");
   const [saving,setSaving] = React.useState(false);
   const [error,setError] = React.useState("");
@@ -2085,6 +2085,7 @@ function Settings({ engine, setEngine, onClose }) {
       await window.apiCall('/api/config',{provider:sel, model:sel==="ollama"?localModel:"",
         api_key: sel!=="ollama"?(apiKey||undefined):undefined});
       setEngine(sel);
+      setModelName(sel==="ollama"?localModel:"");
       onClose();
     } catch(e) {
       setError(e.message || "Could not save settings.");
@@ -2180,6 +2181,7 @@ function App(){
   const [t,setTweak] = useTweaks(TWEAK_DEFAULTS);
   const [phase,setPhase] = React.useState("loading"); // loading|connect|onboard|ask
   const [engine,setEngine] = React.useState("ollama");
+  const [modelName,setModelName] = React.useState("");
   const [verifiedCount,setVerifiedCount] = React.useState(0);
   const [toast,setToast] = React.useState(null);
   const [realSchema,setRealSchema] = React.useState(null);
@@ -2193,6 +2195,7 @@ function App(){
         const s = await window.apiCall('/api/state');
         if (s.connected) {
           setEngine(s.config?.provider||"ollama");
+          setModelName(s.config?.model||"");
           setVerifiedCount(s.trust?.verified||0);
           setDbInfo(s.database||null);
           prevLevel.current = window.BOLO.trustFor(s.trust?.verified||0).key;
@@ -2295,7 +2298,7 @@ function App(){
       )}
       {phase==="connect" && <ConnectScreen engine={engine} setEngine={setEngine} onConnect={onConnect}/>}
       {phase==="onboard" && <OnboardScreen onDone={onOnboardDone}/>}
-      {phase==="ask"     && <AskScreen engine={engine} setEngine={setEngine} verifiedCount={verifiedCount} onVerify={onVerify} toast={toast} realSchema={realSchema} dbInfo={dbInfo}/>}
+      {phase==="ask"     && <AskScreen engine={engine} setEngine={setEngine} modelName={modelName} setModelName={setModelName} verifiedCount={verifiedCount} onVerify={onVerify} toast={toast} realSchema={realSchema} dbInfo={dbInfo}/>}
 
       <TweaksPanel>
         <TweakSection label="Theme" />
