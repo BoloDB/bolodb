@@ -1105,7 +1105,8 @@ function TrustMeter({ count, compact=false }) {
 }
 
 /* ---------- ResultTable ---------- */
-function ResultTable({ columns, rows, max=8 }) {
+const ResultTable = React.memo(function ResultTable({ columns, rows, max=8 }) {
+
   if (!rows || rows.length===0) {
     return (
       <div style={{padding:"22px 18px",textAlign:"center",color:"var(--muted)",
@@ -1144,6 +1145,7 @@ function ResultTable({ columns, rows, max=8 }) {
     </div>
   );
 }
+});
 
 /* ---------- SqlBlock (toggle) ---------- */
 function SqlBlock({ sql }) {
@@ -1657,7 +1659,8 @@ Object.assign(window, { OnboardScreen });
 /* ============================================================
    BoloDB — AnswerCard (restatement + confidence + verify flow)
    ============================================================ */
-function AnswerCard({ turn, onVerify, isLatest }) {  // turn.query_id from API
+const AnswerCard = React.memo(function AnswerCard({ turn, onVerify, isLatest }) {  // turn.query_id from API
+
   // turn: { id, question, restatement, confidence, reason, columns, rows, sql, basedOn, verdict, reasonChosen, thinking }
   const B = window.BOLO;
   const [showReasons,setShowReasons] = React.useState(false);
@@ -1758,6 +1761,7 @@ function AnswerCard({ turn, onVerify, isLatest }) {  // turn.query_id from API
     </div>
   );
 }
+});
 
 function cap(s){ return s ? s.charAt(0).toUpperCase()+s.slice(1) : s; }
 
@@ -1854,9 +1858,12 @@ function AskScreen({ engine, setEngine, modelName, setModelName, verifiedCount, 
     } finally { setLoading(false); }
   }
 
-  async function handleVerify(turnId, verdict, reasonChosen){
+    const turnsRef = React.useRef(turns);
+  React.useEffect(() => { turnsRef.current = turns; }, [turns]);
+
+  const handleVerify = React.useCallback(async (turnId, verdict, reasonChosen) => {
     setTurns(t=>t.map(x=>x.id===turnId?{...x,verdict,reasonChosen}:x));
-    const turn = turns.find(x=>x.id===turnId);
+    const turn = turnsRef.current.find(x=>x.id===turnId);
     try {
       const r = await window.apiCall('/api/feedback',{
         query_id:turn?.query_id||"", verdict, reason:reasonChosen||"",
@@ -1868,7 +1875,7 @@ function AskScreen({ engine, setEngine, modelName, setModelName, verifiedCount, 
     } catch(e) {
       if (verdict==="correct") onVerify();
     }
-  }
+  }, [onVerify]);
 
   const trust = B.trustFor(verifiedCount);
 
