@@ -2,6 +2,7 @@
 from pathlib import Path
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import HTMLResponse
+from fastapi.concurrency import run_in_threadpool
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
@@ -180,7 +181,7 @@ def create_app(initial_db_url="", readonly=True):
     @app.post("/api/execute")
     async def execute(req: RawSQLReq):
         _need_db(db)
-        res = db.execute(req.sql)
+        res = await run_in_threadpool(db.execute, req.sql)
         if "error" in res: raise HTTPException(400, res["error"])
         return res
 
