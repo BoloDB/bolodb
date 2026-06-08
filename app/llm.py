@@ -35,10 +35,6 @@ class OllamaProvider(LLMProvider):
                 return {"ok":True,"models":[m["name"] for m in r.json().get("models",[])]}
         except Exception as e:
             return {"ok":False,"error":str(e)}
-    async def list_models(self):
-        r = await self.health_check()
-        return r.get("models",[])
-
 class ClaudeProvider(LLMProvider):
     name = "claude"; DEFAULT = "claude-haiku-4-5-20251001"
     def __init__(self, api_key, model=""):
