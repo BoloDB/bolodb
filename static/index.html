@@ -1835,25 +1835,17 @@ function AskScreen({ engine, setEngine, verifiedCount, onVerify, toast, realSche
     try {
       const data = await window.apiCall('/api/query',{question:q});
       const rows2d = window.rowsToArrays(data.columns||[], data.rows||[]);
-      if (data.needs_clarification) {
-        setTurns(t=>t.map(x=>x.id===id?{...x,thinking:false,
-          restatement:data.clarification_question||"Could you clarify what you mean?",
-          sql:"",columns:[],rows:[],confidence:"low",
-          reason:"I need more information to answer this accurately.",
-          basedOn:false,query_id:data.query_id||id,verdict:null}:x));
-      } else {
-        setTurns(t=>t.map(x=>x.id===id?{...x,thinking:false,
-          restatement:data.restatement||"",
-          sql:data.sql||"",
-          columns:data.columns||[],
-          rows:rows2d,
-          confidence:data.confidence||"medium",
-          reason:data.confidence_reason||"",
-          basedOn:data.based_on_verified||false,
-          query_id:data.query_id||id,
-          executionError:data.execution_error||null,
-          verdict:null}:x));
-      }
+      setTurns(t=>t.map(x=>x.id===id?{...x,thinking:false,
+        restatement:data.restatement||"",
+        sql:data.sql||"",
+        columns:data.columns||[],
+        rows:rows2d,
+        confidence:data.confidence||"medium",
+        reason:data.confidence_reason||"",
+        basedOn:data.based_on_verified||false,
+        query_id:data.query_id||id,
+        executionError:data.execution_error||null,
+        verdict:null}:x));
     } catch(e) {
       setTurns(t=>t.map(x=>x.id===id?{...x,thinking:false,
         restatement:"Something went wrong — please try again.",
