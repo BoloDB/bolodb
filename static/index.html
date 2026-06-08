@@ -1175,15 +1175,12 @@ function ConnectScreen({ engine, setEngine, onConnect }) {
   const [dbUrl,setDbUrl] = React.useState("");
   const [connecting,setConnecting] = React.useState(null);
   const [error,setError] = React.useState("");
-  const [localModel,setLocalModel] = React.useState("llama3.2");
-  const [apiKey,setApiKey] = React.useState("");
   const P = window.BOLO.providers;
 
   async function go(kind){
     setConnecting(kind); setError("");
     try {
-      await window.apiCall('/api/config',{provider:engine, model:engine==="ollama"?localModel:"",
-        api_key: engine!=="ollama"?(apiKey||undefined):undefined});
+      await window.apiCall('/api/config',{provider:engine});
       let res;
       if (kind==="sample") {
         res = await window.apiCall('/api/connect-sample',{});
