@@ -1,8 +1,39 @@
 """Tests for verified-answer storage, similarity retrieval, and trust levels."""
 import pytest
-from app.knowledge import KnowledgeBase
+from app.knowledge import KnowledgeBase, _tokens, _similarity
 
 DB_ID = "testdb"
+
+
+def test_tokens():
+    assert _tokens(None) == set()
+    assert _tokens("") == set()
+    assert _tokens("a b c d") == set()  # words length <= 1 are ignored
+    assert _tokens("Hello World!") == {"hello", "world"}
+    assert _tokens("It's a test, 123!") == {"it", "test", "123"}
+    assert _tokens("Mixed_Case-And.Punctuation!") == {"mixed", "case", "and", "punctuation"}
+
+
+def test_similarity():
+    # Identical strings
+    assert _similarity("Hello World", "Hello World") == 1.0
+    assert _similarity("Hello World", "hello world") == 1.0  # Case insensitivity
+
+    # Completely different (Jaccard will be 0.0, but SequenceMatcher ratio might be > 0.0)
+    # "hello world" and "apples oranges" both have "es" / "le" / " l" / " o" etc.
+    # So sequence ratio might be e.g., 0.32, thus sim > 0
+    sim_diff = _similarity("xyz", "abc")
+    assert sim_diff == 0.0
+
+    # Partial overlap
+    sim = _similarity("How many orders?", "How many customers?")
+    assert 0.0 < sim < 1.0
+
+    # Robustness against empty string
+    # jaccard is 0.0 (since no tokens)
+    # SequenceMatcher ratio is 1.0 for two empty strings
+    # final score = 0.6 * 0.0 + 0.4 * 1.0 = 0.4
+    assert _similarity("", "") == 0.4
 
 
 @pytest.fixture
