@@ -77,10 +77,16 @@ def test_truncation_flag_is_exact(db):
     assert res["truncated"] is True
 
 
-def test_sanitize_url_masks_password():
-    assert sanitize_url("postgresql://user:secret@host:5432/db") == \
-        "postgresql://user:***@host:5432/db"
-    assert sanitize_url("sqlite:///C:/path/to/file.db") == "sqlite:///C:/path/to/file.db"
+@pytest.mark.parametrize("url,expected", [
+    ("postgresql://user:secret@host:5432/db", "postgresql://user:***@host:5432/db"),
+    ("sqlite:///C:/path/to/file.db",          "sqlite:///C:/path/to/file.db"),
+    ("postgresql://user@host/db",             "postgresql://user:***@host/db"),
+    ("postgresql://:password@host/db",        "postgresql://:***@host/db"),
+    ("postgresql://user:pass:word@host/db",   "postgresql://user:***@host/db"),
+    ("just_a_string",                         "just_a_string"),
+])
+def test_sanitize_url_masks_password(url, expected):
+    assert sanitize_url(url) == expected
 
 
 def test_db_id_is_stable_and_ignores_password():
@@ -95,3 +101,12 @@ def test_db_id_differs_for_different_targets():
     a = db_id_for("postgresql://user:secret@host/db")
     b = db_id_for("postgresql://user:secret@otherhost/db")
     assert a != b
+
+
+def test_q_escapes_embedded_quotes(db):
+    assert db._q("normal_table") == '"normal_table"'
+    assert db._q('bad"table') == '"bad""table"'
+    db.dialect = "mysql"
+    assert db._q("normal_table") == "`normal_table`"
+    assert db._q("bad`table") == "`bad``table`"
+    db.dialect = "sqlite"  # restore

@@ -1,8 +1,35 @@
 """Tests for verified-answer storage, similarity retrieval, and trust levels."""
 import pytest
-from app.knowledge import KnowledgeBase
+from app.knowledge import KnowledgeBase, _tokens, _similarity
 
 DB_ID = "testdb"
+
+
+def test_tokens_filters_short_words_and_normalises_case():
+    assert _tokens(None) == set()
+    assert _tokens("") == set()
+    assert _tokens("a b c") == set()          # all single-char, dropped
+    assert _tokens("Hello World!") == {"hello", "world"}
+    assert _tokens("user_id = 123") == {"user", "id", "123"}
+
+
+def test_similarity_identical_strings_score_1():
+    assert _similarity("hello world", "hello world") == 1.0
+    assert _similarity("Hello World", "hello world") == 1.0  # case-insensitive
+
+
+def test_similarity_empty_strings():
+    # Jaccard = 0 (no tokens), SequenceMatcher ratio = 1.0 → 0.4
+    assert _similarity("", "") == pytest.approx(0.4)
+
+
+def test_similarity_completely_different_is_low():
+    assert _similarity("hello world", "abc xyz") < 0.1
+
+
+def test_similarity_partial_overlap_is_between():
+    sim = _similarity("How many orders?", "How many customers?")
+    assert 0.0 < sim < 1.0
 
 
 @pytest.fixture

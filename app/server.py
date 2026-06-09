@@ -1,4 +1,5 @@
 """FastAPI application."""
+import asyncio
 from pathlib import Path
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import HTMLResponse
@@ -114,11 +115,15 @@ def create_app(initial_db_url="", readonly=True):
         _need_db(db)
         try:
             starters = await generate_starters(providers.get(), db.schema_as_text(), db.dialect)
-            for s in starters:
-                res = await run_in_threadpool(db.execute, s.get("sql",""))
-                s["columns"] = res.get("columns",[])
-                s["rows"]    = res.get("rows",[])[:5]
+
+            async def _run_starter(s):
+                res = await run_in_threadpool(db.execute, s.get("sql", ""))
+                s["columns"] = res.get("columns", [])
+                s["rows"]    = res.get("rows", [])[:5]
                 s["error"]   = res.get("error")
+                return s
+
+            starters = list(await asyncio.gather(*[_run_starter(s) for s in starters]))
             return {"starters": starters}
         except Exception as e:
             raise HTTPException(502, f"LLM error: {e}")
