@@ -562,6 +562,15 @@ function TrustMeter({ count, compact=false }) {
 /* ---------- ResultTable ---------- */
 const ResultTable = React.memo(function ResultTable({ columns, rows, max=8 }) {
 
+  function copyCSV(){
+    const header = columns.join(",");
+    const body = rows.map(r=>r.map(c=>{
+      const s=String(c??'');
+      return (s.includes(',')||s.includes('"')||s.includes('\n')) ? `"${s.replace(/"/g,'""')}"` : s;
+    }).join(",")).join("\n");
+    navigator.clipboard.writeText(header+"\n"+body).catch(()=>{});
+  }
+
   if (!rows || rows.length===0) {
     return (
       <div style={{padding:"22px 18px",textAlign:"center",color:"var(--muted)",
@@ -573,6 +582,16 @@ const ResultTable = React.memo(function ResultTable({ columns, rows, max=8 }) {
   const numeric = (v)=> typeof v==="string" && /^[$]?[\d.,%]+$/.test(v);
   return (
     <div style={{border:"1px solid var(--border)",borderRadius:"var(--radius)",overflow:"hidden",background:"var(--surface)"}}>
+      <div style={{display:"flex",alignItems:"center",justifyContent:"flex-end",padding:"7px 12px 0",background:"var(--surface-2)",borderBottom:"1px solid var(--border)"}}>
+        <button onClick={copyCSV} title="Copy all rows as CSV — paste into Excel or Sheets"
+          style={{display:"inline-flex",alignItems:"center",gap:5,padding:"4px 10px",borderRadius:6,
+            background:"transparent",border:"1px solid var(--border-2)",color:"var(--faint)",
+            fontSize:11.5,fontWeight:650,cursor:"pointer",transition:"all .15s"}}
+          onMouseEnter={e=>{ e.currentTarget.style.background="var(--surface-3)"; e.currentTarget.style.color="var(--ink-2)"; }}
+          onMouseLeave={e=>{ e.currentTarget.style.background="transparent"; e.currentTarget.style.color="var(--faint)"; }}>
+          ↓ Copy as CSV
+        </button>
+      </div>
       <table style={{width:"100%",borderCollapse:"collapse",fontSize:14}}>
         <thead>
           <tr>
@@ -628,25 +647,108 @@ Object.assign(window, { Ico, Logo, Button, ConfidenceBadge, TrustMeter, ResultTa
    BoloDB — Connect screen
    ============================================================ */
 function ConnectScreen({ engine, setEngine, onConnect }) {
-  const [dbUrl,setDbUrl] = React.useState("");
-  const [connecting,setConnecting] = React.useState(null);
-  const [error,setError] = React.useState("");
   const P = window.BOLO.providers;
+  // --- DB form state ---
+  const [dbType,   setDbType]   = React.useState("postgresql");
+  const [formMode, setFormMode] = React.useState(true);   // true = friendly form, false = raw URL
+  const [host,     setHost]     = React.useState("localhost");
+  const [port,     setPort]     = React.useState("5432");
+  const [user,     setUser]     = React.useState("");
+  const [password, setPassword] = React.useState("");
+  const [dbName,   setDbName]   = React.useState("");
+  const [filePath, setFilePath] = React.useState("");
+  const [dbUrl,    setDbUrl]    = React.useState("");
+  // --- connection state ---
+  const [connecting,    setConnecting]    = React.useState(null);
+  const [error,         setError]         = React.useState("");
+  const [ollamaStatus,  setOllamaStatus]  = React.useState(null); // null|loading|ok|fail
+
+  const DB_TYPES = [
+    {id:"postgresql", label:"PostgreSQL", port:"5432"},
+    {id:"mysql",      label:"MySQL",      port:"3306"},
+    {id:"sqlite",     label:"SQLite",     port:null},
+    {id:"mssql",      label:"SQL Server", port:"1433"},
+    {id:"duckdb",     label:"DuckDB",     port:null},
+  ];
+  const API_KEY_LINKS = {
+    claude:"https://console.anthropic.com/settings/keys",
+    openai:"https://platform.openai.com/api-keys",
+    groq:"https://console.groq.com/keys",
+  };
+  const isFileBased = dbType==="sqlite" || dbType==="duckdb";
+
+  // Check Ollama whenever user picks the local engine
+  React.useEffect(()=>{
+    if (engine!=="ollama") return;
+    setOllamaStatus("loading");
+    fetch("/api/ollama-check")
+      .then(r=>r.json())
+      .then(d=>setOllamaStatus(d.ok?"ok":"fail"))
+      .catch(()=>setOllamaStatus("fail"));
+  },[engine]);
+
+  function recheckOllama(){
+    setOllamaStatus("loading");
+    fetch("/api/ollama-check")
+      .then(r=>r.json())
+      .then(d=>setOllamaStatus(d.ok?"ok":"fail"))
+      .catch(()=>setOllamaStatus("fail"));
+  }
+
+  // Build a connection URL from the form fields
+  function buildUrl(){
+    if (dbType==="sqlite")  return `sqlite:///${filePath.trim()}`;
+    if (dbType==="duckdb")  return filePath.trim() ? `duckdb:///${filePath.trim()}` : "duckdb://";
+    const u = encodeURIComponent(user);
+    const p = encodeURIComponent(password);
+    const dialect = dbType==="mssql" ? "mssql+pyodbc" : dbType;
+    const creds = (u && p) ? `${u}:${p}@` : u ? `${u}@` : "";
+    return `${dialect}://${creds}${host.trim()}:${port}/${dbName.trim()}`;
+  }
+
+  // Turn raw SQLAlchemy / driver errors into friendly sentences
+  function humanError(msg){
+    const m=(msg||"").toLowerCase();
+    if (m.includes("connection refused")||m.includes("could not connect to server")||m.includes("can't connect"))
+      return "The database server isn't running or can't be reached — check the host and port.";
+    if (m.includes("password authentication failed")||m.includes("access denied")||m.includes("login failed"))
+      return "Wrong username or password — double-check your credentials.";
+    if (m.includes("no such file")||m.includes("unable to open database file"))
+      return "File not found — check the path and make sure the file exists.";
+    if (m.includes("database") && (m.includes("does not exist")||m.includes("unknown database")))
+      return "That database name wasn't found — check the spelling.";
+    if (m.includes("timeout")||m.includes("timed out"))
+      return "Connection timed out — the server may be unreachable or behind a firewall.";
+    if (m.includes("ssl")||m.includes("certificate"))
+      return "SSL error — if connecting via URL mode, try adding ?sslmode=disable at the end.";
+    if (m.includes("no module named"))
+      return "The driver for that database type isn't installed on this server.";
+    return msg; // fall back to raw if nothing matches
+  }
+
+  function canConnect(){
+    if (formMode){
+      if (isFileBased) return filePath.trim().length>0;
+      return host.trim() && user.trim() && dbName.trim();
+    }
+    return dbUrl.trim().length>0;
+  }
 
   async function go(kind){
     setConnecting(kind); setError("");
     try {
       await window.apiCall('/api/config',{provider:engine});
       let res;
-      if (kind==="sample") {
+      if (kind==="sample"){
         res = await window.apiCall('/api/connect-sample',{});
       } else {
-        if (!dbUrl.trim()) { setError("Please enter a database URL."); setConnecting(null); return; }
-        res = await window.apiCall('/api/connect',{db_url:dbUrl.trim()});
+        const url = formMode ? buildUrl() : dbUrl.trim();
+        if (!url){ setError("Please fill in all required fields."); setConnecting(null); return; }
+        res = await window.apiCall('/api/connect',{db_url:url});
       }
       onConnect(kind==="sample", res);
-    } catch(e) {
-      setError(e.message || "Connection failed. Check the URL and try again.");
+    } catch(e){
+      setError(humanError(e.message)||"Connection failed — check your details and try again.");
       setConnecting(null);
     }
   }
@@ -669,54 +771,199 @@ function ConnectScreen({ engine, setEngine, onConnect }) {
             Ask your data in plain English.<br/><span style={{color:"var(--brand)"}}>Trust</span> the answer you get back.
           </h1>
           <p style={{fontSize:16.5,color:"var(--muted)",margin:0,maxWidth:560,lineHeight:1.55}}>
-            Pick where the AI runs, point BoloDB at a database, and start asking. It explains every
-            answer, tells you how confident it is, and gets sharper each time you confirm one.
+            Pick where the AI runs, connect your database, and start asking questions — no SQL knowledge needed.
           </p>
         </div>
 
         {/* step 1 — engine */}
-        <Section num="1" title="Choose your AI engine" hint="You can switch anytime in Settings.">
+        <Section num="1" title="Choose your AI engine" hint="You can switch anytime in Settings. Not sure? Start with Local — it's free and private.">
           <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:12}}>
             {P.map((p,i)=>(
-              <EngineCard key={p.id} p={p} active={engine===p.id} onClick={()=>setEngine(p.id)} delay={i*55}/>
+              <EngineCard key={p.id} p={p} active={engine===p.id} onClick={()=>{ setEngine(p.id); setError(""); }} delay={i*55}/>
             ))}
           </div>
-          <div style={{display:"flex",alignItems:"center",gap:9,marginTop:14,padding:"11px 15px",
+
+          {/* Ollama status banners */}
+          {engine==="ollama" && ollamaStatus==="loading" && (
+            <div style={{display:"flex",alignItems:"center",gap:9,marginTop:12,padding:"12px 15px",
+              background:"var(--surface-2)",borderRadius:"var(--radius-sm)",border:"1px solid var(--border)",color:"var(--muted)",fontSize:13.5}}>
+              <Spinner/> Checking if Ollama is running on this machine…
+            </div>
+          )}
+          {engine==="ollama" && ollamaStatus==="ok" && (
+            <div style={{display:"flex",alignItems:"center",gap:9,marginTop:12,padding:"12px 15px",
+              background:"var(--brand-tint)",borderRadius:"var(--radius-sm)",border:"1px solid var(--brand-tint-2)",
+              color:"var(--brand-ink)",fontSize:13.5,fontWeight:600}}>
+              <Ico.check style={{width:16,height:16,flexShrink:0}}/> Ollama is running and ready. Your questions will never leave this machine.
+            </div>
+          )}
+          {engine==="ollama" && ollamaStatus==="fail" && (
+            <div style={{marginTop:12,padding:"16px 18px",background:"#FFF8ED",border:"1px solid #F5D78A",
+              borderRadius:"var(--radius)",color:"#7A5C0A",fontSize:13.5}}>
+              <div style={{display:"flex",alignItems:"center",gap:9,fontWeight:700,marginBottom:8}}>
+                <Ico.bolt style={{width:16,height:16,flexShrink:0,color:"#C2891B"}}/> Ollama isn't running yet
+              </div>
+              <p style={{margin:"0 0 10px",fontWeight:500,lineHeight:1.6}}>
+                Ollama is a free tool that lets AI run entirely on your computer — nothing leaves your machine.
+                You need to install it before you can use the Local option.
+              </p>
+              <div style={{display:"flex",gap:10,flexWrap:"wrap",marginBottom:12}}>
+                <a href="https://ollama.com/download" target="_blank" rel="noopener"
+                  style={{display:"inline-flex",alignItems:"center",gap:7,padding:"9px 15px",
+                    background:"var(--ink)",color:"#fff",borderRadius:"var(--radius-sm)",
+                    fontWeight:700,fontSize:13,textDecoration:"none"}}>
+                  <Ico.arrow style={{width:14,height:14}}/> Download Ollama (free)
+                </a>
+                <button onClick={recheckOllama}
+                  style={{display:"inline-flex",alignItems:"center",gap:7,padding:"9px 15px",
+                    background:"transparent",border:"1.5px solid #C2891B",color:"#7A5C0A",
+                    borderRadius:"var(--radius-sm)",fontWeight:700,fontSize:13,cursor:"pointer"}}>
+                  Check again
+                </button>
+              </div>
+              <div style={{fontSize:12.5,fontWeight:550,opacity:.85,lineHeight:1.6}}>
+                After installing Ollama: open a Terminal and run{" "}
+                <code style={{background:"rgba(0,0,0,.09)",padding:"2px 6px",borderRadius:4,fontFamily:"var(--font-mono)"}}>ollama pull llama3.2</code>
+                {" "}to download the model (~2 GB). Then click "Check again."
+              </div>
+              <div style={{marginTop:12,fontSize:12.5,fontWeight:600,opacity:.7}}>
+                Prefer a cloud AI instead? Pick Claude, OpenAI, or Groq above — they don't require any installation.
+              </div>
+            </div>
+          )}
+
+          {/* API key hint for cloud providers */}
+          {engine!=="ollama" && (
+            <div style={{display:"flex",alignItems:"center",gap:9,marginTop:12,padding:"12px 15px",
+              background:"var(--surface-2)",borderRadius:"var(--radius-sm)",border:"1px solid var(--border)",
+              color:"var(--ink-2)",fontSize:13.5}}>
+              <Ico.lock style={{flexShrink:0,width:16,height:16,color:"var(--muted)"}}/>
+              <span style={{flex:1}}>
+                You'll need an API key to use {P.find(p=>p.id===engine)?.name}.
+                {" "}<a href={API_KEY_LINKS[engine]} target="_blank" rel="noopener"
+                  style={{color:"var(--brand-ink)",fontWeight:700,textDecoration:"none"}}>
+                  Get your key here →
+                </a>
+                {" "}<span style={{color:"var(--faint)",fontSize:12.5}}>(You'll enter it in Settings after connecting.)</span>
+              </span>
+            </div>
+          )}
+
+          <div style={{display:"flex",alignItems:"center",gap:9,marginTop:10,padding:"11px 15px",
             background:"var(--brand-tint)",border:"1px solid var(--brand-tint-2)",borderRadius:"var(--radius-sm)",
             color:"var(--brand-ink)",fontSize:13.5,fontWeight:500}}>
-            <Ico.lock style={{flexShrink:0}}/>
-            <span>Even with an API engine, only the <b>schema and your question</b> are sent — never your table data. The query runs locally.</span>
+            <Ico.lock style={{flexShrink:0}}/> Even with a cloud engine, only your <b>database structure and your question</b> are sent — never your actual rows of data.
           </div>
         </Section>
 
         {/* step 2 — connect */}
-        <Section num="2" title="Connect a database" hint="Or skip it and explore with realistic sample data.">
+        <Section num="2" title="Connect your database" hint="Don't have one yet? Use the sample data to see how it works first.">
           <div style={{display:"grid",gridTemplateColumns:"1.4fr 1fr",gap:16}}>
-            {/* url */}
+
+            {/* connection form card */}
             <div className="card" style={{padding:22}}>
-              <div style={{display:"flex",alignItems:"center",gap:9,marginBottom:13,fontWeight:700,fontSize:15}}>
-                <Ico.db style={{color:"var(--brand)"}}/> <span style={{whiteSpace:"nowrap"}}>Your database</span>
+              <div style={{display:"flex",alignItems:"center",gap:9,marginBottom:16,fontWeight:700,fontSize:15}}>
+                <Ico.db style={{color:"var(--brand)"}}/> Your database
               </div>
-              <input className="field mono" placeholder="postgresql://user:•••@localhost:5432/shop"
-                value={dbUrl} onChange={e=>setDbUrl(e.target.value)} style={{fontSize:13.5,marginBottom:10}}/>
-              <div style={{display:"flex",flexWrap:"wrap",gap:6,marginBottom:16}}>
-                {["PostgreSQL","MySQL","SQLite","SQL Server","DuckDB"].map(d=>(
-                  <span key={d} style={{fontSize:11.5,fontWeight:600,color:"var(--faint)",padding:"3px 9px",
-                    background:"var(--surface-3)",borderRadius:99,border:"1px solid var(--border)"}}>{d}</span>
-                ))}
+
+              {/* DB type selector */}
+              <div style={{marginBottom:16}}>
+                <div style={{fontSize:11.5,fontWeight:700,color:"var(--faint)",marginBottom:8,letterSpacing:".05em",textTransform:"uppercase"}}>What type of database?</div>
+                <div style={{display:"flex",flexWrap:"wrap",gap:7}}>
+                  {DB_TYPES.map(dt=>(
+                    <button key={dt.id} onClick={()=>{ setDbType(dt.id); if(dt.port) setPort(dt.port); setError(""); }}
+                      className="focusable"
+                      style={{padding:"6px 14px",borderRadius:99,cursor:"pointer",fontSize:13,fontWeight:650,transition:"all .15s",
+                        background: dbType===dt.id?"var(--brand)":"var(--surface-2)",
+                        color:       dbType===dt.id?"#fff":"var(--ink-2)",
+                        border:      dbType===dt.id?"1.5px solid var(--brand)":"1.5px solid var(--border)"}}>
+                      {dt.label}
+                    </button>
+                  ))}
+                </div>
               </div>
-              <Button kind={dbUrl?"primary":"ghost"} className="btn-block"
-                disabled={!dbUrl || connecting}
+
+              {/* Fields */}
+              {formMode ? (
+                isFileBased ? (
+                  /* File-based: SQLite / DuckDB */
+                  <div style={{marginBottom:14}}>
+                    <div style={{fontSize:11.5,fontWeight:700,color:"var(--faint)",marginBottom:6,letterSpacing:".05em",textTransform:"uppercase"}}>File path</div>
+                    <input className="field mono" value={filePath} onChange={e=>setFilePath(e.target.value)}
+                      placeholder={dbType==="sqlite" ? "/Users/you/data/mydb.db" : "/Users/you/data/mydb.duckdb"}
+                      style={{fontSize:13.5,marginBottom:6}}/>
+                    <div style={{fontSize:12,color:"var(--faint)",fontWeight:550}}>
+                      The full path to your {dbType==="sqlite"?".db or .sqlite":"DuckDB"} file on disk.
+                      {dbType==="duckdb" && " Leave empty to use an in-memory database."}
+                    </div>
+                  </div>
+                ) : (
+                  /* Network DB: PG / MySQL / MSSQL */
+                  <div style={{display:"flex",flexDirection:"column",gap:12,marginBottom:14}}>
+                    <div style={{display:"grid",gridTemplateColumns:"1fr 90px",gap:10}}>
+                      <div>
+                        <div style={{fontSize:11.5,fontWeight:700,color:"var(--faint)",marginBottom:6,letterSpacing:".05em",textTransform:"uppercase"}}>Host</div>
+                        <input className="field" value={host} onChange={e=>setHost(e.target.value)}
+                          placeholder="localhost or db.company.com" style={{fontSize:14}}/>
+                      </div>
+                      <div>
+                        <div style={{fontSize:11.5,fontWeight:700,color:"var(--faint)",marginBottom:6,letterSpacing:".05em",textTransform:"uppercase"}}>Port</div>
+                        <input className="field" value={port} onChange={e=>setPort(e.target.value)}
+                          placeholder={port} style={{fontSize:14}}/>
+                      </div>
+                    </div>
+                    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+                      <div>
+                        <div style={{fontSize:11.5,fontWeight:700,color:"var(--faint)",marginBottom:6,letterSpacing:".05em",textTransform:"uppercase"}}>Username</div>
+                        <input className="field" value={user} onChange={e=>setUser(e.target.value)}
+                          placeholder="your_username" style={{fontSize:14}} autoComplete="username"/>
+                      </div>
+                      <div>
+                        <div style={{fontSize:11.5,fontWeight:700,color:"var(--faint)",marginBottom:6,letterSpacing:".05em",textTransform:"uppercase"}}>Password</div>
+                        <input className="field" type="password" value={password} onChange={e=>setPassword(e.target.value)}
+                          placeholder="••••••••" style={{fontSize:14}} autoComplete="current-password"/>
+                      </div>
+                    </div>
+                    <div>
+                      <div style={{fontSize:11.5,fontWeight:700,color:"var(--faint)",marginBottom:6,letterSpacing:".05em",textTransform:"uppercase"}}>Database name</div>
+                      <input className="field" value={dbName} onChange={e=>setDbName(e.target.value)}
+                        placeholder="my_database" style={{fontSize:14}}/>
+                    </div>
+                  </div>
+                )
+              ) : (
+                /* Raw URL mode */
+                <div style={{marginBottom:14}}>
+                  <div style={{fontSize:11.5,fontWeight:700,color:"var(--faint)",marginBottom:6,letterSpacing:".05em",textTransform:"uppercase"}}>Connection URL</div>
+                  <input className="field mono"
+                    placeholder={dbType==="sqlite"?"sqlite:///path/to/file.db":dbType==="mysql"?"mysql://user:pass@localhost:3306/db":"postgresql://user:pass@localhost:5432/db"}
+                    value={dbUrl} onChange={e=>setDbUrl(e.target.value)} style={{fontSize:13,marginBottom:8}}/>
+                  <button onClick={()=>setFormMode(true)}
+                    style={{fontSize:12.5,color:"var(--brand-ink)",background:"none",border:"none",cursor:"pointer",fontWeight:650,padding:0}}>
+                    ← Back to the simple form
+                  </button>
+                </div>
+              )}
+
+              {formMode && (
+                <button onClick={()=>setFormMode(false)}
+                  style={{fontSize:12.5,color:"var(--faint)",background:"none",border:"none",cursor:"pointer",fontWeight:600,padding:"0 0 16px 0",display:"block"}}>
+                  Have a full connection URL? Use that instead →
+                </button>
+              )}
+
+              <Button kind={canConnect()?"primary":"ghost"} className="btn-block"
+                disabled={!canConnect()||!!connecting}
                 onClick={()=>go("url")} icon={connecting==="url"?<Spinner/>:<Ico.db/>}>
                 {connecting==="url"?"Connecting…":"Connect database"}
               </Button>
-              <div style={{display:"flex",alignItems:"center",gap:7,marginTop:12,color:"var(--faint)",fontSize:12.5}}>
-                <Ico.shield style={{width:14,height:14}}/> Tip: connect with a read-only account.
+              <div style={{display:"flex",alignItems:"center",gap:7,marginTop:11,color:"var(--faint)",fontSize:12.5}}>
+                <Ico.shield style={{width:14,height:14}}/> Tip: use a read-only database account for extra safety.
               </div>
             </div>
 
-            {/* sample */}
-            <button onClick={()=>go("sample")} disabled={connecting}
+            {/* sample data card */}
+            <button onClick={()=>go("sample")} disabled={!!connecting}
               className="card focusable" style={{padding:22,textAlign:"left",cursor:connecting?"wait":"pointer",
               border:"1.5px dashed var(--brand)",background:"var(--brand-tint)",
               display:"flex",flexDirection:"column",justifyContent:"space-between",transition:"transform .15s var(--ease)"}}
@@ -730,20 +977,23 @@ function ConnectScreen({ engine, setEngine, onConnect }) {
                 <div style={{fontWeight:700,fontSize:16,color:"var(--brand-ink)",marginBottom:5}}>
                   {connecting==="sample"?"Building sample data…":"Try with sample data"}
                 </div>
-                <div style={{fontSize:13.5,color:"var(--brand-ink)",opacity:.85,lineHeight:1.5}}>
-                  A realistic TechStore e‑commerce database, created locally. No setup, no credentials.
+                <div style={{fontSize:13.5,color:"var(--brand-ink)",opacity:.85,lineHeight:1.55}}>
+                  A realistic TechStore e-commerce database, built locally for you. No setup, no credentials, ready in seconds.
                 </div>
               </div>
               <div style={{display:"flex",alignItems:"center",gap:6,marginTop:18,fontWeight:700,fontSize:13.5,color:"var(--brand-ink)"}}>
-                Start in ten seconds <Ico.arrow/>
+                Start in seconds <Ico.arrow/>
               </div>
             </button>
           </div>
-        {error && (
-          <div style={{marginTop:10,padding:"11px 15px",background:"var(--c-low-tint)",
-            border:"1px solid #EBC6BD",borderRadius:"var(--radius-sm)",
-            color:"var(--c-low-ink)",fontSize:13.5,fontWeight:550}}>{error}</div>
-        )}
+
+          {error && (
+            <div style={{marginTop:12,padding:"13px 17px",background:"var(--c-low-tint)",
+              border:"1px solid #EBC6BD",borderRadius:"var(--radius)",color:"var(--c-low-ink)",
+              fontSize:13.5,fontWeight:550,lineHeight:1.55}}>
+              <b>Couldn't connect —</b> {error}
+            </div>
+          )}
         </Section>
 
       </div>
@@ -790,7 +1040,7 @@ function EngineCard({ p, active, onClick, delay }) {
           <div style={{fontSize:11.5,color:"var(--faint)",fontWeight:600}}>{p.sub}</div>
         </div>
       </div>
-      <Meta label="Privacy" value={p.id==="ollama"?"Private":"Schema only"} good={p.id==="ollama"}/>
+      <Meta label="Privacy" value={p.id==="ollama"?"Fully private":"No row data sent"} good={p.id==="ollama"}/>
       <Meta label="Cost" value={p.cost==='Pay per use'?'Metered':p.cost} good={p.cost==="Free"}/>
       <Meta label="Accuracy" value={p.accuracy.split("—")[0].split(",")[0].trim()}/>
     </button>
@@ -893,12 +1143,10 @@ function Stepper({ step }) {
 function ProfileStep({ onNext }) {
   const B = window.BOLO;
   const [done,setDone] = React.useState(0);
+  const allDone = done >= B.schema.length;
   React.useEffect(()=>{
     if (done < B.schema.length){
       const t=setTimeout(()=>setDone(d=>d+1), 360 + Math.random()*220);
-      return ()=>clearTimeout(t);
-    } else {
-      const t=setTimeout(onNext, 700);
       return ()=>clearTimeout(t);
     }
   },[done]);
@@ -906,8 +1154,8 @@ function ProfileStep({ onNext }) {
     <div className="rise card" style={{padding:26}}>
       <h2 style={{margin:"0 0 5px",fontSize:21,fontWeight:700,letterSpacing:"-.02em"}}>Getting to know your database</h2>
       <p style={{margin:"0 0 20px",color:"var(--muted)",fontSize:14.5}}>
-        BoloDB profiles each table once — column types, relationships, and the categories your data uses.
-        Nothing is uploaded.
+        BoloDB is reading your table structure — column names, relationships, and what categories your data uses.
+        Nothing is uploaded or sent anywhere.
       </p>
       <div style={{display:"flex",flexDirection:"column",gap:9}}>
         {B.schema.map((t,i)=>{
@@ -935,6 +1183,17 @@ function ProfileStep({ onNext }) {
             </div>
           );
         })}
+      </div>
+      <div style={{display:"flex",justifyContent:"flex-end",marginTop:20}}>
+        {allDone ? (
+          <Button kind="primary" size="lg" iconRight={<Ico.arrow/>} onClick={onNext}>
+            Looks good — continue
+          </Button>
+        ) : (
+          <span style={{fontSize:13,color:"var(--faint)",fontWeight:550,display:"flex",alignItems:"center",gap:7}}>
+            <Spinner/> Reading your database…
+          </span>
+        )}
       </div>
     </div>
   );
@@ -1086,18 +1345,30 @@ function StarterCard({ s, verdict, onYes, onNo, delay }) {
         <div style={{fontSize:14,color:"var(--ink)",fontWeight:550,lineHeight:1.4}}>{s.restatement}</div>
       </div>
       <ResultTable columns={s.columns||[]} rows={window.rowsToArrays(s.columns||[], s.rows||[])} max={4}/>
-      <SqlBlock sql={s.sql}/>
+      {/* SQL hidden by default — non-technical users don't need to see it */}
+      <details style={{marginTop:8}}>
+        <summary style={{fontSize:12,color:"var(--faint)",cursor:"pointer",fontWeight:600,listStyle:"none",display:"flex",alignItems:"center",gap:5}}>
+          <Ico.code style={{width:13,height:13}}/> View technical details (SQL)
+        </summary>
+        <pre className="mono" style={{margin:"8px 0 0",padding:"12px 14px",background:"var(--surface-3)",
+          border:"1px solid var(--border)",borderRadius:"var(--radius-sm)",fontSize:12,lineHeight:1.6,
+          color:"var(--ink-2)",overflowX:"auto",whiteSpace:"pre"}}>{s.sql}</pre>
+      </details>
       <div style={{display:"flex",alignItems:"center",gap:10,marginTop:14}}>
         {verdict===null ? (
           <>
-            <span style={{fontSize:13.5,fontWeight:650,color:"var(--muted)",marginRight:"auto"}}>Does this look right?</span>
-            <Button kind="ghost" size="sm" icon={<Ico.x style={{width:15,height:15}}/>} onClick={onNo}>No</Button>
-            <Button kind="primary" size="sm" icon={<Ico.check style={{width:15,height:15}}/>} onClick={onYes}>Yes, correct</Button>
+            <span style={{fontSize:13.5,fontWeight:650,color:"var(--muted)",marginRight:"auto",flex:1,lineHeight:1.4}}>
+              Does the result table look correct?
+            </span>
+            <Button kind="ghost" size="sm" icon={<Ico.x style={{width:15,height:15}}/>} onClick={onNo}>Not quite</Button>
+            <Button kind="primary" size="sm" icon={<Ico.check style={{width:15,height:15}}/>} onClick={onYes}>Yes, that's right</Button>
           </>
         ) : (
           <div style={{display:"flex",alignItems:"center",gap:8,fontWeight:700,fontSize:13.5,marginLeft:"auto",
             color: verdict==="yes"?"var(--brand-ink)":"var(--c-low-ink)"}}>
-            {verdict==="yes"?<><Ico.check style={{width:16,height:16}}/> Saved as a verified example</> : <><Ico.x style={{width:16,height:16}}/> Skipped — thanks, that's useful too</>}
+            {verdict==="yes"
+              ? <><Ico.check style={{width:16,height:16}}/> Saved — this becomes a reference answer</>
+              : <><Ico.x style={{width:16,height:16}}/> Skipped — noted, it won't be used</>}
           </div>
         )}
       </div>
@@ -1166,20 +1437,52 @@ const AnswerCard = React.memo(function AnswerCard({ turn, onVerify, isLatest }) 
               </div>
             </div>
 
-            {turn.reason && turn.confidence!=="high" && (
-              <div style={{fontSize:13,color:"var(--muted)",marginBottom:14,marginTop:-6,lineHeight:1.5}}>{cap(turn.reason)}</div>
+            {/* Execution error — shown instead of results when query failed */}
+            {turn.executionError ? (
+              <div style={{padding:"14px 16px",background:"var(--c-low-tint)",border:"1px solid #EBC6BD",
+                borderRadius:"var(--radius-sm)",marginBottom:14,fontSize:13.5,lineHeight:1.55,color:"var(--c-low-ink)"}}>
+                <div style={{fontWeight:700,marginBottom:4}}>The query ran into a problem</div>
+                <div style={{fontWeight:500,marginBottom:8}}>
+                  BoloDB generated a query but your database couldn't execute it — this sometimes happens when a
+                  column or table name wasn't matched correctly.
+                </div>
+                <div style={{fontSize:12.5,fontWeight:600,opacity:.75}}>
+                  Try rephrasing your question, naming a specific table or metric, or ask again with more context.
+                </div>
+              </div>
+            ) : null}
+
+            {/* Confidence context hint (not shown on execution error or high confidence with no note) */}
+            {!turn.executionError && turn.confidence!=="high" && turn.reason && (
+              <div style={{fontSize:13,color:"var(--muted)",marginBottom:14,marginTop:-6,lineHeight:1.5,
+                display:"flex",alignItems:"flex-start",gap:7}}>
+                <Ico.flask style={{width:14,height:14,flexShrink:0,marginTop:2,color:"var(--c-med)"}}/>{cap(turn.reason)}
+              </div>
+            )}
+            {!turn.executionError && turn.confidence==="low" && !turn.basedOn && (
+              <div style={{fontSize:12.5,color:"var(--c-med-ink)",background:"var(--c-med-tint)",
+                padding:"8px 12px",borderRadius:"var(--radius-sm)",marginBottom:14,fontWeight:600}}>
+                If the result looks right, click "Yes, correct" below — that trains BoloDB for next time.
+              </div>
             )}
 
-            <ResultTable columns={turn.columns} rows={turn.rows}/>
+            {!turn.executionError && <ResultTable columns={turn.columns} rows={turn.rows}/>}
             <SqlBlock sql={turn.sql}/>
 
             {/* verify zone */}
             <div className="hr" style={{margin:"16px 0 14px"}}/>
             {turn.verdict==null && !showReasons && (
               <div style={{display:"flex",alignItems:"center",gap:11}}>
-                <span style={{fontSize:13.5,fontWeight:650,color:"var(--ink-2)",marginRight:"auto",display:"flex",alignItems:"center",gap:7}}>
-                  <Ico.shield style={{width:15,height:15,color:"var(--brand)"}}/> Is this the answer you wanted?
-                </span>
+                <div style={{flex:1}}>
+                  <span style={{fontSize:13.5,fontWeight:650,color:"var(--ink-2)",display:"flex",alignItems:"center",gap:7}}>
+                    <Ico.shield style={{width:15,height:15,color:"var(--brand)"}}/> Was this the answer you were looking for?
+                  </span>
+                  {isLatest && (
+                    <div style={{fontSize:11.5,color:"var(--faint)",marginTop:4,fontWeight:550}}>
+                      Telling us keeps BoloDB accurate — verified answers become examples for future questions.
+                    </div>
+                  )}
+                </div>
                 <Button kind="ghost" size="sm" icon={<Ico.x style={{width:15,height:15}}/>} onClick={()=>setShowReasons(true)}>No</Button>
                 <Button kind="primary" size="sm" icon={<Ico.check style={{width:15,height:15}}/>} onClick={yes}>Yes, correct</Button>
               </div>
@@ -1268,7 +1571,7 @@ Object.assign(window, { AnswerCard });
 /* ============================================================
    BoloDB — Ask screen (sidebar + conversation + input + settings)
    ============================================================ */
-function AskScreen({ engine, setEngine, modelName, setModelName, verifiedCount, onVerify, toast, realSchema, dbInfo }) {
+function AskScreen({ engine, setEngine, modelName, setModelName, verifiedCount, onVerify, toast, realSchema, dbInfo, starters, onDisconnect }) {
   const B = window.BOLO;
   const dbLabel = dbInfo ? (dbInfo.url||"").split("/").pop()||dbInfo.dialect : "TechStore";
   const tableCount = dbInfo ? dbInfo.tables : 5;
@@ -1357,7 +1660,7 @@ function AskScreen({ engine, setEngine, modelName, setModelName, verifiedCount, 
         {/* feed */}
         <div ref={feedRef} style={{flex:1,overflowY:"auto",padding:"28px 28px 8px"}}>
           <div style={{maxWidth:720,margin:"0 auto"}}>
-            {turns.length===0 ? <Empty trust={trust} onPick={ask}/> :
+            {turns.length===0 ? <Empty trust={trust} onPick={ask} starters={starters}/> :
               turns.map((t,i)=>(
                 <AnswerCard key={t.id} turn={t} isLatest={i===turns.length-1}
                   onVerify={handleVerify}/>
@@ -1387,14 +1690,16 @@ function AskScreen({ engine, setEngine, modelName, setModelName, verifiedCount, 
         {toast && <TrustToast toast={toast}/>}
       </div>
 
-      {settingsOpen && <Settings engine={engine} setEngine={setEngine} modelName={modelName} setModelName={setModelName} onClose={()=>setSettingsOpen(false)}/>}
+      {settingsOpen && <Settings engine={engine} setEngine={setEngine} modelName={modelName} setModelName={setModelName} onClose={()=>setSettingsOpen(false)} onDisconnect={onDisconnect}/>}
     </div>
   );
 }
 
 /* ---------- empty state ---------- */
-function Empty({ trust, onPick }) {
+function Empty({ trust, onPick, starters }) {
   const B = window.BOLO;
+  // Use real verified starters if available, otherwise fall back to generic suggestions
+  const chips = (starters && starters.length > 0) ? starters : B.suggestions;
   return (
     <div className="rise" style={{paddingTop:34,textAlign:"center"}}>
       <div style={{width:54,height:54,borderRadius:16,background:"var(--brand)",color:"#fff",display:"grid",placeItems:"center",margin:"0 auto 18px",boxShadow:"var(--shadow-brand)"}}>
@@ -1402,16 +1707,24 @@ function Empty({ trust, onPick }) {
       </div>
       <h2 style={{fontSize:25,fontWeight:800,letterSpacing:"-.025em",margin:"0 0 8px"}}>What would you like to know?</h2>
       <p style={{fontSize:15,color:"var(--muted)",margin:"0 auto 24px",maxWidth:440,lineHeight:1.55}}>
-        Ask in plain English. You'll get a plain-English restatement, a confidence level, and the rows —
-        with the SQL one tap away.
+        Type any question about your data in plain English. BoloDB will answer it and explain how confident it is.
       </p>
-      <div style={{display:"flex",flexWrap:"wrap",gap:9,justifyContent:"center",maxWidth:560,margin:"0 auto"}}>
-        {B.suggestions.map(s=>(
-          <button key={s} className="chip" onClick={()=>onPick(s)} style={{fontWeight:550}}>
-            <Ico.arrow style={{width:14,height:14,color:"var(--brand)"}}/>{s}
+      {starters && starters.length > 0 && (
+        <div style={{fontSize:12.5,color:"var(--brand-ink)",fontWeight:700,marginBottom:12,
+          display:"flex",alignItems:"center",justifyContent:"center",gap:6}}>
+          <Ico.history style={{width:13,height:13}}/> Questions verified for this database:
+        </div>
+      )}
+      <div style={{display:"flex",flexWrap:"wrap",gap:9,justifyContent:"center",maxWidth:580,margin:"0 auto"}}>
+        {chips.map(s=>(
+          <button key={s} className="chip" onClick={()=>onPick(s)} style={{fontWeight:550,textAlign:"left"}}>
+            <Ico.arrow style={{width:14,height:14,color:"var(--brand)",flexShrink:0}}/>{s}
           </button>
         ))}
       </div>
+      <p style={{fontSize:12.5,color:"var(--faint)",marginTop:20,lineHeight:1.5}}>
+        Click any question above to run it, or type your own below.
+      </p>
     </div>
   );
 }
@@ -1435,13 +1748,24 @@ function Sidebar({ engine, modelName, verifiedCount, onSettings, schema, dbInfo 
         background:"linear-gradient(165deg, var(--brand-tint), var(--surface-2))",border:"1px solid var(--border)"}}>
         <div style={{display:"flex",alignItems:"center",gap:7,marginBottom:11}}>
           <Ico.shield style={{width:16,height:16,color:"var(--brand)"}}/>
-          <span style={{fontSize:12,fontWeight:800,letterSpacing:".04em",color:"var(--brand-ink)",textTransform:"uppercase",whiteSpace:"nowrap"}}>Trust level</span>
+          <span style={{fontSize:12,fontWeight:800,letterSpacing:".04em",color:"var(--brand-ink)",textTransform:"uppercase",whiteSpace:"nowrap"}}>Accuracy</span>
+          <span style={{marginLeft:"auto",fontSize:11,fontWeight:700,color:"var(--faint)"}}>{verifiedCount} verified</span>
         </div>
         <TrustMeter count={verifiedCount}/>
         <p style={{fontSize:12.5,color:"var(--muted)",lineHeight:1.5,margin:"11px 0 0"}}>{trust.behaviour}</p>
         {trust.next && (
-          <div style={{fontSize:11.5,color:"var(--faint)",marginTop:8,fontWeight:600}} className="tnum">
-            {trust.next-verifiedCount} more verified → {B.trustFor(trust.next).label}
+          <div style={{marginTop:10,padding:"9px 11px",background:"rgba(255,255,255,.6)",borderRadius:"var(--radius-sm)",
+            fontSize:12,color:"var(--brand-ink)",fontWeight:600,lineHeight:1.5}}>
+            Verify {trust.next-verifiedCount} more correct answer{trust.next-verifiedCount===1?"":"s"} and BoloDB will{" "}
+            {trust.key==="supervised"
+              ? "start showing confident answers directly without waiting."
+              : "answer all questions directly — reasoning one tap away."}
+          </div>
+        )}
+        {!trust.next && (
+          <div style={{marginTop:10,padding:"9px 11px",background:"rgba(255,255,255,.6)",borderRadius:"var(--radius-sm)",
+            fontSize:12,color:"var(--brand-ink)",fontWeight:600}}>
+            ✓ BoloDB is fully calibrated for this database.
           </div>
         )}
       </div>
@@ -1530,7 +1854,7 @@ function TrustToast({ toast }) {
 }
 
 /* ---------- settings modal ---------- */
-function Settings({ engine, setEngine, modelName, setModelName, onClose }) {
+function Settings({ engine, setEngine, modelName, setModelName, onClose, onDisconnect }) {
   const B = window.BOLO;
   const [sel,setSel] = React.useState(engine);
   const [localModel,setLocalModel] = React.useState(modelName||"llama3.2");
@@ -1607,9 +1931,23 @@ function Settings({ engine, setEngine, modelName, setModelName, onClose }) {
         {error && (
           <div style={{margin:"0 24px 16px",padding:"11px 15px",background:"var(--c-low-tint)",border:"1px solid #EBC6BD",borderRadius:"var(--radius-sm)",color:"var(--c-low-ink)",fontSize:13.5,fontWeight:550}}>{error}</div>
         )}
-        <div style={{padding:"16px 24px",borderTop:"1px solid var(--border)",display:"flex",justifyContent:"flex-end",gap:10,background:"var(--surface-2)"}}>
-          <Button kind="ghost" onClick={onClose}>Cancel</Button>
-          <Button kind="primary" disabled={saving} onClick={save} icon={saving?<Spinner/>:<Ico.check style={{width:16,height:16}}/>}>{saving?"Saving…":"Save changes"}</Button>
+        <div style={{padding:"16px 24px",borderTop:"1px solid var(--border)",background:"var(--surface-2)"}}>
+          {onDisconnect && (
+            <div style={{marginBottom:14,paddingBottom:14,borderBottom:"1px solid var(--border)"}}>
+              <div style={{fontSize:12.5,color:"var(--faint)",marginBottom:8,fontWeight:550}}>
+                Want to connect a different database?
+              </div>
+              <button onClick={onDisconnect}
+                style={{fontSize:13,color:"var(--c-low-ink)",background:"none",border:"1px solid #EBC6BD",
+                  borderRadius:"var(--radius-sm)",padding:"7px 14px",cursor:"pointer",fontWeight:650}}>
+                Disconnect &amp; change database
+              </button>
+            </div>
+          )}
+          <div style={{display:"flex",justifyContent:"flex-end",gap:10}}>
+            <Button kind="ghost" onClick={onClose}>Cancel</Button>
+            <Button kind="primary" disabled={saving} onClick={save} icon={saving?<Spinner/>:<Ico.check style={{width:16,height:16}}/>}>{saving?"Saving…":"Save changes"}</Button>
+          </div>
         </div>
       </div>
     </div>
@@ -1632,6 +1970,7 @@ function App(){
   const [toast,setToast] = React.useState(null);
   const [realSchema,setRealSchema] = React.useState(null);
   const [dbInfo,setDbInfo] = React.useState(null);
+  const [starters,setStarters] = React.useState([]);
   const prevLevel = React.useRef(window.BOLO.trustFor(0).key);
 
   // On mount: check if already connected (restore last session)
@@ -1644,6 +1983,7 @@ function App(){
           setModelName(s.config?.model||"");
           setVerifiedCount(s.trust?.verified||0);
           setDbInfo(s.database||null);
+          setStarters(s.starters||[]);
           prevLevel.current = window.BOLO.trustFor(s.trust?.verified||0).key;
           // Load schema for sidebar
           try {
@@ -1692,6 +2032,7 @@ function App(){
       setVerifiedCount(n);
       prevLevel.current = window.BOLO.trustFor(n).key;
       if (s.database) setDbInfo(s.database);
+      if (s.starters) setStarters(s.starters);
     } catch(e){
       setVerifiedCount(seedCount);
       prevLevel.current = window.BOLO.trustFor(seedCount).key;
@@ -1715,6 +2056,14 @@ function App(){
     });
   }
 
+  async function onDisconnect(){
+    // Disconnect from the current database and return to the connect screen
+    try { await window.apiCall('/api/config',{last_db_url:""}); } catch(e){}
+    setDbInfo(null); setRealSchema(null); setVerifiedCount(0); setStarters([]);
+    prevLevel.current = window.BOLO.trustFor(0).key;
+    setPhase("connect");
+  }
+
   return (
     <div className="app-shell">
       {phase==="loading" && (
@@ -1726,7 +2075,7 @@ function App(){
       )}
       {phase==="connect" && <ConnectScreen engine={engine} setEngine={setEngine} onConnect={onConnect}/>}
       {phase==="onboard" && <OnboardScreen onDone={onOnboardDone}/>}
-      {phase==="ask"     && <AskScreen engine={engine} setEngine={setEngine} modelName={modelName} setModelName={setModelName} verifiedCount={verifiedCount} onVerify={onVerify} toast={toast} realSchema={realSchema} dbInfo={dbInfo}/>}
+      {phase==="ask"     && <AskScreen engine={engine} setEngine={setEngine} modelName={modelName} setModelName={setModelName} verifiedCount={verifiedCount} onVerify={onVerify} toast={toast} realSchema={realSchema} dbInfo={dbInfo} starters={starters} onDisconnect={onDisconnect}/>}
     </div>
   );
 }

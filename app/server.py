@@ -56,7 +56,23 @@ def create_app(initial_db_url="", readonly=True):
                              "tables":db._table_count}
             s["trust"]    = kb.trust_level(db.db_id)
             s["glossary"] = kb.get_glossary(db.db_id)
+            # Surface verified starter questions so the UI can show them as chips
+            s["starters"] = [v["question"] for v in kb.get_verified(db.db_id)[:6]]
         return s
+
+    @app.get("/api/ollama-check")
+    async def ollama_check():
+        """Always checks Ollama health regardless of configured provider."""
+        import httpx as _httpx
+        url = cfg.get("ollama_url", "http://localhost:11434")
+        try:
+            async with _httpx.AsyncClient(timeout=3) as c:
+                r = await c.get(f"{url}/api/tags")
+                r.raise_for_status()
+                models = [m["name"] for m in r.json().get("models", [])]
+                return {"ok": True, "models": models}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
 
     @app.get("/api/health")
     async def health():
