@@ -1,5 +1,5 @@
 """LLM providers (Ollama, Claude, OpenAI, Groq) + lean SQL generation."""
-import httpx, json, re
+import httpx, json
 from abc import ABC, abstractmethod
 
 def parse_json(text):

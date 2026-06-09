@@ -1,7 +1,9 @@
 """Local session logging for validation."""
-import json, time
+import json, time, logging
 from pathlib import Path
 from datetime import datetime
+
+logger = logging.getLogger(__name__)
 
 class SessionLog:
     def __init__(self, base_dir):
@@ -15,7 +17,8 @@ class SessionLog:
         try:
             with open(self.file,"a",encoding="utf-8") as f:
                 f.write(json.dumps(record, default=str) + "\n")
-        except Exception: pass
+        except Exception as e:
+            logger.error("Failed to append to session log: %s", e)
 
     def log_query(self, db_id, question, result):
         import uuid
