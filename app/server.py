@@ -1,5 +1,6 @@
 """FastAPI application."""
 import asyncio
+import logging
 from pathlib import Path
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import HTMLResponse
@@ -16,6 +17,7 @@ from app.schema_link import model_budget, link_relevant_tables, compact_schema, 
 from sample_data import ensure_sample_db
 
 STATIC = Path(__file__).parent.parent / "static"
+logger = logging.getLogger(__name__)
 
 class ConfigUpdate(BaseModel):
     provider: str | None = None
@@ -56,7 +58,23 @@ def create_app(initial_db_url="", readonly=True):
                              "tables":db._table_count}
             s["trust"]    = kb.trust_level(db.db_id)
             s["glossary"] = kb.get_glossary(db.db_id)
+            # Surface verified starter questions so the UI can show them as chips
+            s["starters"] = [v["question"] for v in kb.get_verified(db.db_id)[:6]]
         return s
+
+    @app.get("/api/ollama-check")
+    async def ollama_check():
+        """Always checks Ollama health regardless of configured provider."""
+        import httpx as _httpx
+        url = cfg.get("ollama_url", "http://localhost:11434")
+        try:
+            async with _httpx.AsyncClient(timeout=3) as c:
+                r = await c.get(f"{url}/api/tags")
+                r.raise_for_status()
+                models = [m["name"] for m in r.json().get("models", [])]
+                return {"ok": True, "models": models}
+        except Exception as e:
+            return {"ok": False, "error": str(e)}
 
     @app.get("/api/health")
     async def health():
@@ -82,6 +100,7 @@ def create_app(initial_db_url="", readonly=True):
         result["trust"]        = kb.trust_level(db.db_id)
         result["glossary"]     = kb.get_glossary(db.db_id)
         result["has_knowledge"]= kb.count_verified(db.db_id) > 0
+        result["starters"]     = [v["question"] for v in kb.get_verified(db.db_id)[:6]]
         return result
 
     @app.post("/api/connect-sample")
@@ -93,8 +112,21 @@ def create_app(initial_db_url="", readonly=True):
         result["trust"]        = kb.trust_level(db.db_id)
         result["glossary"]     = kb.get_glossary(db.db_id)
         result["has_knowledge"]= kb.count_verified(db.db_id) > 0
+        result["starters"]     = [v["question"] for v in kb.get_verified(db.db_id)[:6]]
         result["is_sample"]    = True
         return result
+
+    @app.post("/api/disconnect")
+    async def disconnect():
+        db.disconnect()
+        cfg.pop("last_db_url", None)
+        try:
+            cfgmod.save_config(cfg)
+        except Exception as e:
+            # Disconnect already succeeded in memory; persisting the cleared
+            # last_db_url is best-effort, so log and still report success.
+            logger.warning("Failed to save config after disconnect: %s", e)
+        return {"ok": True}
 
     @app.get("/api/schema")
     async def schema(refresh: bool = False):
@@ -175,7 +207,10 @@ def create_app(initial_db_url="", readonly=True):
         session_log.log_feedback(req.query_id, req.verdict, req.reason)
         if req.verdict == "correct":
             kb.add_verified(db.db_id, req.question, req.sql, req.restatement)
-        return {"ok":True,"trust":kb.trust_level(db.db_id)}
+        out = {"ok": True, "trust": kb.trust_level(db.db_id)}
+        if req.verdict == "correct":
+            out["starters"] = [v["question"] for v in kb.get_verified(db.db_id)[:6]]
+        return out
 
     @app.post("/api/verify")
     async def verify(req: VerifyReq):

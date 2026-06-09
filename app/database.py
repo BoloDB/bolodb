@@ -30,6 +30,16 @@ class DatabaseManager:
     @property
     def connected(self): return self.engine is not None
 
+    def disconnect(self):
+        """Reset all connection state so the server accepts a new connect call."""
+        if self.engine is not None:
+            try:
+                self.engine.dispose()  # release pooled connections
+            except Exception as e:
+                logger.warning("Error disposing engine on disconnect: %s", e)
+        self.engine = None; self.url = None; self.db_id = None
+        self.dialect = None; self._schema_cache = None; self._table_count = 0
+
     def connect(self, url):
         try:
             engine = create_engine(url)
