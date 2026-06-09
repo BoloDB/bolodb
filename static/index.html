@@ -563,11 +563,15 @@ function TrustMeter({ count, compact=false }) {
 const ResultTable = React.memo(function ResultTable({ columns, rows, max=8 }) {
 
   function copyCSV(){
-    const header = columns.join(",");
-    const body = rows.map(r=>r.map(c=>{
-      const s=String(c??'');
+    // Guard against CSV/formula injection: cells starting with =,+,-,@ are
+    // prefixed with ' so spreadsheet tools treat them as text, not formulas.
+    const cell = (v)=>{
+      let s = String(v??'');
+      if (/^[=+\-@]/.test(s)) s = "'" + s;
       return (s.includes(',')||s.includes('"')||s.includes('\n')) ? `"${s.replace(/"/g,'""')}"` : s;
-    }).join(",")).join("\n");
+    };
+    const header = columns.map(cell).join(",");
+    const body = rows.map(r=>r.map(cell).join(",")).join("\n");
     navigator.clipboard.writeText(header+"\n"+body).catch(()=>{});
   }
 
@@ -728,7 +732,8 @@ function ConnectScreen({ engine, setEngine, onConnect }) {
 
   function canConnect(){
     if (formMode){
-      if (isFileBased) return filePath.trim().length>0;
+      if (dbType==="duckdb") return true;                  // empty path = in-memory DuckDB
+      if (isFileBased) return filePath.trim().length>0;    // SQLite needs a file
       return host.trim() && user.trim() && dbName.trim();
     }
     return dbUrl.trim().length>0;
@@ -1501,9 +1506,10 @@ const AnswerCard = React.memo(function AnswerCard({ turn, onVerify, isLatest }) 
             {!turn.executionError && <ResultTable columns={turn.columns} rows={turn.rows}/>}
             <SqlBlock sql={turn.sql}/>
 
-            {/* verify zone */}
-            <div className="hr" style={{margin:"16px 0 14px"}}/>
-            {turn.verdict==null && !showReasons && (
+            {/* verify zone — hidden when the query failed to execute, so a
+                broken query can never be saved as a verified ("correct") example */}
+            {!turn.executionError && <div className="hr" style={{margin:"16px 0 14px"}}/>}
+            {!turn.executionError && turn.verdict==null && !showReasons && (
               <div style={{display:"flex",alignItems:"center",gap:11}}>
                 <div style={{flex:1}}>
                   <span style={{fontSize:13.5,fontWeight:650,color:"var(--ink-2)",display:"flex",alignItems:"center",gap:7}}>
@@ -1520,7 +1526,7 @@ const AnswerCard = React.memo(function AnswerCard({ turn, onVerify, isLatest }) 
               </div>
             )}
 
-            {turn.verdict==null && showReasons && (
+            {!turn.executionError && turn.verdict==null && showReasons && (
               <div className="rise">
                 <div style={{fontSize:13.5,fontWeight:700,marginBottom:10,color:"var(--ink)"}}>Thanks — what was off? <span style={{fontWeight:500,color:"var(--faint)"}}>(this is the most useful signal)</span></div>
                 <div style={{display:"flex",flexWrap:"wrap",gap:8}}>
@@ -1663,7 +1669,9 @@ function AskScreen({ engine, setEngine, modelName, setModelName, verifiedCount, 
         if (r.starters) onUpdateStarters(r.starters);
       }
     } catch(e) {
-      if (verdict==="correct") onVerify();
+      // Feedback didn't persist on the server — revert the optimistic verdict
+      // so client trust stays aligned with the server and the user can retry.
+      setTurns(t=>t.map(x=>x.id===turnId?{...x,verdict:null,reasonChosen:null}:x));
     }
   }, [onVerify, onUpdateStarters]);
 

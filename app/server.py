@@ -1,5 +1,6 @@
 """FastAPI application."""
 import asyncio
+import logging
 from pathlib import Path
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import HTMLResponse
@@ -16,6 +17,7 @@ from app.schema_link import model_budget, link_relevant_tables, compact_schema, 
 from sample_data import ensure_sample_db
 
 STATIC = Path(__file__).parent.parent / "static"
+logger = logging.getLogger(__name__)
 
 class ConfigUpdate(BaseModel):
     provider: str | None = None
@@ -117,7 +119,13 @@ def create_app(initial_db_url="", readonly=True):
     @app.post("/api/disconnect")
     async def disconnect():
         db.disconnect()
-        cfg.pop("last_db_url", None); cfgmod.save_config(cfg)
+        cfg.pop("last_db_url", None)
+        try:
+            cfgmod.save_config(cfg)
+        except Exception as e:
+            # Disconnect already succeeded in memory; persisting the cleared
+            # last_db_url is best-effort, so log and still report success.
+            logger.warning("Failed to save config after disconnect: %s", e)
         return {"ok": True}
 
     @app.get("/api/schema")
