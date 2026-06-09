@@ -627,7 +627,7 @@ function SqlBlock({ sql }) {
     <div style={{marginTop:2}}>
       <button onClick={()=>setOpen(o=>!o)} className="btn btn-quiet btn-sm"
         style={{padding:"6px 10px",color:"var(--muted)",fontWeight:600}}>
-        <Ico.code/> {open?"Hide SQL":"Show SQL"} <Ico.caret style={{transform:open?"rotate(180deg)":"none",transition:"transform .2s"}}/>
+        <Ico.code/> {open?"Hide query":"View the query"} <Ico.caret style={{transform:open?"rotate(180deg)":"none",transition:"transform .2s"}}/>
       </button>
       {open && (
         <pre className="mono" style={{margin:"8px 0 0",padding:"14px 16px",background:"var(--surface-3)",
@@ -1682,7 +1682,7 @@ function AskScreen({ engine, setEngine, modelName, setModelName, verifiedCount, 
             <span style={{width:30,height:30,borderRadius:9,background:"var(--brand-tint)",color:"var(--brand)",display:"grid",placeItems:"center"}}><Ico.db/></span>
             <div>
               <div style={{fontWeight:700,fontSize:14.5,lineHeight:1.1}}>{dbLabel}</div>
-              <div style={{fontSize:11.5,color:"var(--faint)",fontWeight:600}}>{tableCount} tables · view only</div>
+              <div style={{fontSize:11.5,color:"var(--faint)",fontWeight:600}}>{tableCount>0?`${tableCount} table${tableCount===1?"":"s"} · `:""}view only</div>
             </div>
           </div>
           <div style={{display:"flex",alignItems:"center",gap:10}}>
