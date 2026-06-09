@@ -1731,9 +1731,7 @@ function AskScreen({ engine, setEngine, modelName, setModelName, verifiedCount, 
 
 /* ---------- empty state ---------- */
 function Empty({ trust, onPick, starters }) {
-  const B = window.BOLO;
-  // Use real verified starters if available, otherwise fall back to generic suggestions
-  const chips = (starters && starters.length > 0) ? starters : B.suggestions;
+  const hasStarters = starters && starters.length > 0;
   return (
     <div className="rise" style={{paddingTop:34,textAlign:"center"}}>
       <div style={{width:54,height:54,borderRadius:16,background:"var(--brand)",color:"#fff",display:"grid",placeItems:"center",margin:"0 auto 18px",boxShadow:"var(--shadow-brand)"}}>
@@ -1743,22 +1741,44 @@ function Empty({ trust, onPick, starters }) {
       <p style={{fontSize:15,color:"var(--muted)",margin:"0 auto 24px",maxWidth:440,lineHeight:1.55}}>
         Type any question about your data in plain English. BoloDB will answer it and explain how confident it is.
       </p>
-      {starters && starters.length > 0 && (
-        <div style={{fontSize:12.5,color:"var(--brand-ink)",fontWeight:700,marginBottom:12,
-          display:"flex",alignItems:"center",justifyContent:"center",gap:6}}>
-          <Ico.history style={{width:13,height:13}}/> Questions verified for this database:
+
+      {hasStarters ? (
+        <>
+          <div style={{fontSize:12.5,color:"var(--brand-ink)",fontWeight:700,marginBottom:12,
+            display:"flex",alignItems:"center",justifyContent:"center",gap:6}}>
+            <Ico.history style={{width:13,height:13}}/> Questions verified for this database:
+          </div>
+          <div style={{display:"flex",flexWrap:"wrap",gap:9,justifyContent:"center",maxWidth:580,margin:"0 auto"}}>
+            {starters.map(s=>(
+              <button key={s} className="chip" onClick={()=>onPick(s)} style={{fontWeight:550,textAlign:"left"}}>
+                <Ico.arrow style={{width:14,height:14,color:"var(--brand)",flexShrink:0}}/>{s}
+              </button>
+            ))}
+          </div>
+          <p style={{fontSize:12.5,color:"var(--faint)",marginTop:20,lineHeight:1.5}}>
+            Click any question above to run it, or type your own below.
+          </p>
+        </>
+      ) : (
+        <div style={{padding:"20px 24px",borderRadius:"var(--radius)",background:"var(--surface-2)",
+          border:"1px dashed var(--border-2)",maxWidth:480,margin:"0 auto",textAlign:"left"}}>
+          <div style={{fontWeight:700,fontSize:14,marginBottom:10,color:"var(--ink-2)"}}>Not sure where to start? Try asking:</div>
+          <div style={{display:"flex",flexDirection:"column",gap:7}}>
+            {["What tables does my database have?",
+              "How many rows are in each table?",
+              "Show me the most recent 10 entries",
+              "What are the unique values in [a column name]?"].map(s=>(
+              <button key={s} className="chip" onClick={()=>onPick(s)}
+                style={{fontWeight:550,textAlign:"left",justifyContent:"flex-start",width:"100%"}}>
+                <Ico.arrow style={{width:14,height:14,color:"var(--brand)",flexShrink:0}}/>{s}
+              </button>
+            ))}
+          </div>
+          <p style={{fontSize:12,color:"var(--faint)",marginTop:12,marginBottom:0,lineHeight:1.5}}>
+            As you verify answers, questions specific to your data will appear here.
+          </p>
         </div>
       )}
-      <div style={{display:"flex",flexWrap:"wrap",gap:9,justifyContent:"center",maxWidth:580,margin:"0 auto"}}>
-        {chips.map(s=>(
-          <button key={s} className="chip" onClick={()=>onPick(s)} style={{fontWeight:550,textAlign:"left"}}>
-            <Ico.arrow style={{width:14,height:14,color:"var(--brand)",flexShrink:0}}/>{s}
-          </button>
-        ))}
-      </div>
-      <p style={{fontSize:12.5,color:"var(--faint)",marginTop:20,lineHeight:1.5}}>
-        Click any question above to run it, or type your own below.
-      </p>
     </div>
   );
 }
