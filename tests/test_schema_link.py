@@ -1,6 +1,38 @@
-"""Tests for model budgeting and signal-based confidence scoring."""
+"""Tests for model budgeting, confidence scoring, and table linking."""
 import pytest
-from app.schema_link import model_budget, compute_confidence
+from app.schema_link import model_budget, compute_confidence, link_relevant_tables
+
+
+@pytest.fixture
+def small_schema():
+    return {
+        "users":    {"columns": [{"name": "id"}, {"name": "name"}], "row_count": 100, "foreign_keys": [], "distinct_values": {}},
+        "orders":   {"columns": [{"name": "id"}, {"name": "user_id"}], "foreign_keys": [{"column": "user_id", "references": "users.id"}], "row_count": 50, "distinct_values": {}},
+        "products": {"columns": [{"name": "id"}, {"name": "title"}, {"name": "price"}], "row_count": 200, "foreign_keys": [], "distinct_values": {}},
+    }
+
+
+def test_link_returns_all_tables_when_under_max(small_schema):
+    result = link_relevant_tables("test question", small_schema, [], [], max_tables=10)
+    assert set(result) == {"users", "orders", "products"}
+
+
+def test_link_prioritises_token_matched_tables(small_schema):
+    result = link_relevant_tables("show me all orders", small_schema, [], [], max_tables=1)
+    assert "orders" in result
+
+
+def test_link_includes_fk_referenced_tables(small_schema):
+    # "orders" has a FK to "users"; even if max_tables=1 matches only "orders",
+    # "users" should be pulled in as a FK dependency
+    result = link_relevant_tables("show me all orders", small_schema, [], [], max_tables=1)
+    assert "users" in result
+
+
+def test_link_uses_verified_sql_as_boost(small_schema):
+    retrieved = [{"sql": "SELECT * FROM products WHERE price > 100", "question": "", "restatement": ""}]
+    result = link_relevant_tables("expensive items", small_schema, [], retrieved, max_tables=1)
+    assert "products" in result
 
 
 @pytest.mark.parametrize("provider,model,expected_tier", [
