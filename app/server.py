@@ -98,6 +98,7 @@ def create_app(initial_db_url="", readonly=True):
         result["trust"]        = kb.trust_level(db.db_id)
         result["glossary"]     = kb.get_glossary(db.db_id)
         result["has_knowledge"]= kb.count_verified(db.db_id) > 0
+        result["starters"]     = [v["question"] for v in kb.get_verified(db.db_id)[:6]]
         return result
 
     @app.post("/api/connect-sample")
@@ -109,8 +110,15 @@ def create_app(initial_db_url="", readonly=True):
         result["trust"]        = kb.trust_level(db.db_id)
         result["glossary"]     = kb.get_glossary(db.db_id)
         result["has_knowledge"]= kb.count_verified(db.db_id) > 0
+        result["starters"]     = [v["question"] for v in kb.get_verified(db.db_id)[:6]]
         result["is_sample"]    = True
         return result
+
+    @app.post("/api/disconnect")
+    async def disconnect():
+        db.disconnect()
+        cfg.pop("last_db_url", None); cfgmod.save_config(cfg)
+        return {"ok": True}
 
     @app.get("/api/schema")
     async def schema(refresh: bool = False):
@@ -191,7 +199,10 @@ def create_app(initial_db_url="", readonly=True):
         session_log.log_feedback(req.query_id, req.verdict, req.reason)
         if req.verdict == "correct":
             kb.add_verified(db.db_id, req.question, req.sql, req.restatement)
-        return {"ok":True,"trust":kb.trust_level(db.db_id)}
+        out = {"ok": True, "trust": kb.trust_level(db.db_id)}
+        if req.verdict == "correct":
+            out["starters"] = [v["question"] for v in kb.get_verified(db.db_id)[:6]]
+        return out
 
     @app.post("/api/verify")
     async def verify(req: VerifyReq):

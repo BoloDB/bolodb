@@ -1571,7 +1571,7 @@ Object.assign(window, { AnswerCard });
 /* ============================================================
    BoloDB — Ask screen (sidebar + conversation + input + settings)
    ============================================================ */
-function AskScreen({ engine, setEngine, modelName, setModelName, verifiedCount, onVerify, toast, realSchema, dbInfo, starters, onDisconnect }) {
+function AskScreen({ engine, setEngine, modelName, setModelName, verifiedCount, onVerify, onUpdateStarters, toast, realSchema, dbInfo, starters, onDisconnect }) {
   const B = window.BOLO;
   const dbLabel = dbInfo ? (dbInfo.url||"").split("/").pop()||dbInfo.dialect : "TechStore";
   const tableCount = dbInfo ? dbInfo.tables : 5;
@@ -1627,11 +1627,13 @@ function AskScreen({ engine, setEngine, modelName, setModelName, verifiedCount, 
       if (verdict==="correct") {
         if (r.trust) onVerify(r.trust.verified);
         else onVerify();
+        // Update starter chips so newly verified questions appear immediately
+        if (r.starters) onUpdateStarters(r.starters);
       }
     } catch(e) {
       if (verdict==="correct") onVerify();
     }
-  }, [onVerify]);
+  }, [onVerify, onUpdateStarters]);
 
   const trust = B.trustFor(verifiedCount);
 
@@ -2016,6 +2018,7 @@ function App(){
       setDbInfo(res);
       setVerifiedCount(res.trust?.verified||0);
       prevLevel.current = window.BOLO.trustFor(res.trust?.verified||0).key;
+      if (res.starters) setStarters(res.starters);
       try {
         const schema = await window.apiCall('/api/schema');
         setRealSchema(schemaObjToDisplay(schema));
@@ -2057,8 +2060,7 @@ function App(){
   }
 
   async function onDisconnect(){
-    // Disconnect from the current database and return to the connect screen
-    try { await window.apiCall('/api/config',{last_db_url:""}); } catch(e){}
+    try { await window.apiCall('/api/disconnect', {}); } catch(e){}
     setDbInfo(null); setRealSchema(null); setVerifiedCount(0); setStarters([]);
     prevLevel.current = window.BOLO.trustFor(0).key;
     setPhase("connect");
@@ -2075,7 +2077,7 @@ function App(){
       )}
       {phase==="connect" && <ConnectScreen engine={engine} setEngine={setEngine} onConnect={onConnect}/>}
       {phase==="onboard" && <OnboardScreen onDone={onOnboardDone}/>}
-      {phase==="ask"     && <AskScreen engine={engine} setEngine={setEngine} modelName={modelName} setModelName={setModelName} verifiedCount={verifiedCount} onVerify={onVerify} toast={toast} realSchema={realSchema} dbInfo={dbInfo} starters={starters} onDisconnect={onDisconnect}/>}
+      {phase==="ask"     && <AskScreen engine={engine} setEngine={setEngine} modelName={modelName} setModelName={setModelName} verifiedCount={verifiedCount} onVerify={onVerify} onUpdateStarters={setStarters} toast={toast} realSchema={realSchema} dbInfo={dbInfo} starters={starters} onDisconnect={onDisconnect}/>}
     </div>
   );
 }
