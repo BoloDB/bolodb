@@ -5,10 +5,14 @@ from pathlib import Path
 
 from app.utils import _tokens
 
-def _similarity(a, b):
-    ta, tb = _tokens(a), _tokens(b)
+def _similarity(a, b, tb=None, b_lower=None):
+    ta = _tokens(a)
+    if tb is None:
+        tb = _tokens(b)
     jacc = len(ta & tb) / len(ta | tb) if ta or tb else 0.0
-    seq  = SequenceMatcher(None, a.lower(), b.lower()).ratio()
+    if b_lower is None:
+        b_lower = b.lower()
+    seq  = SequenceMatcher(None, a.lower(), b_lower).ratio()
     return 0.6 * jacc + 0.4 * seq
 
 class KnowledgeBase:
@@ -33,8 +37,10 @@ class KnowledgeBase:
         self.conn.commit()
 
     def add_verified(self, db_id, question, sql, restatement=""):
+        tb = _tokens(question)
+        b_lower = question.lower()
         for e in self.get_verified(db_id):
-            if _similarity(e["question"], question) > 0.92: return
+            if _similarity(e["question"], question, tb, b_lower) > 0.92: return
         self.conn.execute(
             "INSERT INTO verified(db_id,question,sql,restatement,created_at) VALUES(?,?,?,?,?)",
             (db_id, question, sql, restatement, time.time()))
@@ -51,8 +57,10 @@ class KnowledgeBase:
 
     def retrieve_similar(self, db_id, question, k=3, threshold=0.25):
         scored = []
+        tb = _tokens(question)
+        b_lower = question.lower()
         for c in self.get_verified(db_id):
-            s = _similarity(c["question"], question)
+            s = _similarity(c["question"], question, tb, b_lower)
             if s >= threshold:
                 scored.append({**c, "similarity": round(s, 3)})
         scored.sort(key=lambda x: -x["similarity"])
