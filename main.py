@@ -5,7 +5,7 @@ from app.server import create_app
 def is_ollama_up(url="http://localhost:11434"):
     try:
         import httpx; httpx.get(f"{url}/api/tags", timeout=3); return True
-    except: return False
+    except Exception: return False
 
 def start_ollama(url="http://localhost:11434"):
     exe = shutil.which("ollama")
@@ -26,7 +26,7 @@ def start_ollama(url="http://localhost:11434"):
             time.sleep(1); print(".", end="", flush=True)
             if is_ollama_up(url): print(" ready."); return True
         print(" timed out."); return False
-    except: return False
+    except Exception: return False
 
 def main():
     ap = argparse.ArgumentParser(description="BoloDB")
