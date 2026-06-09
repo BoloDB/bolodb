@@ -3,8 +3,7 @@ import sqlite3, time, re
 from difflib import SequenceMatcher
 from pathlib import Path
 
-def _tokens(text):
-    return set(t for t in re.findall(r"[a-z0-9]+", (text or "").lower()) if len(t) > 1)
+from app.utils import _tokens
 
 def _similarity(a, b):
     ta, tb = _tokens(a), _tokens(b)

@@ -1,8 +1,6 @@
 """Schema linking, compact rendering, signal-based confidence, model budgets."""
 import re
-
-def _tokens(text):
-    return set(t for t in re.findall(r"[a-z0-9]+", (text or "").lower()) if len(t) > 1)
+from app.utils import _tokens
 
 def model_budget(provider, model):
     m = (model or "").lower()
