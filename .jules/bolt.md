@@ -1,0 +1,3 @@
+## 2025-05-20 - Memoization Cache Poisoning via Mutable Returns
+**Learning:** When using `functools.lru_cache` to memoize functions that return collections (like `_tokens` returning a `set`), the return type must be immutable (e.g., `frozenset`). Callers modifying the returned collection with operators like `|=` (in-place union) will inadvertently mutate the cached value itself, causing subsequent calls with the same arguments to return the poisoned, mutated state.
+**Action:** Always return immutable types (`frozenset`, `tuple`) from memoized functions when the caller expects to receive a collection, to prevent unintended cache mutation.
