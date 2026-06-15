@@ -561,6 +561,7 @@ function TrustMeter({ count, compact=false }) {
 
 /* ---------- ResultTable ---------- */
 const ResultTable = React.memo(function ResultTable({ columns, rows, max=8 }) {
+  const [copied, setCopied] = React.useState(false);
 
   function copyCSV(){
     // Guard against CSV/formula injection: cells starting with =,+,-,@ are
@@ -572,7 +573,10 @@ const ResultTable = React.memo(function ResultTable({ columns, rows, max=8 }) {
     };
     const header = columns.map(cell).join(",");
     const body = rows.map(r=>r.map(cell).join(",")).join("\n");
-    navigator.clipboard.writeText(header+"\n"+body).catch(()=>{});
+    navigator.clipboard.writeText(header+"\n"+body).then(()=>{
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }).catch(()=>{});
   }
 
   if (!rows || rows.length===0) {
@@ -587,13 +591,15 @@ const ResultTable = React.memo(function ResultTable({ columns, rows, max=8 }) {
   return (
     <div style={{border:"1px solid var(--border)",borderRadius:"var(--radius)",overflow:"hidden",background:"var(--surface)"}}>
       <div style={{display:"flex",alignItems:"center",justifyContent:"flex-end",padding:"7px 12px 0",background:"var(--surface-2)",borderBottom:"1px solid var(--border)"}}>
-        <button onClick={copyCSV} title="Copy all rows as CSV — paste into Excel or Sheets"
+        <button onClick={copyCSV} title="Copy all rows as CSV — paste into Excel or Sheets" aria-live="polite"
           style={{display:"inline-flex",alignItems:"center",gap:5,padding:"4px 10px",borderRadius:6,
-            background:"transparent",border:"1px solid var(--border-2)",color:"var(--faint)",
+            background: copied?"var(--brand-tint)":"transparent",
+            border: copied?"1px solid var(--brand-tint-2)":"1px solid var(--border-2)",
+            color: copied?"var(--brand-ink)":"var(--faint)",
             fontSize:11.5,fontWeight:650,cursor:"pointer",transition:"all .15s"}}
-          onMouseEnter={e=>{ e.currentTarget.style.background="var(--surface-3)"; e.currentTarget.style.color="var(--ink-2)"; }}
-          onMouseLeave={e=>{ e.currentTarget.style.background="transparent"; e.currentTarget.style.color="var(--faint)"; }}>
-          ↓ Copy as CSV
+          onMouseEnter={e=>{ if(!copied){ e.currentTarget.style.background="var(--surface-3)"; e.currentTarget.style.color="var(--ink-2)"; } }}
+          onMouseLeave={e=>{ if(!copied){ e.currentTarget.style.background="transparent"; e.currentTarget.style.color="var(--faint)"; } }}>
+          {copied ? <><Ico.check style={{width: 14, height: 14}}/> Copied!</> : "↓ Copy as CSV"}
         </button>
       </div>
       <table style={{width:"100%",borderCollapse:"collapse",fontSize:14}}>
