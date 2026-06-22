@@ -1368,6 +1368,10 @@ function StartersStep({ onDone, starterItems, glossary }) {
 }
 
 function StarterCard({ s, verdict, onYes, onNo, delay }) {
+  // Memoize rows to preserve referential equality and prevent
+  // the React.memo inside <ResultTable> from uselessly re-rendering
+  const memoizedRows = React.useMemo(() => window.rowsToArrays(s.columns||[], s.rows||[]), [s.columns, s.rows]);
+
   return (
     <div className="card rise" style={{padding:20,animationDelay:`${delay}ms`,
       borderColor: verdict==="yes"?"var(--brand-tint-2)":verdict==="no"?"#EBC6BD":"var(--border)",
@@ -1381,7 +1385,7 @@ function StarterCard({ s, verdict, onYes, onNo, delay }) {
         <div style={{fontSize:10.5,fontWeight:800,color:"var(--faint)",letterSpacing:".07em",marginBottom:5}}>WHAT I UNDERSTOOD</div>
         <div style={{fontSize:14,color:"var(--ink)",fontWeight:550,lineHeight:1.4}}>{s.restatement}</div>
       </div>
-      <ResultTable columns={s.columns||[]} rows={window.rowsToArrays(s.columns||[], s.rows||[])} max={4}/>
+      <ResultTable columns={s.columns||[]} rows={memoizedRows} max={4}/>
       {/* SQL hidden by default — non-technical users don't need to see it */}
       <details style={{marginTop:8}}>
         <summary style={{fontSize:12,color:"var(--faint)",cursor:"pointer",fontWeight:600,listStyle:"none",display:"flex",alignItems:"center",gap:5}}>

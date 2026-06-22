@@ -1,0 +1,3 @@
+## 2024-06-22 - Prevent unnecessary re-renders in standalone React frontend by memoizing inline array transformations
+**Learning:** In the standalone single-file frontend (`static/index.html`), passing inline array transformations directly as props (e.g., `rows={window.rowsToArrays(...)}`) to components wrapped in `React.memo` (like `ResultTable`) defeats memoization because the array reference changes on every render.
+**Action:** Always wrap expensive or inline data transformations passed to memoized components in a `React.useMemo` hook to ensure referential stability and prevent useless re-renders of child components.
