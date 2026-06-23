@@ -1,0 +1,3 @@
+## 2025-02-28 - Copy-to-clipboard state feedback
+**Learning:** Copy-to-clipboard buttons in data-heavy components like `ResultTable` require immediate visual and accessible feedback (e.g., `aria-live="polite"` and temporary styling changes) to confidently confirm the action to the user without jarring layout shifts or popups.
+**Action:** When implementing copy functionality, always include a temporary state change (e.g., "Copied!", icon change, color change) bound to a `setTimeout` (typically 2 seconds) and an `aria-live="polite"` attribute for screen reader announcements.
