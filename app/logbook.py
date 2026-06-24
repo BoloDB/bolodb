@@ -1,5 +1,7 @@
 """Local session logging for validation."""
-import json, time, logging
+import json
+import time
+import logging
 from pathlib import Path
 from datetime import datetime
 

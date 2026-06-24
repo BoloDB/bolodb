@@ -3,3 +3,5 @@ __pycache__/
 *.log
 .bolodb/
 .claude/settings.local.json
+.venv/
+.pytest_cache/

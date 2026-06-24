@@ -1,8 +1,6 @@
 import json
-from pathlib import Path
 from unittest.mock import patch
 
-from app import config
 from app.config import load_config, DEFAULTS
 
 def test_load_config_no_file(tmp_path):

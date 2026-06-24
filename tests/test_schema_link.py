@@ -23,7 +23,8 @@ def test_link_prioritises_token_matched_tables(small_schema):
 
 
 def test_link_includes_fk_referenced_tables(small_schema):
-    # "orders" has a FK to "users"; even if max_tables=1 matches only "orders",
+    # "orders" has a FK to "users"
+    # even if max_tables=1 matches only "orders",
     # "users" should be pulled in as a FK dependency
     result = link_relevant_tables("show me all orders", small_schema, [], [], max_tables=1)
     assert "users" in result

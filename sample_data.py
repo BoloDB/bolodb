@@ -1,5 +1,6 @@
 """Creates TechStore sample database on first run."""
-import sqlite3, os
+import sqlite3
+import os
 from pathlib import Path
 
 def ensure_sample_db():
@@ -60,7 +61,8 @@ def ensure_sample_db():
       (5,105,'bank',5120.00,'2026-06-04'),
       (6,106,'card',798.00,'2026-05-20');
     """)
-    c.commit(); c.close()
+    c.commit()
+    c.close()
     print(f"Sample database created: {path}")
     return f"sqlite:///{path.as_posix()}"
 

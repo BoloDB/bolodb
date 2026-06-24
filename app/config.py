@@ -1,5 +1,6 @@
 """Local config + path constants."""
-import json, os
+import json
+import os
 from pathlib import Path
 
 CONFIG_DIR = Path(os.path.expanduser("~")) / ".bolodb"

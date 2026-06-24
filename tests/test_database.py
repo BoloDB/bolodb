@@ -37,7 +37,7 @@ def test_write_statements_rejected(db, sql):
 
 
 def test_stacked_statement_rejected(db):
-    res = db.execute("SELECT * FROM items; DROP TABLE items")
+    res = db.execute("SELECT * FROM items\nDROP TABLE items")
     assert "error" in res
 
 

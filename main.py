@@ -1,19 +1,31 @@
 """BoloDB entry point."""
-import sys, os, time, shutil, subprocess, argparse, uvicorn
+import sys
+import os
+import time
+import shutil
+import subprocess
+import argparse
+import uvicorn
 from app.server import create_app
 
 def is_ollama_up(url="http://localhost:11434"):
     try:
-        import httpx; httpx.get(f"{url}/api/tags", timeout=3); return True
-    except Exception: return False
+        import httpx
+        httpx.get(f"{url}/api/tags", timeout=3)
+        return True
+    except Exception: 
+        return False
 
 def start_ollama(url="http://localhost:11434"):
     exe = shutil.which("ollama")
     if not exe and sys.platform=="win32":
         for c in [os.path.join(os.environ.get("LOCALAPPDATA",""),"Programs","Ollama","ollama.exe"),
                   r"C:\Program Files\Ollama\ollama.exe"]:
-            if os.path.exists(c): exe=c; break
-    if not exe: return False
+            if os.path.exists(c): 
+                exe=c
+                break
+    if not exe: 
+        return False
     print("  Starting Ollama...", end="", flush=True)
     try:
         kw = dict(stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
@@ -23,10 +35,15 @@ def start_ollama(url="http://localhost:11434"):
         else:
             subprocess.Popen([exe,"serve"], **kw)
         for _ in range(20):
-            time.sleep(1); print(".", end="", flush=True)
-            if is_ollama_up(url): print(" ready."); return True
-        print(" timed out."); return False
-    except Exception: return False
+            time.sleep(1)
+            print(".", end="", flush=True)
+            if is_ollama_up(url): 
+                print(" ready.")
+                return True
+        print(" timed out.")
+        return False
+    except Exception: 
+        return False
 
 def main():
     ap = argparse.ArgumentParser(description="BoloDB")
@@ -51,7 +68,8 @@ def main():
     print(f"  Open: {url}\n  (Ctrl+C to stop)\n")
 
     if not args.no_browser:
-        import threading, webbrowser
+        import threading
+        import webbrowser
         threading.Thread(target=lambda:(time.sleep(1.5),webbrowser.open(url)),daemon=True).start()
 
     uvicorn.run(app, host=args.host, port=args.port, log_level="warning")

@@ -25,14 +25,27 @@ class ConfigUpdate(BaseModel):
     ollama_url: str | None = None
     api_key: str | None = None
 
-class ConnectReq(BaseModel): db_url: str
-class QueryReq(BaseModel): question: str
-class VerifyReq(BaseModel): question: str; sql: str; restatement: str = ""
+class ConnectReq(BaseModel): 
+    db_url: str
+class QueryReq(BaseModel): 
+    question: str
+class VerifyReq(BaseModel): 
+    question: str
+    sql: str
+    restatement: str = ""
 class FeedbackReq(BaseModel):
-    query_id: str = ""; verdict: str; reason: str = ""
-    question: str = ""; sql: str = ""; restatement: str = ""
-class RawSQLReq(BaseModel): sql: str
-class GlossaryItem(BaseModel): term: str; maps_to: str = ""; sql_hint: str = ""
+    query_id: str = ""
+    verdict: str
+    reason: str = ""
+    question: str = ""
+    sql: str = ""
+    restatement: str = ""
+class RawSQLReq(BaseModel): 
+    sql: str
+class GlossaryItem(BaseModel): 
+    term: str
+    maps_to: str = ""
+    sql_hint: str = ""
 class SaveOnboardReq(BaseModel):
     glossary: list[GlossaryItem] = []
     starters: list[dict] = []
@@ -88,7 +101,8 @@ def create_app(initial_db_url="", readonly=True):
         if req.ollama_url: cfg["ollama_url"] = req.ollama_url
         if req.api_key and req.provider in ("claude","openai","groq"):
             cfg["api_keys"][req.provider] = req.api_key
-        cfgmod.save_config(cfg); providers.reconfigure(cfg)
+        cfgmod.save_config(cfg)
+        providers.reconfigure(cfg)
         h = await providers.get().health_check()
         return {"config":cfgmod.public_config(cfg),"health":h}
 
@@ -96,7 +110,8 @@ def create_app(initial_db_url="", readonly=True):
     async def connect(req: ConnectReq):
         result = db.connect(req.db_url)
         if not result["ok"]: raise HTTPException(400, result["error"])
-        cfg["last_db_url"] = req.db_url; cfgmod.save_config(cfg)
+        cfg["last_db_url"] = req.db_url
+        cfgmod.save_config(cfg)
         result["trust"]        = kb.trust_level(db.db_id)
         result["glossary"]     = kb.get_glossary(db.db_id)
         result["has_knowledge"]= kb.count_verified(db.db_id) > 0
@@ -108,7 +123,8 @@ def create_app(initial_db_url="", readonly=True):
         url = ensure_sample_db()
         result = db.connect(url)
         if not result["ok"]: raise HTTPException(500, result["error"])
-        cfg["last_db_url"] = url; cfgmod.save_config(cfg)
+        cfg["last_db_url"] = url
+        cfgmod.save_config(cfg)
         result["trust"]        = kb.trust_level(db.db_id)
         result["glossary"]     = kb.get_glossary(db.db_id)
         result["has_knowledge"]= kb.count_verified(db.db_id) > 0
@@ -188,7 +204,8 @@ def create_app(initial_db_url="", readonly=True):
                    "based_on_verified":False,"execution_error":str(e),"columns":[],"rows":[]}
             out["query_id"] = session_log.log_query(db.db_id, q, out)
             return out
-        sql = gen.get("sql",""); restatement = gen.get("restatement","")
+        sql = gen.get("sql","")
+        restatement = gen.get("restatement","")
         exec_result = await run_in_threadpool(db.execute, sql)
         confidence, reason, based = compute_confidence(retrieved, exec_result)
         out = {"answered":True,"sql":sql,"restatement":restatement,

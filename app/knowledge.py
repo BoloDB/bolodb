@@ -1,5 +1,6 @@
 """Per-database knowledge base: verified Q->SQL pairs, glossary, trust."""
-import sqlite3, time, re
+import sqlite3
+import time
 from difflib import SequenceMatcher
 from pathlib import Path
 

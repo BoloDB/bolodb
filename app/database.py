@@ -1,5 +1,6 @@
 """Database connection, schema introspection (guarded), read-only execution."""
-import hashlib, re
+import hashlib
+import re
 import logging
 import sqlglot
 import sqlglot.expressions as exp
@@ -35,9 +36,15 @@ def db_id_for(url):
 
 class DatabaseManager:
     def __init__(self, readonly=True, sample_rows=3, max_rows=500):
-        self.readonly = readonly; self.sample_rows = sample_rows; self.max_rows = max_rows
-        self.engine = None; self.url = None; self.db_id = None
-        self.dialect = None; self._schema_cache = None; self._table_count = 0
+        self.readonly = readonly
+        self.sample_rows = sample_rows
+        self.max_rows = max_rows
+        self.engine = None
+        self.url = None
+        self.db_id = None
+        self.dialect = None
+        self._schema_cache = None
+        self._table_count = 0
 
     @property
     def connected(self): return self.engine is not None
@@ -49,15 +56,23 @@ class DatabaseManager:
                 self.engine.dispose()  # release pooled connections
             except Exception as e:
                 logger.warning("Error disposing engine on disconnect: %s", e)
-        self.engine = None; self.url = None; self.db_id = None
-        self.dialect = None; self._schema_cache = None; self._table_count = 0
+        self.engine = None
+        self.url = None
+        self.db_id = None
+        self.dialect = None
+        self._schema_cache = None
+        self._table_count = 0
 
     def connect(self, url):
         try:
             engine = create_engine(url)
-            with engine.connect() as c: c.execute(text("SELECT 1"))
-            self.engine = engine; self.url = url; self.db_id = db_id_for(url)
-            self.dialect = url.split(":")[0].split("+")[0]; self._schema_cache = None
+            with engine.connect() as c:
+                c.execute(text("SELECT 1"))
+            self.engine = engine
+            self.url = url
+            self.db_id = db_id_for(url)
+            self.dialect = url.split(":")[0].split("+")[0]
+            self._schema_cache = None
             tables = len(inspect(engine).get_table_names())
             self._table_count = tables
             return {"ok":True,"dialect":self.dialect,"tables":tables,"db_id":self.db_id,
@@ -75,7 +90,8 @@ class DatabaseManager:
         if self._schema_cache and not refresh: return self._schema_cache
         inspector = inspect(self.engine)
         schema = {}
-        MAX_T = 40; BIG = 100_000
+        MAX_T = 40
+        BIG = 100_000
         SKIP = ("date","time","name","email","phone","address","id","desc","url","note","comment","title","code")
         table_names = inspector.get_table_names()[:MAX_T]
 
@@ -86,7 +102,10 @@ class DatabaseManager:
             multi_pks  = inspector.get_multi_pk_constraint(schema=schema_name)
             multi_fks  = inspector.get_multi_foreign_keys(schema=schema_name)
         except Exception:
-            schema_name = None; multi_cols = {}; multi_pks = {}; multi_fks = {}
+            schema_name = None
+            multi_cols = {}
+            multi_pks = {}
+            multi_fks = {}
 
         with self.engine.connect() as conn:
             # Fetch approximate row counts from DB stats tables in one shot (postgres/mysql/mssql)
@@ -126,7 +145,8 @@ class DatabaseManager:
                     columns = [{"name": c["name"], "type": str(c["type"]), "primary_key": c["name"] in pk}
                                for c in cols_raw]
                 except Exception as e:
-                    logger.warning("Error inspecting columns for %s: %s", tbl, e); continue
+                    logger.warning("Error inspecting columns for %s: %s", tbl, e)
+                    continue
 
                 try:
                     res = conn.execute(text(f"SELECT * FROM {self._q(tbl)} LIMIT {self.sample_rows}"))
@@ -136,14 +156,16 @@ class DatabaseManager:
                         for k, v in r.items():
                             if isinstance(v, str) and len(v) > 50: r[k] = v[:47] + "..."
                 except Exception as e:
-                    logger.warning("Error fetching samples for %s: %s", tbl, e); samples = []
+                    logger.warning("Error fetching samples for %s: %s", tbl, e)
+                    samples = []
 
                 rc = bulk_counts.get(tbl)
                 if rc is None:
                     try:
                         rc = conn.execute(text(f"SELECT COUNT(*) FROM {self._q(tbl)}")).scalar()
                     except Exception as e:
-                        logger.warning("Error fetching row count for %s: %s", tbl, e); rc = None
+                        logger.warning("Error fetching row count for %s: %s", tbl, e)
+                        rc = None
 
                 low_card = {}
                 if rc is None or rc <= BIG:

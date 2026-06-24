@@ -1,5 +1,6 @@
 """LLM providers (Ollama, Claude, OpenAI, Groq) + lean SQL generation."""
-import httpx, json
+import httpx
+import json
 from abc import ABC, abstractmethod
 
 def parse_json(text):
@@ -16,7 +17,8 @@ class LLMProvider(ABC):
 
 class OllamaProvider(LLMProvider):
     def __init__(self, model="bolodb-sql", base_url="http://localhost:11434"):
-        self.model = model or "bolodb-sql"; self.base_url = base_url.rstrip("/")
+        self.model = model or "bolodb-sql"
+        self.base_url = base_url.rstrip("/")
     async def complete(self, system, user, json_mode=False):
         body = {"model":self.model,"messages":[{"role":"system","content":system},
                 {"role":"user","content":user}],"stream":False,
@@ -36,7 +38,8 @@ class OllamaProvider(LLMProvider):
 class APIKeyProvider(LLMProvider):
     DEFAULT = ""
     def __init__(self, api_key, model=""):
-        self.api_key = api_key; self.model = model or self.DEFAULT
+        self.api_key = api_key
+        self.model = model or self.DEFAULT
     async def health_check(self):
         return {"ok":bool(self.api_key),"models":[self.model] if self.api_key else []}
 
@@ -76,7 +79,9 @@ class GroqProvider(APIKeyProvider):
             return r.json()["choices"][0]["message"]["content"]
 
 def create_provider(cfg):
-    p = cfg.get("provider","ollama"); model = cfg.get("model",""); keys = cfg.get("api_keys",{})
+    p = cfg.get("provider","ollama")
+    model = cfg.get("model","")
+    keys = cfg.get("api_keys",{})
     if p == "ollama": return OllamaProvider(model=model, base_url=cfg.get("ollama_url","http://localhost:11434"))
     if p == "claude": return ClaudeProvider(api_key=keys.get("claude",""), model=model)
     if p == "openai": return OpenAIProvider(api_key=keys.get("openai",""), model=model)
@@ -84,11 +89,18 @@ def create_provider(cfg):
     raise ValueError(f"Unknown provider: {p}")
 
 class ProviderManager:
-    def __init__(self, cfg): self.cfg = cfg; self._p = None
+    def __init__(self, cfg): 
+        self.cfg = cfg
+        self._p = None
+
     def get(self):
-        if not self._p: self._p = create_provider(self.cfg)
+        if not self._p: 
+            self._p = create_provider(self.cfg)
         return self._p
-    def reconfigure(self, cfg): self.cfg = cfg; self._p = None
+        
+    def reconfigure(self, cfg): 
+        self.cfg = cfg
+        self._p = None
 
 async def generate_sql(provider, question, schema_text, dialect, glossary, retrieved, max_examples=3):
     gloss = ("Term meanings:\n" + "\n".join(f'- {g["term"]} = {g["maps_to"]}' for g in glossary) + "\n") if glossary else ""
