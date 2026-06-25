@@ -1,6 +1,6 @@
 import pytest
 import json
-from app.llm import parse_json
+from backend.app.llm import parse_json
 
 def test_parse_json_pure():
     text = '{"key": "value"}'

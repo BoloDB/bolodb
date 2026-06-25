@@ -1,0 +1,85 @@
+# ──────────────────────────────────────────────
+#  BoloDB  ·  Docker Compose
+# ──────────────────────────────────────────────
+#  Usage:
+#    docker compose up --build        # build & start
+#    docker compose up --build -d     # detached
+#    docker compose down              # stop & remove
+# ──────────────────────────────────────────────
+
+services:
+  # ── Backend: FastAPI / Uvicorn ──
+  backend:
+    build:
+      context: .
+      dockerfile: backend/DOCKERFILE
+    container_name: bolodb-backend
+    restart: unless-stopped
+    ports:
+      - "4321:4321"                       # Exposed to host for development
+    volumes:
+      - bolodb-data:/home/bolodb/.bolodb  # Persist config + knowledge DB
+    environment:
+      - PYTHONUNBUFFERED=1
+      - RUNNING_IN_DOCKER=true
+      - OLLAMA_URL=http://host.docker.internal:11434
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - bolodb-net
+
+  # ── MongoDB: Database ──
+  mongodb:
+    image: mongo:latest
+    container_name: bolodb-mongodb
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    volumes:
+      - bolodb-mongodb-data:/data/db
+    networks:
+      - bolodb-net
+
+  # ── Frontend: Svelte (Vite) dev server ──
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: DOCKERFILE.dev
+    container_name: bolodb-frontend
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    ports:
+      - "5173:5173"
+    environment:
+      - BACKEND_URL=http://backend:4321
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks:
+      - bolodb-net
+
+  # ── Nginx: Reverse proxy + Vite dev server ──
+  nginx:
+    build:
+      context: ./nginx
+      dockerfile: DOCKERFILE
+    container_name: bolodb-nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    depends_on:
+      frontend:
+        condition: service_started
+      backend:
+        condition: service_healthy
+    networks:
+      - bolodb-net
+
+volumes:
+  bolodb-data:
+  bolodb-mongodb-data:
+
+networks:
+  bolodb-net:
+    driver: bridge

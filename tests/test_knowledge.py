@@ -1,6 +1,6 @@
 """Tests for verified-answer storage, similarity retrieval, and trust levels."""
 import pytest
-from app.knowledge import KnowledgeBase, _tokens, _similarity
+from backend.app.knowledge import KnowledgeBase, _tokens, _similarity
 
 DB_ID = "testdb"
 
