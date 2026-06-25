@@ -7,6 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 from backend.app import config as cfgmod
+from backend.app.routes.auth import router as auth_router
 from backend.app.database import DatabaseManager, sanitize_url
 from backend.app.knowledge import KnowledgeBase
 from backend.app.logbook import SessionLog
@@ -66,6 +67,8 @@ def create_app(initial_db_url="", readonly=True):
 
     if initial_db_url:
         db.connect(initial_db_url)
+
+    app.include_router(auth_router)
 
     @app.get("/api/state")
     async def state():
