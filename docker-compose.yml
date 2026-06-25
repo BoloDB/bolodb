@@ -1,0 +1,61 @@
+# ──────────────────────────────────────────────
+#  BoloDB  ·  Docker Compose
+# ──────────────────────────────────────────────
+#  Usage:
+#    docker compose up --build        # build & start
+#    docker compose up --build -d     # detached
+#    docker compose down              # stop & remove
+# ──────────────────────────────────────────────
+
+services:
+  # ── Backend: FastAPI / Uvicorn ──
+  backend:
+    build:
+      context: .
+      dockerfile: backend/DOCKERFILE
+    container_name: bolodb-backend
+    restart: unless-stopped
+    expose:
+      - "4321"                            # Internal only — Nginx proxies to this
+    volumes:
+      - bolodb-data:/home/bolodb/.bolodb  # Persist config + knowledge DB
+    environment:
+      - PYTHONUNBUFFERED=1
+    networks:
+      - bolodb-net
+
+  # ── Frontend: Svelte (Vite) build ──
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: DOCKERFILE
+    container_name: bolodb-frontend
+    volumes:
+      - frontend-build:/app/dist          # Share build output with Nginx
+
+  # ── Nginx: Reverse proxy + static server ──
+  nginx:
+    build:
+      context: ./nginx
+      dockerfile: DOCKERFILE
+    container_name: bolodb-nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    volumes:
+      - frontend-build:/usr/share/nginx/html:ro   # Mount Svelte build
+    depends_on:
+      frontend:
+        condition: service_started
+      backend:
+        condition: service_healthy
+    networks:
+      - bolodb-net
+
+volumes:
+  bolodb-data:
+  frontend-build:
+
+networks:
+  bolodb-net:
+    driver: bridge

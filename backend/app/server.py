@@ -8,12 +8,12 @@ from fastapi.concurrency import run_in_threadpool
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from app import config as cfgmod
-from app.database import DatabaseManager, sanitize_url
-from app.knowledge import KnowledgeBase
-from app.logbook import SessionLog
-from app.llm import ProviderManager, generate_sql, generate_glossary, generate_starters
-from app.schema_link import model_budget, link_relevant_tables, compact_schema, compute_confidence
+from backend.app import config as cfgmod
+from backend.app.database import DatabaseManager, sanitize_url
+from backend.app.knowledge import KnowledgeBase
+from backend.app.logbook import SessionLog
+from backend.app.llm import ProviderManager, generate_sql, generate_glossary, generate_starters
+from backend.app.schema_link import model_budget, link_relevant_tables, compact_schema, compute_confidence
 from sample_data import ensure_sample_db
 
 STATIC = Path(__file__).parent.parent / "static"

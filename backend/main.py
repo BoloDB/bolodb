@@ -6,7 +6,7 @@ import shutil
 import subprocess
 import argparse
 import uvicorn
-from app.server import create_app
+from backend.app.server import create_app
 
 def is_ollama_up(url="http://localhost:11434"):
     try:
@@ -56,7 +56,7 @@ def main():
 
     print("\n  BoloDB  -  Ask your data. Trust the answer.\n")
 
-    from app import config as cfgmod
+    from backend.app import config as cfgmod
     cfg = cfgmod.load_config()
     if cfg.get("provider","ollama") == "ollama":
         if not is_ollama_up(cfg.get("ollama_url","http://localhost:11434")):

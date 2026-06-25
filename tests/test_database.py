@@ -1,6 +1,6 @@
 """Tests for the read-only execution guard and helpers in app.database."""
 import pytest
-from app.database import DatabaseManager, sanitize_url, db_id_for
+from backend.app.database import DatabaseManager, sanitize_url, db_id_for
 
 
 @pytest.fixture

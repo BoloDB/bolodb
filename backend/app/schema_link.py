@@ -1,6 +1,6 @@
 """Schema linking, compact rendering, signal-based confidence, model budgets."""
 import re
-from app.utils import _tokens
+from backend.app.utils import _tokens
 
 def model_budget(provider, model):
     m = (model or "").lower()

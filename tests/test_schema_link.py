@@ -1,6 +1,6 @@
 """Tests for model budgeting, confidence scoring, and table linking."""
 import pytest
-from app.schema_link import model_budget, compute_confidence, link_relevant_tables
+from backend.app.schema_link import model_budget, compute_confidence, link_relevant_tables
 
 
 @pytest.fixture

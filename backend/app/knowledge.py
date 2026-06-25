@@ -4,7 +4,7 @@ import time
 from difflib import SequenceMatcher
 from pathlib import Path
 
-from app.utils import _tokens
+from backend.app.utils import _tokens
 
 def _similarity(a, b, tb=None, b_lower=None):
     ta = _tokens(a)

@@ -1,7 +1,7 @@
 import json
 from unittest.mock import patch
 
-from app.config import load_config, DEFAULTS
+from backend.app.config import load_config, DEFAULTS
 
 def test_load_config_no_file(tmp_path):
     config_dir = tmp_path / ".bolodb"
@@ -53,7 +53,7 @@ def test_save_config(tmp_path):
     config_file = config_dir / "config.json"
 
     with patch("app.config.CONFIG_DIR", config_dir), patch("app.config.CONFIG_FILE", config_file):
-        from app.config import save_config
+        from backend.app.config import save_config
         save_config({"test": "data"})
 
         assert config_dir.exists()
@@ -61,7 +61,7 @@ def test_save_config(tmp_path):
         assert json.loads(config_file.read_text()) == {"test": "data"}
 
 def test_public_config():
-    from app.config import public_config
+    from backend.app.config import public_config
     cfg = {
         "provider": "claude",
         "model": "claude-3-5-sonnet",
