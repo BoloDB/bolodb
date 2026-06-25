@@ -19,14 +19,20 @@ def ensure_dir(): CONFIG_DIR.mkdir(parents=True, exist_ok=True)
 
 def load_config():
     ensure_dir()
+    d = {}
     if CONFIG_FILE.exists():
         try:
             d = json.loads(CONFIG_FILE.read_text(encoding="utf-8"))
-            cfg = {**DEFAULTS, **d}
-            cfg["api_keys"] = {**DEFAULTS["api_keys"], **d.get("api_keys", {})}
-            return cfg
         except Exception: pass
-    return dict(DEFAULTS)
+        
+    cfg = {**DEFAULTS, **d}
+    cfg["api_keys"] = {**DEFAULTS["api_keys"], **d.get("api_keys", {})}
+    
+    # Auto-route localhost to host.docker.internal if running in Docker
+    if os.environ.get("RUNNING_IN_DOCKER") and "localhost" in cfg.get("ollama_url", ""):
+        cfg["ollama_url"] = cfg["ollama_url"].replace("localhost", "host.docker.internal")
+        
+    return cfg
 
 def save_config(cfg):
     ensure_dir()

@@ -21,6 +21,10 @@ services:
       - bolodb-data:/home/bolodb/.bolodb  # Persist config + knowledge DB
     environment:
       - PYTHONUNBUFFERED=1
+      - RUNNING_IN_DOCKER=true
+      - OLLAMA_URL=http://host.docker.internal:11434
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     networks:
       - bolodb-net
 

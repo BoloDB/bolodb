@@ -95,7 +95,7 @@ def create_app(initial_db_url="", readonly=True):
                 models = [m["name"] for m in r.json().get("models", [])]
                 return {"ok": True, "models": models}
         except Exception as e:
-            return {"ok": False, "error": str(e)}
+            return {"ok": False, "error": f"{type(e).__name__}: {str(e)}", "url": url}
 
     @app.get("/api/health")
     async def health():
