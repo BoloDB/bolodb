@@ -7,7 +7,14 @@
 
   const items = $derived(glossaryItems && glossaryItems.length ? glossaryItems : defaultGlossary);
   const glossList = $derived(items.map(g => g.def !== undefined ? g : { term: g.term, def: g.maps_to || g.def || '', maps_to: g.maps_to || '', alt: g.alt || [], sql_hint: g.sql_hint || '' }));
-  let choices = $state(items.map(() => 0));
+  let choices = $state<number[]>([]);
+
+  $effect(() => {
+    if (choices.length !== items.length) {
+      const next = items.map((_, i) => choices[i] ?? 0);
+      choices = next;
+    }
+  });
 
   function next() {
     const confirmed = glossList.map((g, gi) => {
