@@ -5,7 +5,8 @@ from pathlib import Path
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import HTMLResponse
 from fastapi.concurrency import run_in_threadpool
-from fastapi.staticfiles import StaticFiles
+from fastapi.concurrency import run_in_threadpool
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 from backend.app import config as cfgmod
@@ -14,9 +15,8 @@ from backend.app.knowledge import KnowledgeBase
 from backend.app.logbook import SessionLog
 from backend.app.llm import ProviderManager, generate_sql, generate_glossary, generate_starters
 from backend.app.schema_link import model_budget, link_relevant_tables, compact_schema, compute_confidence
-from sample_data import ensure_sample_db
+from backend.sample_data import ensure_sample_db
 
-STATIC = Path(__file__).parent.parent / "static"
 logger = logging.getLogger(__name__)
 
 class ConfigUpdate(BaseModel):
@@ -58,6 +58,14 @@ def create_app(initial_db_url="", readonly=True):
     session_log = SessionLog(cfgmod.CONFIG_DIR)
 
     app = FastAPI(title="BoloDB", version="2.0.0")
+
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["http://localhost:5173", "http://localhost:80"],
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
 
     if initial_db_url:
         db.connect(initial_db_url)
@@ -242,14 +250,7 @@ def create_app(initial_db_url="", readonly=True):
         if "error" in res: raise HTTPException(400, res["error"])
         return res
 
-    @app.get("/", response_class=HTMLResponse)
-    async def root():
-        idx = STATIC / "index.html"
-        if idx.exists(): return HTMLResponse(idx.read_text(encoding="utf-8"))
-        return HTMLResponse("<h1>BoloDB running</h1>")
 
-    if STATIC.exists():
-        app.mount("/static", StaticFiles(directory=str(STATIC)), name="static")
 
     return app
 

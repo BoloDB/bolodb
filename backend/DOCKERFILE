@@ -20,7 +20,7 @@ RUN pip install --no-cache-dir -r /app/backend/requirements.txt
 COPY backend/        /app/backend/
 
 # ── 3. Create non-root user ──
-RUN addgroup --system bolodb && adduser --system --ingroup bolodb bolodb \
+RUN addgroup --system bolodb && adduser --system --home /home/bolodb --ingroup bolodb bolodb \
     && mkdir -p /home/bolodb/.bolodb \
     && chown -R bolodb:bolodb /home/bolodb/.bolodb /app
 

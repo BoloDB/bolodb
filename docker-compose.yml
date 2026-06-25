@@ -15,8 +15,8 @@ services:
       dockerfile: backend/DOCKERFILE
     container_name: bolodb-backend
     restart: unless-stopped
-    expose:
-      - "4321"                            # Internal only — Nginx proxies to this
+    ports:
+      - "4321:4321"                       # Exposed to host for development
     volumes:
       - bolodb-data:/home/bolodb/.bolodb  # Persist config + knowledge DB
     environment:
@@ -24,14 +24,45 @@ services:
     networks:
       - bolodb-net
 
+  # ── MongoDB: Database ──
+  mongodb:
+    image: mongo:latest
+    container_name: bolodb-mongodb
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    volumes:
+      - bolodb-mongodb-data:/data/db
+    networks:
+      - bolodb-net
+
   # ── Frontend: Svelte (Vite) build ──
+  # frontend:
+  #   build:
+  #     context: ./frontend
+  #     dockerfile: DOCKERFILE
+  #   container_name: bolodb-frontend
+  #   volumes:
+  #     - frontend-build:/app/dist          # Share build output with Nginx
+
+  # ── Frontend: Svelte (Vite) dev server ──
   frontend:
     build:
       context: ./frontend
-      dockerfile: DOCKERFILE
+      dockerfile: DOCKERFILE.dev
     container_name: bolodb-frontend
     volumes:
-      - frontend-build:/app/dist          # Share build output with Nginx
+      - ./frontend:/app
+      - /app/node_modules
+    ports:
+      - "5173:5173"
+    environment:
+      - BACKEND_URL=http://backend:4321
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks:
+      - bolodb-net
 
   # ── Nginx: Reverse proxy + static server ──
   nginx:
@@ -54,6 +85,7 @@ services:
 
 volumes:
   bolodb-data:
+  bolodb-mongodb-data:
   frontend-build:
 
 networks:
