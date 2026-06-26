@@ -1,4 +1,5 @@
 """FastAPI application."""
+
 import asyncio
 import logging
 from fastapi import FastAPI, HTTPException
@@ -11,11 +12,22 @@ from backend.app.routes.auth import router as auth_router
 from backend.app.database import DatabaseManager, sanitize_url
 from backend.app.knowledge import KnowledgeBase
 from backend.app.logbook import SessionLog
-from backend.app.llm import ProviderManager, generate_sql, generate_glossary, generate_starters
-from backend.app.schema_link import model_budget, link_relevant_tables, compact_schema, compute_confidence
+from backend.app.llm import (
+    ProviderManager,
+    generate_sql,
+    generate_glossary,
+    generate_starters,
+)
+from backend.app.schema_link import (
+    model_budget,
+    link_relevant_tables,
+    compact_schema,
+    compute_confidence,
+)
 from backend.sample_data import ensure_sample_db
 
 logger = logging.getLogger(__name__)
+
 
 class ConfigUpdate(BaseModel):
     provider: str | None = None
@@ -23,14 +35,21 @@ class ConfigUpdate(BaseModel):
     ollama_url: str | None = None
     api_key: str | None = None
 
-class ConnectReq(BaseModel): 
+
+class ConnectReq(BaseModel):
     db_url: str
-class QueryReq(BaseModel): 
+
+
+class QueryReq(BaseModel):
     question: str
-class VerifyReq(BaseModel): 
+
+
+class VerifyReq(BaseModel):
     question: str
     sql: str
     restatement: str = ""
+
+
 class FeedbackReq(BaseModel):
     query_id: str = ""
     verdict: str
@@ -38,15 +57,22 @@ class FeedbackReq(BaseModel):
     question: str = ""
     sql: str = ""
     restatement: str = ""
-class RawSQLReq(BaseModel): 
+
+
+class RawSQLReq(BaseModel):
     sql: str
-class GlossaryItem(BaseModel): 
+
+
+class GlossaryItem(BaseModel):
     term: str
     maps_to: str = ""
     sql_hint: str = ""
+
+
 class SaveOnboardReq(BaseModel):
     glossary: list[GlossaryItem] = []
     starters: list[dict] = []
+
 
 def create_app(initial_db_url="", readonly=True):
     cfg = cfgmod.load_config()
@@ -72,12 +98,15 @@ def create_app(initial_db_url="", readonly=True):
 
     @app.get("/api/state")
     async def state():
-        s = {"connected":db.connected,"config":cfgmod.public_config(cfg)}
+        s = {"connected": db.connected, "config": cfgmod.public_config(cfg)}
         if db.connected:
-            s["database"] = {"url":sanitize_url(db.url) if db.url else None,
-                             "dialect":db.dialect,"db_id":db.db_id,
-                             "tables":db._table_count}
-            s["trust"]    = kb.trust_level(db.db_id)
+            s["database"] = {
+                "url": sanitize_url(db.url) if db.url else None,
+                "dialect": db.dialect,
+                "db_id": db.db_id,
+                "tables": db._table_count,
+            }
+            s["trust"] = kb.trust_level(db.db_id)
             s["glossary"] = kb.get_glossary(db.db_id)
             # Surface verified starter questions so the UI can show them as chips
             s["starters"] = [v["question"] for v in kb.get_verified(db.db_id)[:6]]
@@ -87,6 +116,7 @@ def create_app(initial_db_url="", readonly=True):
     async def ollama_check():
         """Always checks Ollama health regardless of configured provider."""
         import httpx as _httpx
+
         url = cfg.get("ollama_url", "http://localhost:11434")
         try:
             async with _httpx.AsyncClient(timeout=3) as c:
@@ -100,62 +130,91 @@ def create_app(initial_db_url="", readonly=True):
     @app.get("/api/health")
     async def health():
         ph = await providers.get().health_check()
-        return {"provider":{"name":cfg["provider"],**ph},"connected":db.connected}
+        return {"provider": {"name": cfg["provider"], **ph}, "connected": db.connected}
 
     @app.post("/api/config")
     async def update_config(req: ConfigUpdate):
-        if req.provider: cfg["provider"] = req.provider
-        if req.model is not None: cfg["model"] = req.model
-        if req.ollama_url: cfg["ollama_url"] = req.ollama_url
-        if req.api_key and req.provider in ("claude","openai","groq"):
+        if req.provider:
+            cfg["provider"] = req.provider
+        if req.model is not None:
+            cfg["model"] = req.model
+        if req.ollama_url:
+            cfg["ollama_url"] = req.ollama_url
+        if req.api_key and req.provider in ("claude", "openai", "groq"):
             cfg["api_keys"][req.provider] = req.api_key
         cfgmod.save_config(cfg)
         providers.reconfigure(cfg)
         h = await providers.get().health_check()
-        return {"config":cfgmod.public_config(cfg),"health":h}
+        return {"config": cfgmod.public_config(cfg), "health": h}
 
     @app.post("/api/connect")
     async def connect(req: ConnectReq):
         result = db.connect(req.db_url)
-        if not result["ok"]: raise HTTPException(400, result["error"])
+        if not result["ok"]:
+            raise HTTPException(400, result["error"])
         cfg["last_db_url"] = req.db_url
         cfgmod.save_config(cfg)
-        result["trust"]        = kb.trust_level(db.db_id)
-        result["glossary"]     = kb.get_glossary(db.db_id)
-        result["has_knowledge"]= kb.count_verified(db.db_id) > 0
-        result["starters"]     = [v["question"] for v in kb.get_verified(db.db_id)[:6]]
+        result["trust"] = kb.trust_level(db.db_id)
+        result["glossary"] = kb.get_glossary(db.db_id)
+        result["has_knowledge"] = kb.count_verified(db.db_id) > 0
+        result["starters"] = [v["question"] for v in kb.get_verified(db.db_id)[:6]]
         return result
 
     @app.post("/api/connect-sample")
     async def connect_sample():
         url = ensure_sample_db()
         result = db.connect(url)
-        if not result["ok"]: raise HTTPException(500, result["error"])
+        if not result["ok"]:
+            raise HTTPException(500, result["error"])
         cfg["last_db_url"] = url
         cfgmod.save_config(cfg)
-        
+
         # Pre-seed KnowledgeBase for the sample DB so users skip onboarding
         if kb.count_verified(db.db_id) == 0:
-            kb.set_glossary(db.db_id, [
-                {"term": "Revenue", "maps_to": "orders.total_amount", "sql_hint": "Sum of total_amount on orders with status = completed"},
-                {"term": "Active customer", "maps_to": "orders.created_at", "sql_hint": "A customer with at least one order in the last 90 days"},
-                {"term": "Top product", "maps_to": "order_items.quantity", "sql_hint": "Product ranked by units sold (sum of quantity)"}
-            ])
-            kb.add_verified(db.db_id, "How many orders were completed last month?", 
-                "SELECT COUNT(*) AS completed_orders\nFROM orders\nWHERE status = 'completed'\n  AND created_at >= date('now','start of month','-1 month')\n  AND created_at <  date('now','start of month');", 
-                "Count of orders with status 'completed' created in the previous calendar month")
-            kb.add_verified(db.db_id, "Which product category brings in the most revenue?", 
-                "SELECT p.category, ROUND(SUM(oi.quantity*oi.unit_price)) AS revenue\nFROM order_items oi\nJOIN products p ON p.id = oi.product_id\nJOIN orders   o ON o.id = oi.order_id\nWHERE o.status = 'completed'\nGROUP BY p.category\nORDER BY revenue DESC;", 
-                "Total revenue per product category, highest first")
-            kb.add_verified(db.db_id, "How many customers do we have in each segment?", 
-                "SELECT segment, COUNT(*) AS customers\nFROM customers\nGROUP BY segment\nORDER BY customers DESC;", 
-                "Count of customers grouped by segment")
+            kb.set_glossary(
+                db.db_id,
+                [
+                    {
+                        "term": "Revenue",
+                        "maps_to": "orders.total_amount",
+                        "sql_hint": "Sum of total_amount on orders with status = completed",
+                    },
+                    {
+                        "term": "Active customer",
+                        "maps_to": "orders.created_at",
+                        "sql_hint": "A customer with at least one order in the last 90 days",
+                    },
+                    {
+                        "term": "Top product",
+                        "maps_to": "order_items.quantity",
+                        "sql_hint": "Product ranked by units sold (sum of quantity)",
+                    },
+                ],
+            )
+            kb.add_verified(
+                db.db_id,
+                "How many orders were completed last month?",
+                "SELECT COUNT(*) AS completed_orders\nFROM orders\nWHERE status = 'completed'\n  AND created_at >= date('now','start of month','-1 month')\n  AND created_at <  date('now','start of month');",
+                "Count of orders with status 'completed' created in the previous calendar month",
+            )
+            kb.add_verified(
+                db.db_id,
+                "Which product category brings in the most revenue?",
+                "SELECT p.category, ROUND(SUM(oi.quantity*oi.unit_price)) AS revenue\nFROM order_items oi\nJOIN products p ON p.id = oi.product_id\nJOIN orders   o ON o.id = oi.order_id\nWHERE o.status = 'completed'\nGROUP BY p.category\nORDER BY revenue DESC;",
+                "Total revenue per product category, highest first",
+            )
+            kb.add_verified(
+                db.db_id,
+                "How many customers do we have in each segment?",
+                "SELECT segment, COUNT(*) AS customers\nFROM customers\nGROUP BY segment\nORDER BY customers DESC;",
+                "Count of customers grouped by segment",
+            )
 
-        result["trust"]        = kb.trust_level(db.db_id)
-        result["glossary"]     = kb.get_glossary(db.db_id)
-        result["has_knowledge"]= kb.count_verified(db.db_id) > 0
-        result["starters"]     = [v["question"] for v in kb.get_verified(db.db_id)[:6]]
-        result["is_sample"]    = True
+        result["trust"] = kb.trust_level(db.db_id)
+        result["glossary"] = kb.get_glossary(db.db_id)
+        result["has_knowledge"] = kb.count_verified(db.db_id) > 0
+        result["starters"] = [v["question"] for v in kb.get_verified(db.db_id)[:6]]
+        result["is_sample"] = True
         return result
 
     @app.post("/api/disconnect")
@@ -188,13 +247,15 @@ def create_app(initial_db_url="", readonly=True):
     async def onboard_starters():
         _need_db(db)
         try:
-            starters = await generate_starters(providers.get(), db.schema_as_text(), db.dialect)
+            starters = await generate_starters(
+                providers.get(), db.schema_as_text(), db.dialect
+            )
 
             async def _run_starter(s):
                 res = await run_in_threadpool(db.execute, s.get("sql", ""))
                 s["columns"] = res.get("columns", [])
-                s["rows"]    = res.get("rows", [])[:5]
-                s["error"]   = res.get("error")
+                s["rows"] = res.get("rows", [])[:5]
+                s["error"] = res.get("error")
                 return s
 
             starters = list(await asyncio.gather(*[_run_starter(s) for s in starters]))
@@ -207,40 +268,70 @@ def create_app(initial_db_url="", readonly=True):
         _need_db(db)
         kb.set_glossary(db.db_id, [g.dict() for g in req.glossary])
         for s in req.starters:
-            kb.add_verified(db.db_id, s.get("question",""), s.get("sql",""), s.get("restatement",""))
-        return {"ok":True,"trust":kb.trust_level(db.db_id)}
+            kb.add_verified(
+                db.db_id,
+                s.get("question", ""),
+                s.get("sql", ""),
+                s.get("restatement", ""),
+            )
+        return {"ok": True, "trust": kb.trust_level(db.db_id)}
 
     @app.post("/api/query")
     async def query(req: QueryReq):
         _need_db(db)
         q = req.question.strip()
-        if not q: raise HTTPException(400, "Empty question")
-        glossary  = kb.get_glossary(db.db_id)
+        if not q:
+            raise HTTPException(400, "Empty question")
+        glossary = kb.get_glossary(db.db_id)
         retrieved = kb.retrieve_similar(db.db_id, q, k=3)
-        budget    = model_budget(cfg.get("provider","ollama"), cfg.get("model",""))
+        budget = model_budget(cfg.get("provider", "ollama"), cfg.get("model", ""))
         full_schema = db.get_schema()
-        tables    = link_relevant_tables(q, full_schema, glossary, retrieved, budget["max_tables"])
+        tables = link_relevant_tables(
+            q, full_schema, glossary, retrieved, budget["max_tables"]
+        )
         schema_text = compact_schema(full_schema, tables, budget["samples"])
         try:
-            gen = await generate_sql(providers.get(), q, schema_text, db.dialect,
-                                     glossary, retrieved, budget["max_examples"])
+            gen = await generate_sql(
+                providers.get(),
+                q,
+                schema_text,
+                db.dialect,
+                glossary,
+                retrieved,
+                budget["max_examples"],
+            )
         except Exception as e:
-            out = {"answered":True,"sql":"","restatement":"",
-                   "confidence":"low","confidence_reason":"Could not form a query - try rephrasing",
-                   "based_on_verified":False,"execution_error":str(e),"columns":[],"rows":[]}
+            out = {
+                "answered": True,
+                "sql": "",
+                "restatement": "",
+                "confidence": "low",
+                "confidence_reason": "Could not form a query - try rephrasing",
+                "based_on_verified": False,
+                "execution_error": str(e),
+                "columns": [],
+                "rows": [],
+            }
             out["query_id"] = session_log.log_query(db.db_id, q, out)
             return out
-        sql = gen.get("sql","")
-        restatement = gen.get("restatement","")
+        sql = gen.get("sql", "")
+        restatement = gen.get("restatement", "")
         exec_result = await run_in_threadpool(db.execute, sql)
         confidence, reason, based = compute_confidence(retrieved, exec_result)
-        out = {"answered":True,"sql":sql,"restatement":restatement,
-               "confidence":confidence,"confidence_reason":reason,"based_on_verified":based,
-               "columns":exec_result.get("columns",[]),
-               "rows":exec_result.get("rows",[]),
-               "truncated":exec_result.get("truncated",False),
-               "tables_used":tables}
-        if "error" in exec_result: out["execution_error"] = exec_result["error"]
+        out = {
+            "answered": True,
+            "sql": sql,
+            "restatement": restatement,
+            "confidence": confidence,
+            "confidence_reason": reason,
+            "based_on_verified": based,
+            "columns": exec_result.get("columns", []),
+            "rows": exec_result.get("rows", []),
+            "truncated": exec_result.get("truncated", False),
+            "tables_used": tables,
+        }
+        if "error" in exec_result:
+            out["execution_error"] = exec_result["error"]
         out["query_id"] = session_log.log_query(db.db_id, q, out)
         return out
 
@@ -259,18 +350,19 @@ def create_app(initial_db_url="", readonly=True):
     async def verify(req: VerifyReq):
         _need_db(db)
         kb.add_verified(db.db_id, req.question, req.sql, req.restatement)
-        return {"ok":True,"trust":kb.trust_level(db.db_id)}
+        return {"ok": True, "trust": kb.trust_level(db.db_id)}
 
     @app.post("/api/execute")
     async def execute(req: RawSQLReq):
         _need_db(db)
         res = await run_in_threadpool(db.execute, req.sql)
-        if "error" in res: raise HTTPException(400, res["error"])
+        if "error" in res:
+            raise HTTPException(400, res["error"])
         return res
-
-
 
     return app
 
+
 def _need_db(db):
-    if not db.connected: raise HTTPException(409, "No database connected")
+    if not db.connected:
+        raise HTTPException(409, "No database connected")

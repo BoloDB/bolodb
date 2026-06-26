@@ -1,7 +1,7 @@
 import bcrypt
 from pydantic import EmailStr
 from fastapi import HTTPException
-from app.models.user import UserSignup, UserInDB, Role
+from backend.app.models.user import UserSignup, UserInDB, Role
 from dotenv import load_dotenv
 from backend.app.mongodatabase import (
     create_user,
@@ -17,19 +17,21 @@ from datetime import datetime, timedelta, UTC
 
 load_dotenv()
 
-jwt_secret = os.getenv("JWT_SECRET")
+jwt_secret = os.getenv("JWT_SECRET", "RANDOM-SECRET")
+
 
 def get_me(user_id):
     data = serialize_doc(get_user_by_id(user_id))
     data.pop("hashed_pass", None)
     return data
 
+
 def login(email: EmailStr, password: str):
     user_details = get_user_by_email(email)
     if user_details is None:
         raise HTTPException(status_code=400, detail="Email id invalid, please signup")
     user_bytes = password.encode()
-    if bcrypt.checkpw(user_bytes, user_details["hashed_pass"].encode("utf-8")) == True:
+    if bcrypt.checkpw(user_bytes, user_details["hashed_pass"].encode("utf-8")):
         return create_jwt(str(user_details["_id"]), user_details["role"])
     raise HTTPException(status_code=401, detail="Incorrect Password")
 
@@ -37,10 +39,10 @@ def login(email: EmailStr, password: str):
 def create_access_jwt(user_id, role):
     ALGORITHM = "HS256"
     data = {"user_id": user_id, "role": role}
-    expiry = datetime.utcnow() + timedelta(minutes=60)
+    expiry = datetime.now(UTC) + timedelta(minutes=60)
     data.update({"exp": expiry})
-    encoded_jwt = jwt.encode(data, jwt_secret, algorithm=ALGORITHM)
-    return encoded_jwt
+    return jwt.encode(data, jwt_secret, algorithm=ALGORITHM)
+
 
 def create_jwt(user_id, role):
     ALGORITHM = "HS256"
@@ -65,6 +67,7 @@ def signup(user: UserSignup):
     user_in_db = UserInDB(email=user.email, hashed_pass=hashed_pw, role=Role.user)
     create_user(user_in_db)
     return True
+
 
 def change_password(user_id, old_password, new_password):
     user_details = get_user_by_id(user_id)

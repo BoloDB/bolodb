@@ -1,11 +1,11 @@
-from fastapi import HTTPException, Cookie, Depends
+from fastapi import HTTPException, Cookie
 from dotenv import load_dotenv
 import os
 import jwt
 
 load_dotenv()
 
-JWT_SECRET = os.getenv("JWT_SECRET", "this-is-a-default-secret")
+JWT_SECRET = os.environ["JWT_SECRET"]
 
 
 async def get_current_user(access_token: str = Cookie(None)):
@@ -21,4 +21,3 @@ async def get_current_user(access_token: str = Cookie(None)):
         )
     except jwt.InvalidTokenError:
         raise HTTPException(status_code=401, detail="Invalid Token")
-

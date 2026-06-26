@@ -1,7 +1,9 @@
 """Creates TechStore sample database on first run."""
+
 import sqlite3
 import os
 from pathlib import Path
+
 
 def ensure_sample_db():
     path = Path(os.path.expanduser("~")) / ".bolodb" / "sample_techstore.db"
@@ -9,7 +11,8 @@ def ensure_sample_db():
     if path.exists():
         return f"sqlite:///{path.as_posix()}"
     c = sqlite3.connect(str(path))
-    c.executescript("""
+    c.executescript(
+        """
     CREATE TABLE customers(id INTEGER PRIMARY KEY,name TEXT,email TEXT,segment TEXT,country TEXT,created_at TEXT);
     CREATE TABLE products(id INTEGER PRIMARY KEY,name TEXT,category TEXT,price REAL,stock INTEGER);
     CREATE TABLE orders(id INTEGER PRIMARY KEY,customer_id INTEGER,status TEXT,total_amount REAL,created_at TEXT,
@@ -60,11 +63,13 @@ def ensure_sample_db():
       (3,103,'card',5880.00,'2026-05-28'),
       (5,105,'bank',5120.00,'2026-06-04'),
       (6,106,'card',798.00,'2026-05-20');
-    """)
+    """
+    )
     c.commit()
     c.close()
     print(f"Sample database created: {path}")
     return f"sqlite:///{path.as_posix()}"
+
 
 if __name__ == "__main__":
     print(ensure_sample_db())

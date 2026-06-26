@@ -1,6 +1,6 @@
 from enum import Enum
-from pydantic import BaseModel, Field, EmailStr
 from typing import Optional
+from pydantic import BaseModel, Field, EmailStr, ConfigDict
 
 
 class Role(Enum):
@@ -19,8 +19,7 @@ class UserInDB(BaseModel):
     hashed_pass: str
     role: Role
 
-    class Config:
-        populate_by_name = True
+    model_config = ConfigDict(populate_by_name=True)
 
 
 class UserPublic(BaseModel):
@@ -28,5 +27,4 @@ class UserPublic(BaseModel):
     email: EmailStr
     role: Role
 
-    class Config:
-        populate_by_name = True
+    model_config = ConfigDict(populate_by_name=True)
