@@ -19,7 +19,7 @@ RUN npm run build
 # ── 3. Minimal output stage ──
 #  The built assets are copied to /app/build (SvelteKit static adapter default).
 #  docker-compose mounts this as a shared volume for Nginx.
-FROM alpine:3.20
+FROM alpine:3.24
 
 COPY --from=builder /app/build /app/dist
 
