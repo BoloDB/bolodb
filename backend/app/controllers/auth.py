@@ -29,11 +29,11 @@ def get_me(user_id):
 def login(email: EmailStr, password: str):
     user_details = get_user_by_email(email)
     if user_details is None:
-        raise HTTPException(status_code=400, detail="Email id invalid, please signup")
+        raise HTTPException(status_code=401, detail="Invalid credentials")
     user_bytes = password.encode()
     if bcrypt.checkpw(user_bytes, user_details["hashed_pass"].encode("utf-8")):
         return create_jwt(str(user_details["_id"]), user_details["role"])
-    raise HTTPException(status_code=401, detail="Incorrect Password")
+    raise HTTPException(status_code=401, detail="Invalid credentials")
 
 
 def create_access_jwt(user_id, role):
