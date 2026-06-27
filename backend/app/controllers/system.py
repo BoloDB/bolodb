@@ -27,8 +27,8 @@ async def check_ollama(cfg):
             r.raise_for_status()
             models = [m["name"] for m in r.json().get("models", [])]
             return {"ok": True, "models": models}
-    except Exception as e:
-        return {"ok": False, "error": f"{type(e).__name__}: {str(e)}", "url": url}
+    except Exception:
+        return {"ok": False, "error": "Failed to contact Ollama service", "url": url}
 
 
 async def get_health(cfg, providers, db):
