@@ -38,7 +38,7 @@ With any API engine, only the schema and your question are sent - never your act
      sudo systemctl edit ollama.service
      # Add this under [Service]:
      # Environment="OLLAMA_HOST=0.0.0.0"
-     
+
      sudo systemctl daemon-reload
      sudo systemctl restart ollama
      ```

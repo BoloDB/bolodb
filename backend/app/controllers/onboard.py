@@ -3,6 +3,7 @@ from fastapi.concurrency import run_in_threadpool
 import asyncio
 from backend.app.llm import generate_glossary, generate_starters
 
+
 async def get_glossary(db, providers):
     if not db.connected:
         raise HTTPException(409, "No database connected")
@@ -11,6 +12,7 @@ async def get_glossary(db, providers):
         return {"glossary": terms}
     except Exception as e:
         raise HTTPException(502, f"LLM error: {e}")
+
 
 async def get_starters(db, providers):
     if not db.connected:
@@ -31,6 +33,7 @@ async def get_starters(db, providers):
         return {"starters": starters}
     except Exception as e:
         raise HTTPException(502, f"LLM error: {e}")
+
 
 async def save(db, kb, req_data):
     if not db.connected:

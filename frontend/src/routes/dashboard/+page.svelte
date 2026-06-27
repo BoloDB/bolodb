@@ -25,22 +25,22 @@
     <h1 style="font-size: 2rem; margin: 0;">Dashboard</h1>
     <button class="btn secondary" onclick={() => goto('/chat')}>Back to Chat</button>
   </div>
-  
+
   {#if appState.isLoaded && appState.dbInfo}
     <div style="background: var(--bg-1); border: 1px solid var(--border); border-radius: 8px; padding: 20px; margin-bottom: 24px;">
       <h2 style="font-size: 1.25rem; margin-top: 0; margin-bottom: 12px;">Connection</h2>
       <div style="display: grid; grid-template-columns: 120px 1fr; gap: 8px;">
-        <strong style="color: var(--muted);">Database:</strong> 
+        <strong style="color: var(--muted);">Database:</strong>
         <span>{appState.dbInfo.dialect}</span>
-        
-        <strong style="color: var(--muted);">Status:</strong> 
+
+        <strong style="color: var(--muted);">Status:</strong>
         <span style="color: #10b981; font-weight: 500;">Connected</span>
-        
-        <strong style="color: var(--muted);">Provider:</strong> 
+
+        <strong style="color: var(--muted);">Provider:</strong>
         <span style="text-transform: capitalize;">{appState.engine}</span>
-        
+
         {#if appState.modelName}
-          <strong style="color: var(--muted);">Model:</strong> 
+          <strong style="color: var(--muted);">Model:</strong>
           <span>{appState.modelName}</span>
         {/if}
       </div>
@@ -49,10 +49,10 @@
     <div style="background: var(--bg-1); border: 1px solid var(--border); border-radius: 8px; padding: 20px; margin-bottom: 24px;">
       <h2 style="font-size: 1.25rem; margin-top: 0; margin-bottom: 12px;">Trust & Accuracy</h2>
       <div style="display: grid; grid-template-columns: 120px 1fr; gap: 8px;">
-        <strong style="color: var(--muted);">Verified Queries:</strong> 
+        <strong style="color: var(--muted);">Verified Queries:</strong>
         <span>{appState.verifiedCount}</span>
-        
-        <strong style="color: var(--muted);">Current Level:</strong> 
+
+        <strong style="color: var(--muted);">Current Level:</strong>
         <span style="text-transform: capitalize; font-weight: 500;">{appState.prevLevel}</span>
       </div>
     </div>

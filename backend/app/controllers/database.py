@@ -5,6 +5,7 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+
 async def connect(db, kb, cfg, req_data):
     result = db.connect(req_data.db_url)
     if not result["ok"]:
@@ -16,6 +17,7 @@ async def connect(db, kb, cfg, req_data):
     result["has_knowledge"] = kb.count_verified(db.db_id) > 0
     result["starters"] = [v["question"] for v in kb.get_verified(db.db_id)[:6]]
     return result
+
 
 async def connect_sample(db, kb, cfg):
     url = ensure_sample_db()
@@ -72,6 +74,7 @@ async def connect_sample(db, kb, cfg):
     result["is_sample"] = True
     return result
 
+
 async def disconnect(db, cfg):
     db.disconnect()
     cfg.pop("last_db_url", None)
@@ -80,6 +83,7 @@ async def disconnect(db, cfg):
     except Exception as e:
         logger.warning("Failed to save config after disconnect: %s", e)
     return {"ok": True}
+
 
 async def get_schema(db, refresh):
     if not db.connected:
