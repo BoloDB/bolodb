@@ -28,13 +28,21 @@
   });
 
   async function handleDelete(id: string) {
-    await deleteHistoryEntry(id);
-    history = history.filter(h => h._id !== id);
+    try {
+      await deleteHistoryEntry(id);
+      history = history.filter(h => h._id !== id);
+    } catch (e) {
+      console.error(e);
+    }
   }
 
   async function handleClear() {
-    await clearHistory();
-    history = [];
+    try {
+      await clearHistory();
+      history = [];
+    } catch (e) {
+      console.error(e);
+    }
   }
 </script>
 
