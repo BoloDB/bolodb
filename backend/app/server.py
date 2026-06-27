@@ -105,6 +105,7 @@ def create_app(initial_db_url="", readonly=True):
                 "dialect": db.dialect,
                 "db_id": db.db_id,
                 "tables": db._table_count,
+                "has_knowledge": kb.count_verified(db.db_id) > 0,
             }
             s["trust"] = kb.trust_level(db.db_id)
             s["glossary"] = kb.get_glossary(db.db_id)
