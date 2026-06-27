@@ -42,9 +42,20 @@
     if (!q) return;
     input = ''; loading = true;
     const id = Math.random().toString(36).slice(2, 10);
+    let build_context = []
+    for(let turn of turns.toReversed()){
+      if(build_context.length >= 2){
+        break;
+      }
+      if(turn.thinking == true){
+        continue;
+      }else{
+        build_context.push({question: turn.question, sql: turn.sql, restatement: turn.restatement})
+      }
+    }
     turns = [...turns, { id, question: q, thinking: true }];
     try {
-      const data = await apiCall('/api/query', { question: q });
+      const data = await apiCall('/api/query', { question: q, context: build_context });
       const rows2d = rowsToArrays(data.columns || [], data.rows || []);
       turns = turns.map(x => x.id === id ? {
         ...x, thinking: false,
