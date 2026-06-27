@@ -42,10 +42,26 @@ class AppState {
         this.isLoaded = true;
         if (redirect) goto('/connect');
       }
-    } catch {
+    } catch (e: any) {
       this.isLoaded = true;
-      if (redirect) goto('/connect');
+      const msg = e.message || '';
+      if (msg.includes('Access Denied') || msg.includes('Session Expired') || msg.includes('Invalid Token') || msg.includes('401')) {
+        if (typeof window !== 'undefined' && !window.location.pathname.startsWith('/login') && !window.location.pathname.startsWith('/signup')) {
+          goto('/login');
+        }
+      } else {
+        if (redirect) goto('/connect');
+      }
     }
+  }
+
+  async logout() {
+    try { await apiCall('/api/auth/logout', {}); } catch {}
+    this.dbInfo = null;
+    this.realSchema = null;
+    this.verifiedCount = 0;
+    this.starters = [];
+    goto('/login');
   }
 
   async setConnect(isSample: boolean, res: DbInfo) {

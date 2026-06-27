@@ -5,3 +5,4 @@ __pycache__/
 .claude/settings.local.json
 .venv/
 .pytest_cache/
+.env

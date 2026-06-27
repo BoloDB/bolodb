@@ -29,7 +29,7 @@ USER bolodb
 EXPOSE 4321
 
 HEALTHCHECK --interval=30s --timeout=5s --retries=3 \
-    CMD python -c "import httpx; httpx.get('http://localhost:4321/api/state', timeout=3).raise_for_status()" || exit 1
+    CMD python -c "import httpx; httpx.get('http://localhost:4321/api/health', timeout=3).raise_for_status()" || exit 1
 
 CMD ["python", "-m", "uvicorn", "backend.app.server:create_app", \
      "--factory", "--host", "0.0.0.0", "--port", "4321", "--log-level", "warning"]
