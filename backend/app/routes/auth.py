@@ -7,7 +7,7 @@ import jwt
 import os
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
-JWT_SECRET = os.environ["JWT_SECRET"]
+JWT_SECRET = os.getenv("JWT_SECRET", "RANDOM-SECRET")
 
 
 @router.post("/refresh")
