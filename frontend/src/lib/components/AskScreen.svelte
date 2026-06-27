@@ -47,11 +47,13 @@
       if(build_context.length >= 2){
         break;
       }
-      if(turn.thinking == true){
+      if(turn.thinking == true || !turn.sql || turn.executionError || turn.verdict === 'wrong'){
         continue;
-      }else{
-        build_context.push({question: turn.question, sql: turn.sql, restatement: turn.restatement})
       }
+      build_context.push({
+        question: turn.question,
+        sql: turn.sql,
+        restatement: turn.restatement})
     }
     turns = [...turns, { id, question: q, thinking: true }];
     try {
