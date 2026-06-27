@@ -33,6 +33,7 @@ def get_session_log(request: Request):
     return request.app.state.session_log
 
 def get_cfg(request: Request):
-    return request.app.state.cfg
+    try:    
+        return request.app.state.cfg
     except jwt.InvalidTokenError:
         raise HTTPException(status_code=401, detail="Invalid Token")
