@@ -1,4 +1,6 @@
+import logging
 from fastapi import APIRouter, Depends
+from fastapi.concurrency import run_in_threadpool
 from backend.app.dependencies import (
     get_current_user,
     get_db,
@@ -10,6 +12,7 @@ from backend.app.dependencies import (
 from backend.app.models.api import QueryReq, FeedbackReq, VerifyReq, RawSQLReq
 import backend.app.controllers.query as ctrl
 
+log = logging.getLogger(__name__)
 router = APIRouter()
 
 

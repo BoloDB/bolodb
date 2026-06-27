@@ -7,8 +7,8 @@
   let { engine, setEngine, modelName, setModelName, onClose, onDisconnect }:
     { engine: string; setEngine: (e: string) => void; modelName: string; setModelName: (m: string) => void; onClose: () => void; onDisconnect?: () => void } = $props();
 
-  let sel = $state(engine);
-  let localModel = $state(modelName || 'llama3.2');
+  let sel = $state( (() => engine)() );
+  let localModel = $state( (() => modelName || 'llama3.2')() );
   let apiKey = $state('');
   let saving = $state(false);
   let error = $state('');
