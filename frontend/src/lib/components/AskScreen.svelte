@@ -88,7 +88,7 @@
 </script>
 
 <div class="page" style="display:flex;height:100%">
-  <Sidebar {engine} {modelName} {verifiedCount} onSettings={() => settingsOpen = true} schema={realSchema} {dbInfo} {historyTrigger} onHistorySelect={(h) => input = h.question} />
+  <Sidebar {engine} {modelName} {verifiedCount} onSettings={() => settingsOpen = true} schema={realSchema} {dbInfo} {historyTrigger} onHistorySelect={(h: any) => input = h.question} />
 
   <div style="flex:1;display:flex;flex-direction:column;min-width:0;position:relative">
     <!-- top bar -->

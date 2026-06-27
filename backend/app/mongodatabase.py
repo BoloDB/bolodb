@@ -9,7 +9,7 @@ from backend.app.models.user import UserInDB
 load_dotenv()
 mongouri = os.getenv("MONGO_URI")
 client = MongoClient(mongouri)
-db = client["sports_council_db"]
+db = client["bolodb"]
 
 
 def get_user_by_email(email):

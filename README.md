@@ -80,17 +80,17 @@ docker compose build --no-cache # Rebuild all images from scratch
 ## Running tests
 
 ```bash
+cd backend
 pip install -r requirements.txt
-pytest
+pytest ../tests
 ```
 
 ## Privacy
 
-- All learned knowledge is stored locally in `~/.bolodb/`
-- With a local model (Ollama), nothing leaves your machine
-- With an API model, only the schema and your question are sent to generate SQL
-- No telemetry, no cloud sync
-- Delete `~/.bolodb/` to wipe everything BoloDB has learned
+- All learned knowledge and user settings are stored in the local MongoDB container volume.
+- With a local model (Ollama), nothing leaves your machine.
+- With an API model, only the schema and your question are sent to generate SQL.
+- No telemetry, no cloud sync.
 
 ## License
 

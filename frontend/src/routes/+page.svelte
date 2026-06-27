@@ -45,24 +45,6 @@
   <div class="fixed top-[-10%] left-[-10%] w-[50%] h-[60%] rounded-full mix-blend-multiply opacity-20 pointer-events-none" style="background: var(--brand); filter: blur(100px);"></div>
   <div class="fixed top-[20%] right-[-10%] w-[40%] h-[50%] rounded-full mix-blend-multiply opacity-20 pointer-events-none" style="background: #34d399; filter: blur(100px);"></div>
 
-  <!-- Navigation -->
-  <nav class="fixed top-0 left-0 right-0 z-50 border-b" style="background: rgba(255,255,255,0.7); backdrop-filter: blur(12px); border-color: var(--border);">
-    <div class="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
-      <div class="font-extrabold text-xl tracking-tight" style="color: var(--ink);">
-        Bolo<span style="color: var(--brand);">DB</span>
-      </div>
-      <div class="flex items-center gap-4">
-        {#if !appState.isLoaded}
-           <div class="spin w-4 h-4 rounded-full border-2 border-brand border-t-transparent"></div>
-        {:else if appState.dbInfo}
-           <button class="btn btn-primary btn-sm" onclick={() => goto('/chat')}>Go to Dashboard</button>
-        {:else}
-           <button class="btn btn-ghost btn-sm" onclick={() => goto('/login')}>Log in</button>
-           <button class="btn btn-primary btn-sm shadow-sm" onclick={() => goto('/signup')}>Sign up</button>
-        {/if}
-      </div>
-    </div>
-  </nav>
 
   <!-- Main Content -->
   <main class="flex-1 max-w-7xl mx-auto px-6 pt-32 pb-24 relative z-10 w-full">
@@ -82,7 +64,7 @@
     </div>
 
     <!-- Mock Demo Section -->
-    <div class="card p-4 md:p-8 mb-24 max-w-5xl mx-auto rise shadow-2xl" style="animation-delay: 0.3s; background: rgba(255,255,255,0.6); backdrop-filter: blur(16px);">
+    <div class="card p-4 md:p-8 mb-24 max-w-5xl mx-auto rise shadow-2xl" style="animation-delay: 0.3s; backdrop-filter: blur(16px);">
       <div class="border rounded-xl overflow-hidden shadow-sm" style="border-color: var(--border); background: var(--bg);">
         <div class="px-4 py-3 border-b flex items-center gap-2" style="border-color: var(--border); background: var(--surface);">
           <div class="w-3 h-3 rounded-full bg-red-400"></div>
