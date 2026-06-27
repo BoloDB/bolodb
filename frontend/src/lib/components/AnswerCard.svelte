@@ -21,7 +21,7 @@
 <div class="rise" style="margin-bottom:26px">
   <!-- question bubble -->
   <div style="display:flex;justify-content:flex-end;margin-bottom:12px">
-    <div style="max-width:72%;padding:11px 17px;border-radius:var(--radius-lg);border-bottom-right-radius:7px;background:var(--ink);color:var(--surface);font-size:15px;font-weight:550;line-height:1.4;box-shadow:var(--shadow-sm)">
+    <div style="max-width:72%;padding:11px 17px;border-radius:var(--radius-lg);border-bottom-right-radius:7px;background:var(--surface-3);color:var(--ink);font-size:15px;font-weight:550;line-height:1.4;box-shadow:var(--shadow-sm)">
       {turn.question}
     </div>
   </div>

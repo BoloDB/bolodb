@@ -1,3 +1,4 @@
+import logging
 from fastapi import HTTPException
 from fastapi.concurrency import run_in_threadpool
 from backend.app.schema_link import (
@@ -7,6 +8,8 @@ from backend.app.schema_link import (
     compute_confidence,
 )
 from backend.app.llm import generate_sql
+
+log = logging.getLogger(__name__)
 
 
 async def run_query(db, kb, cfg, providers, session_log, req_data):
@@ -33,7 +36,8 @@ async def run_query(db, kb, cfg, providers, session_log, req_data):
             retrieved,
             budget["max_examples"],
         )
-    except Exception as e:
+    except Exception:
+        log.warning("SQL generation failed during run_query", exc_info=True)
         out = {
             "answered": True,
             "sql": "",
@@ -41,7 +45,7 @@ async def run_query(db, kb, cfg, providers, session_log, req_data):
             "confidence": "low",
             "confidence_reason": "Could not form a query - try rephrasing",
             "based_on_verified": False,
-            "execution_error": str(e),
+            "execution_error": "Could not form a query - try rephrasing",
             "columns": [],
             "rows": [],
         }

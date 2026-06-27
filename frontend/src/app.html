@@ -1,6 +1,15 @@
 <!doctype html>
-<html lang="en" data-theme="crisp">
+<html lang="en">
   <head>
+    <script>
+      (function () {
+        try {
+          var stored = localStorage.getItem("bolodb_theme");
+          var theme = stored ? stored : "dark";
+          document.documentElement.setAttribute("data-theme", theme);
+        } catch (e) {}
+      })();
+    </script>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta

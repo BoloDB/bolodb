@@ -28,6 +28,7 @@
   let settingsOpen = $state(false);
   let loading = $state(false);
   let feedRef: HTMLDivElement | undefined = $state(undefined);
+  let historyTrigger = $state(0);
 
   const trust = $derived(trustFor(verifiedCount));
 
@@ -53,6 +54,7 @@
         basedOn: data.based_on_verified || false, query_id: data.query_id || id,
         executionError: data.execution_error || null, verdict: null
       } : x);
+      historyTrigger++;
     } catch (e: any) {
       turns = turns.map(x => x.id === id ? {
         ...x, thinking: false,
@@ -86,7 +88,7 @@
 </script>
 
 <div class="page" style="display:flex;height:100%">
-  <Sidebar {engine} {modelName} {verifiedCount} onSettings={() => settingsOpen = true} schema={realSchema} {dbInfo} />
+  <Sidebar {engine} {modelName} {verifiedCount} onSettings={() => settingsOpen = true} schema={realSchema} {dbInfo} {historyTrigger} onHistorySelect={(h) => input = h.question} />
 
   <div style="flex:1;display:flex;flex-direction:column;min-width:0;position:relative">
     <!-- top bar -->

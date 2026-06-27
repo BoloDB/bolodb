@@ -3,6 +3,7 @@
   import { appState } from '$lib/appState.svelte';
   import { page } from '$app/stores';
   import { goto } from '$app/navigation';
+  import Navbar from '$lib/components/ui/Navbar.svelte';
 
   let { children } = $props();
 </script>
@@ -10,22 +11,23 @@
 <svelte:head>
   <title>BoloDB — Ask your data. Trust the answer.</title>
 </svelte:head>
-<!--
-{#if appState.isLoaded && appState.dbInfo && $page.url.pathname !== '/connect' && $page.url.pathname !== '/onboard' && $page.url.pathname !== '/'}
-  <div style="position: absolute; top: 16px; right: 24px; z-index: 1000; display: flex; gap: 12px; align-items: center;">
-    {#if $page.url.pathname === '/chat'}
-      <button class="btn btn-ghost" style="padding: 6px 12px; font-size: 13px;" onclick={() => goto('/dashboard')}>
-        Dashboard
-      </button>
-    {:else if $page.url.pathname === '/dashboard'}
-      <button class="btn btn-ghost" style="padding: 6px 12px; font-size: 13px;" onclick={() => goto('/chat')}>
-        Chat
-      </button>
-    {/if}
-    <button class="btn btn-ghost" style="padding: 6px 12px; font-size: 13px; color: var(--c-low);" onclick={() => appState.disconnect()}>
-      Disconnect
-    </button>
-  </div>
-{/if} -->
 
-{@render children()}
+<!-- Only show navbar if loaded and not on home/login/signup. Or we can just show it everywhere, but let's hide on root or auth if needed. Actually we want it globally if we are connected. Let's hide it on login/signup/onboard by checking path -->
+{#if appState.isLoaded && $page.url.pathname !== '/login' && $page.url.pathname !== '/signup' && $page.url.pathname !== '/onboard'}
+  <Navbar />
+{/if}
+
+<div class="main-content" class:has-navbar={appState.isLoaded && $page.url.pathname !== '/login' && $page.url.pathname !== '/signup' && $page.url.pathname !== '/onboard'}>
+  {@render children()}
+</div>
+
+<style>
+  .main-content {
+    height: 100%;
+    width: 100%;
+  }
+  .has-navbar {
+    padding-top: 60px;
+    height: 100%;
+  }
+</style>
