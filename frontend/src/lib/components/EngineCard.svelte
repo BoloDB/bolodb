@@ -11,7 +11,7 @@
     box-shadow:{active?'0 0 0 4px var(--ring), var(--shadow)':'var(--shadow-sm)'};
     transition:all .18s var(--ease);position:relative;animation-delay:{delay}ms">
   {#if provider.badge}
-    <span style="position:absolute;top:-8px;right:10px;font-size:10.5px;font-weight:800;letter-spacing:.02em;padding:3px 8px;border-radius:99px;background:{provider.tone==='brand'?'var(--brand)':'var(--ink)'};color:#fff">{provider.badge}</span>
+    <span style="position:absolute;top:-8px;right:10px;font-size:10.5px;font-weight:800;letter-spacing:.02em;padding:3px 8px;border-radius:99px;background:{provider.tone==='brand'?'var(--brand)':'var(--ink)'};color:var(--surface)">{provider.badge}</span>
   {/if}
   <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
     <span style="width:30px;height:30px;border-radius:9px;display:grid;place-items:center;background:{active?'var(--brand-tint)':'var(--surface-3)'};color:{active?'var(--brand)':'var(--muted)'}">

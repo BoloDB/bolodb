@@ -1,24 +1,54 @@
 <script lang="ts">
   import { schema as defaultSchema, trustFor, providers } from '$lib/data';
-  import type { SchemaTable, DbInfo } from '$lib/types';
+  import type { SchemaTable, DbInfo, HistoryEntry } from '$lib/types';
   import Logo from '$lib/components/ui/Logo.svelte';
   import TrustMeter from '$lib/components/ui/TrustMeter.svelte';
+  import { getHistory, deleteHistoryEntry, clearHistory } from '$lib/api';
 
-  let { engine, modelName, verifiedCount, onSettings, schema, dbInfo }:
-    { engine: string; modelName: string; verifiedCount: number; onSettings: () => void; schema: SchemaTable[] | null; dbInfo: DbInfo | null } = $props();
+  let { engine, modelName, verifiedCount, onSettings, schema, dbInfo, onHistorySelect, historyTrigger = 0 }:
+    { engine: string; modelName: string; verifiedCount: number; onSettings: () => void; schema: SchemaTable[] | null; dbInfo: DbInfo | null; onHistorySelect?: (entry: HistoryEntry) => void; historyTrigger?: number } = $props();
 
   const trust = $derived(trustFor(verifiedCount));
   const prov = $derived(providers.find(p => p.id === engine)!);
   let openTable: string | null = $state(null);
+  let history: HistoryEntry[] = $state([]);
+  let openHistory: boolean = $state(true);
+  let hoveredHistoryId: string | null = $state(null);
+
   const schemaData = $derived(schema || defaultSchema);
   const dbLabel = $derived(dbInfo ? (dbInfo.url || '').split('/').pop() || dbInfo.dialect || 'your database' : 'your database');
+
+  $effect(() => {
+    historyTrigger; // track
+    getHistory().then(res => {
+      if (res && res.history) {
+        history = res.history;
+      }
+    }).catch(e => console.error(e));
+  });
+
+  async function handleDelete(id: string) {
+    try {
+      await deleteHistoryEntry(id);
+      history = history.filter(h => h._id !== id);
+    } catch (e) {
+      console.error(e);
+    }
+  }
+
+  async function handleClear() {
+    try {
+      await clearHistory();
+      history = [];
+    } catch (e) {
+      console.error(e);
+    }
+  }
 </script>
 
 <div style="width:286px;flex-shrink:0;border-right:1px solid var(--border);background:var(--surface);display:flex;flex-direction:column;height:100%">
-  <div style="padding:18px 20px 14px"><Logo size={26} /></div>
-
   <!-- trust panel -->
-  <div style="margin:0 16px 14px;padding:16px;border-radius:var(--radius);background:linear-gradient(165deg, var(--brand-tint), var(--surface-2));border:1px solid var(--border)">
+  <div style="margin:16px 16px 14px;padding:16px;border-radius:var(--radius);background:linear-gradient(165deg, var(--brand-tint), var(--surface-2));border:1px solid var(--border)">
     <div style="display:flex;align-items:center;gap:7px;margin-bottom:11px">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" style="color:var(--brand)"><path d="M12 3l7 3v5c0 4.4-3 8-7 10-4-2-7-5.6-7-10V6l7-3z" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round"/><path d="M9 12l2 2 4-4" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></svg>
       <span style="font-size:12px;font-weight:800;letter-spacing:.04em;color:var(--brand-ink);text-transform:uppercase;white-space:nowrap">Accuracy</span>
@@ -27,12 +57,12 @@
     <TrustMeter count={verifiedCount} />
     <p style="font-size:12.5px;color:var(--muted);line-height:1.5;margin:11px 0 0">{trust.behaviour}</p>
     {#if trust.next}
-      <div style="margin-top:10px;padding:9px 11px;background:rgba(255,255,255,.6);border-radius:var(--radius-sm);font-size:12px;color:var(--brand-ink);font-weight:600;line-height:1.5">
+      <div style="margin-top:10px;padding:9px 11px;background:var(--surface);border-radius:var(--radius-sm);font-size:12px;color:var(--brand-ink);font-weight:600;line-height:1.5">
         Verify {trust.next - verifiedCount} more correct answer{trust.next - verifiedCount === 1 ? '' : 's'} and BoloDB will
         {trust.key === 'supervised' ? 'start showing confident answers directly without waiting.' : 'answer all questions directly — reasoning one tap away.'}
       </div>
     {:else}
-      <div style="margin-top:10px;padding:9px 11px;background:rgba(255,255,255,.6);border-radius:var(--radius-sm);font-size:12px;color:var(--brand-ink);font-weight:600">
+      <div style="margin-top:10px;padding:9px 11px;background:var(--surface);border-radius:var(--radius-sm);font-size:12px;color:var(--brand-ink);font-weight:600">
         ✓ BoloDB is fully calibrated for this database.
       </div>
     {/if}
@@ -64,6 +94,37 @@
         {/if}
       </div>
     {/each}
+
+    <!-- history -->
+    <div style="margin:24px 6px 9px;display:flex;align-items:center;gap:6px">
+      <button onclick={() => openHistory = !openHistory} style="display:flex;align-items:center;gap:6px;background:none;border:none;cursor:pointer;padding:0;font-size:11px;font-weight:800;letter-spacing:.06em;color:var(--faint);text-transform:uppercase;">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" style="transform:{openHistory?'none':'rotate(-90deg)'};transition:transform .15s;flex-shrink:0"><path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.8"/><path d="M12 7v5l3 3" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        History
+      </button>
+      {#if history.length > 0}
+        <button onclick={handleClear} style="margin-left:auto;font-size:10px;color:var(--faint);background:none;border:none;cursor:pointer;text-transform:none;font-weight:700;padding:0">Clear all</button>
+      {/if}
+    </div>
+    {#if openHistory}
+      <div class="rise" style="padding:2px 0 6px 27px">
+        {#if history.length === 0}
+           <div class="mono" style="font-size:11.5px;color:var(--faint);padding:3px 0;font-style:italic">No history yet</div>
+        {:else}
+          {#each history as h (h._id)}
+            <div role="presentation" onmouseenter={() => hoveredHistoryId = h._id} onmouseleave={() => hoveredHistoryId = null} style="position:relative;margin-bottom:2px">
+              <button onclick={() => onHistorySelect && onHistorySelect(h)} style="width:100%;text-align:left;background:transparent;border:none;padding:5px 0;cursor:pointer;display:flex;align-items:center;gap:8px">
+                <span style="width:4px;height:4px;border-radius:99px;background:{h.confidence==='High'?'var(--brand)':h.confidence==='Medium'?'var(--c-med)':'var(--border-2)'};flex-shrink:0"></span>
+                <span style="font-size:12px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1">{h.question}</span>
+              </button>
+              {#if hoveredHistoryId === h._id}
+                <button onclick={(e) => { e.stopPropagation(); handleDelete(h._id); }} style="position:absolute;right:8px;top:50%;transform:translateY(-50%);background:var(--surface);border:none;color:var(--faint);cursor:pointer;padding:4px;font-size:10px;border-radius:4px;display:flex;align-items:center;justify-content:center" title="Delete">✕</button>
+              {/if}
+            </div>
+          {/each}
+        {/if}
+      </div>
+    {/if}
   </div>
 
   <!-- engine + settings -->

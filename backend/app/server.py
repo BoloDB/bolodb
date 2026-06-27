@@ -15,6 +15,7 @@ from backend.app.routes.system import router as system_router
 from backend.app.routes.database import router as database_router
 from backend.app.routes.onboard import router as onboard_router
 from backend.app.routes.query import router as query_router
+from backend.app.routes.history import router as history_router
 
 logger = logging.getLogger(__name__)
 
@@ -50,5 +51,6 @@ def create_app(initial_db_url="", readonly=True):
     app.include_router(database_router)
     app.include_router(onboard_router)
     app.include_router(query_router)
+    app.include_router(history_router)
 
     return app

@@ -8,8 +8,8 @@ def test_load_config_no_file(tmp_path):
     config_dir = tmp_path / ".bolodb"
     config_file = config_dir / "config.json"
 
-    with patch("app.config.CONFIG_DIR", config_dir), patch(
-        "app.config.CONFIG_FILE", config_file
+    with patch("backend.app.config.CONFIG_DIR", config_dir), patch(
+        "backend.app.config.CONFIG_FILE", config_file
     ):
         cfg = load_config()
         assert cfg == dict(DEFAULTS)

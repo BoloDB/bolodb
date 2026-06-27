@@ -98,3 +98,12 @@ export interface BankItem {
   rows: string[][];
   base: string;
 }
+
+export interface HistoryEntry {
+  _id: string;
+  question: string;
+  sql: string;
+  result: Record<string, unknown>[];
+  confidence: "High" | "Medium" | "Low";
+  timestamp: string;
+}

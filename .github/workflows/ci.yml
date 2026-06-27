@@ -2,9 +2,13 @@ name: CI
 
 on:
   push:
-    branches: [ "main" ]
+    branches: [ "master", "main" ]
   pull_request:
-    branches: [ "main" ]
+    branches: [ "master", "main" ]
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 jobs:
   backend-ci:
@@ -33,7 +37,7 @@ jobs:
 
     - name: Run tests with coverage
       run: |
-        PYTHONPATH=./backend pytest --cov=backend/app --cov-report=xml --cov-report=term tests/
+        PYTHONPATH=. pytest --cov=backend/app --cov-report=xml --cov-report=term tests/
 
     - name: Upload coverage report as artifact
       uses: actions/upload-artifact@v4
