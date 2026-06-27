@@ -5,8 +5,7 @@ import jwt
 
 load_dotenv()
 
-JWT_SECRET = os.environ["JWT_SECRET"]
-
+JWT_SECRET = os.getenv("JWT_SECRET", "RANDOM-SECRET")
 
 async def get_current_user(access_token: str = Cookie(None)):
     # read cookie , verify jwt , return user
@@ -19,6 +18,8 @@ async def get_current_user(access_token: str = Cookie(None)):
         raise HTTPException(
             status_code=401, detail="Session Expired, please login again"
         )
+    except jwt.InvalidTokenError:
+        raise HTTPException(status_code=401, detail="Invalid Token")
 
 def get_db(request: Request):
     return request.app.state.db
@@ -33,7 +34,4 @@ def get_session_log(request: Request):
     return request.app.state.session_log
 
 def get_cfg(request: Request):
-    try:    
-        return request.app.state.cfg
-    except jwt.InvalidTokenError:
-        raise HTTPException(status_code=401, detail="Invalid Token")
+    return request.app.state.cfg
