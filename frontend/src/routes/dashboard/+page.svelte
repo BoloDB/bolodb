@@ -20,63 +20,110 @@
   <title>Dashboard — BoloDB</title>
 </svelte:head>
 
-<div class="app-shell" style="padding: 24px; max-width: 800px; margin: 0 auto; display: block; overflow-y: auto;">
-  <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem;">
-    <h1 style="font-size: 2rem; margin: 0;">Dashboard</h1>
-    <button class="btn secondary" onclick={() => goto('/chat')}>Back to Chat</button>
-  </div>
-
-  {#if appState.isLoaded && appState.dbInfo}
-    <div style="background: var(--bg-1); border: 1px solid var(--border); border-radius: 8px; padding: 20px; margin-bottom: 24px;">
-      <h2 style="font-size: 1.25rem; margin-top: 0; margin-bottom: 12px;">Connection</h2>
-      <div style="display: grid; grid-template-columns: 120px 1fr; gap: 8px;">
-        <strong style="color: var(--muted);">Database:</strong>
-        <span>{appState.dbInfo.dialect}</span>
-
-        <strong style="color: var(--muted);">Status:</strong>
-        <span style="color: #10b981; font-weight: 500;">Connected</span>
-
-        <strong style="color: var(--muted);">Provider:</strong>
-        <span style="text-transform: capitalize;">{appState.engine}</span>
-
-        {#if appState.modelName}
-          <strong style="color: var(--muted);">Model:</strong>
-          <span>{appState.modelName}</span>
-        {/if}
+<div class="app-shell" style="padding: 40px; overflow-y: auto;">
+  <div class="max-w-6xl mx-auto w-full">
+    
+    <!-- Header -->
+    <div class="flex justify-between items-center mb-8 rise" style="animation-delay: 0.1s;">
+      <div>
+        <h1 class="text-3xl font-bold tracking-tight" style="color: var(--ink);">Dashboard</h1>
+        <p class="text-sm mt-1" style="color: var(--muted);">Overview of your database connection and system status.</p>
       </div>
+      <button class="btn btn-ghost" onclick={() => goto('/chat')}>
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="mr-2"><path d="m15 18-6-6 6-6"/></svg>
+        Back to Chat
+      </button>
     </div>
-
-    <div style="background: var(--bg-1); border: 1px solid var(--border); border-radius: 8px; padding: 20px; margin-bottom: 24px;">
-      <h2 style="font-size: 1.25rem; margin-top: 0; margin-bottom: 12px;">Trust & Accuracy</h2>
-      <div style="display: grid; grid-template-columns: 120px 1fr; gap: 8px;">
-        <strong style="color: var(--muted);">Verified Queries:</strong>
-        <span>{appState.verifiedCount}</span>
-
-        <strong style="color: var(--muted);">Current Level:</strong>
-        <span style="text-transform: capitalize; font-weight: 500;">{appState.prevLevel}</span>
-      </div>
-    </div>
-
-    <div style="background: var(--bg-1); border: 1px solid var(--border); border-radius: 8px; padding: 20px;">
-      <h2 style="font-size: 1.25rem; margin-top: 0; margin-bottom: 12px;">Schema Information</h2>
-      {#if appState.realSchema && appState.realSchema.length > 0}
-        <div style="display: flex; flex-direction: column; gap: 12px;">
-          {#each appState.realSchema as table}
-            <div style="border: 1px solid var(--border); border-radius: 6px; padding: 12px;">
-              <h3 style="font-size: 1rem; margin: 0 0 8px 0;">{table.name} <span style="color: var(--muted); font-size: 0.85rem; font-weight: normal;">({table.cols.length} columns)</span></h3>
-              <div style="display: flex; flex-wrap: wrap; gap: 6px;">
-                {#each table.cols as col}
-                  <span style="background: var(--bg-2); padding: 2px 8px; border-radius: 4px; font-size: 0.85rem; font-family: monospace;">{col.name}</span>
-                {/each}
+    
+    {#if appState.isLoaded && appState.dbInfo}
+      
+      <!-- Stats Grid -->
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+        
+        <!-- Connection Card -->
+        <div class="card p-6 rise" style="animation-delay: 0.2s;">
+          <h2 class="text-sm uppercase tracking-wider font-semibold mb-4" style="color: var(--faint);">Connection Status</h2>
+          <div class="grid grid-cols-2 gap-y-4">
+            <div>
+              <div class="text-xs uppercase" style="color: var(--muted);">Database</div>
+              <div class="text-lg font-semibold" style="color: var(--ink);">{appState.dbInfo.dialect}</div>
+            </div>
+            <div>
+              <div class="text-xs uppercase" style="color: var(--muted);">Status</div>
+              <div class="text-lg font-semibold flex items-center gap-2" style="color: var(--ok);">
+                <div class="w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.8)]"></div>
+                Connected
               </div>
             </div>
-          {/each}
+            <div>
+              <div class="text-xs uppercase" style="color: var(--muted);">AI Engine</div>
+              <div class="text-lg font-semibold capitalize" style="color: var(--ink);">{appState.engine}</div>
+            </div>
+            {#if appState.modelName}
+              <div>
+                <div class="text-xs uppercase" style="color: var(--muted);">Model</div>
+                <div class="text-lg font-semibold" style="color: var(--ink);">{appState.modelName}</div>
+              </div>
+            {/if}
+          </div>
         </div>
-      {:else}
-        <p style="color: var(--muted); margin: 0;">No schema information available.</p>
-      {/if}
-    </div>
-  {:else}
-    <p>Loading dashboard...</p>
-  {/if}
+
+        <!-- Trust Card -->
+        <div class="card p-6 rise" style="animation-delay: 0.3s;">
+          <h2 class="text-sm uppercase tracking-wider font-semibold mb-4" style="color: var(--faint);">Trust & Accuracy</h2>
+          <div class="grid grid-cols-2 gap-y-4">
+            <div>
+              <div class="text-xs uppercase" style="color: var(--muted);">Verified Queries</div>
+              <div class="text-4xl font-extrabold" style="color: var(--brand);">{appState.verifiedCount}</div>
+            </div>
+            <div>
+              <div class="text-xs uppercase" style="color: var(--muted);">Current Level</div>
+              <div class="mt-2">
+                <span class="conf {appState.prevLevel === 'high' ? 'conf-high' : appState.prevLevel === 'med' ? 'conf-med' : 'conf-low'}">
+                  <span class="dot"></span>
+                  <span class="capitalize">{appState.prevLevel}</span>
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Schema Grid -->
+      <div class="card p-6 rise" style="animation-delay: 0.4s;">
+        <h2 class="text-sm uppercase tracking-wider font-semibold mb-6" style="color: var(--faint);">Indexed Schema Overview</h2>
+        
+        {#if appState.realSchema && appState.realSchema.length > 0}
+          <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {#each appState.realSchema as table}
+              <div class="border rounded-xl p-4 transition-all hover:shadow-md" style="border-color: var(--border-2); background: var(--surface-2);">
+                <div class="flex justify-between items-center mb-4">
+                  <h3 class="text-md font-bold" style="color: var(--ink);">{table.name}</h3>
+                  <span class="text-xs font-semibold px-2 py-1 rounded bg-white border" style="color: var(--muted); border-color: var(--border);">{table.cols.length} cols</span>
+                </div>
+                <div class="flex flex-wrap gap-2">
+                  {#each table.cols as col}
+                    <span class="chip text-xs">
+                      {col.name}
+                    </span>
+                  {/each}
+                </div>
+              </div>
+            {/each}
+          </div>
+        {:else}
+          <div class="flex flex-col items-center justify-center py-12 border-2 border-dashed rounded-xl" style="border-color: var(--border-2); background: var(--surface-3);">
+            <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: var(--faint);" class="mb-3"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><line x1="3" x2="21" y1="9" y2="9"/><line x1="9" x2="9" y1="21" y2="9"/></svg>
+            <p class="text-sm font-medium" style="color: var(--muted);">No schema information available yet.</p>
+          </div>
+        {/if}
+      </div>
+
+    {:else}
+      <div class="flex justify-center items-center h-64">
+        <div class="spin w-8 h-8 rounded-full border-4 border-brand border-t-transparent"></div>
+      </div>
+    {/if}
+  </div>
 </div>

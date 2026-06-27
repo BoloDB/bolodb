@@ -44,19 +44,13 @@ class AppState {
       }
     } catch (e: any) {
       this.isLoaded = true;
-      const msg = e.message || "";
-      if (
-        msg.includes("Access Denied") ||
-        msg.includes("Session Expired") ||
-        msg.includes("Invalid Token") ||
-        msg.includes("401")
-      ) {
-        if (
-          typeof window !== "undefined" &&
-          !window.location.pathname.startsWith("/login") &&
-          !window.location.pathname.startsWith("/signup")
-        ) {
-          goto("/login");
+      const msg = e.message || '';
+      if (msg.includes('Access Denied') || msg.includes('Session Expired') || msg.includes('Invalid Token') || msg.includes('401')) {
+        if (typeof window !== 'undefined' && 
+            !window.location.pathname.startsWith('/login') && 
+            !window.location.pathname.startsWith('/signup') &&
+            window.location.pathname !== '/') {
+          goto('/login');
         }
       } else {
         if (redirect) goto("/connect");
