@@ -12,7 +12,11 @@
 
   $effect(() => {
     if (appState.isLoaded && appState.dbInfo) {
-      goto('/chat');
+      if (appState.dbInfo.has_knowledge) {
+        goto('/chat');
+      } else {
+        goto('/onboard');
+      }
     }
   });
 </script>

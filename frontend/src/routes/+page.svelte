@@ -22,10 +22,14 @@
       class="btn primary" 
       style="padding: 12px 24px; font-size: 1.1rem;"
       onclick={() => {
-        if (appState.dbInfo) goto('/chat');
-        else goto('/connect');
+        if (appState.dbInfo) {
+          if (appState.dbInfo.has_knowledge) goto('/chat');
+          else goto('/onboard');
+        } else {
+          goto('/connect');
+        }
       }}>
-      {appState.dbInfo ? 'Go to Chat' : 'Get Started'}
+      {appState.dbInfo ? 'Continue' : 'Get Started'}
     </button>
   {/if}
 </div>
