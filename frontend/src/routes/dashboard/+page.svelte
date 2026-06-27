@@ -79,7 +79,7 @@
             <div>
               <div class="text-xs uppercase" style="color: var(--muted);">Current Level</div>
               <div class="mt-2">
-                <span class="conf {appState.prevLevel === 'high' ? 'conf-high' : appState.prevLevel === 'med' ? 'conf-med' : 'conf-low'}">
+                <span class="conf {appState.prevLevel === 'trusted' ? 'conf-high' : appState.prevLevel === 'assisted' ? 'conf-med' : 'conf-low'}">
                   <span class="dot"></span>
                   <span class="capitalize">{appState.prevLevel}</span>
                 </span>
@@ -105,7 +105,7 @@
                 <div class="flex flex-wrap gap-2">
                   {#each table.cols as col}
                     <span class="chip text-xs">
-                      {col.name}
+                      {col}
                     </span>
                   {/each}
                 </div>
