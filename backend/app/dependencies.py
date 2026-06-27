@@ -7,6 +7,7 @@ load_dotenv()
 
 JWT_SECRET = os.getenv("JWT_SECRET", "RANDOM-SECRET")
 
+
 async def get_current_user(access_token: str = Cookie(None)):
     # read cookie , verify jwt , return user
     if access_token is None:
@@ -21,17 +22,22 @@ async def get_current_user(access_token: str = Cookie(None)):
     except jwt.InvalidTokenError:
         raise HTTPException(status_code=401, detail="Invalid Token")
 
+
 def get_db(request: Request):
     return request.app.state.db
+
 
 def get_kb(request: Request):
     return request.app.state.kb
 
+
 def get_providers(request: Request):
     return request.app.state.providers
 
+
 def get_session_log(request: Request):
     return request.app.state.session_log
+
 
 def get_cfg(request: Request):
     return request.app.state.cfg

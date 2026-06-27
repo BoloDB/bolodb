@@ -1,4 +1,5 @@
 """Tests for the read-only execution guard and helpers in app.database."""
+
 import pytest
 from backend.app.database import DatabaseManager, sanitize_url, db_id_for
 
@@ -9,6 +10,7 @@ def db():
     result = mgr.connect("sqlite:///:memory:")
     assert result["ok"]
     from sqlalchemy import text
+
     with mgr.engine.connect() as conn:
         conn.execute(text("CREATE TABLE items (id INTEGER PRIMARY KEY, name TEXT)"))
         for i in range(8):
@@ -23,14 +25,17 @@ def test_select_allowed(db):
     assert res["columns"] == ["id", "name"]
 
 
-@pytest.mark.parametrize("sql", [
-    "INSERT INTO items(name) VALUES ('x')",
-    "UPDATE items SET name='x' WHERE id=1",
-    "DELETE FROM items WHERE id=1",
-    "DROP TABLE items",
-    "ALTER TABLE items ADD COLUMN extra TEXT",
-    "CREATE TABLE other (id INTEGER)",
-])
+@pytest.mark.parametrize(
+    "sql",
+    [
+        "INSERT INTO items(name) VALUES ('x')",
+        "UPDATE items SET name='x' WHERE id=1",
+        "DELETE FROM items WHERE id=1",
+        "DROP TABLE items",
+        "ALTER TABLE items ADD COLUMN extra TEXT",
+        "CREATE TABLE other (id INTEGER)",
+    ],
+)
 def test_write_statements_rejected(db, sql):
     res = db.execute(sql)
     assert "error" in res
@@ -42,8 +47,7 @@ def test_stacked_statement_rejected(db):
 
 
 def test_data_modifying_cte_rejected(db):
-    res = db.execute(
-        "WITH gone AS (DELETE FROM items RETURNING *) SELECT * FROM gone")
+    res = db.execute("WITH gone AS (DELETE FROM items RETURNING *) SELECT * FROM gone")
     assert "error" in res
 
 
@@ -60,8 +64,11 @@ def test_pragma_rejected(db):
 def test_keyword_inside_identifier_is_not_blocked(db):
     """Column/table names that merely contain a write keyword must still work."""
     from sqlalchemy import text
+
     with db.engine.connect() as conn:
-        conn.execute(text("CREATE TABLE updates_log (id INTEGER PRIMARY KEY, created_at TEXT)"))
+        conn.execute(
+            text("CREATE TABLE updates_log (id INTEGER PRIMARY KEY, created_at TEXT)")
+        )
         conn.commit()
     res = db.execute("SELECT created_at FROM updates_log")
     assert "error" not in res
@@ -92,14 +99,17 @@ def test_truncation_flag_is_exact(db):
     assert res["truncated"] is True
 
 
-@pytest.mark.parametrize("url,expected", [
-    ("postgresql://user:secret@host:5432/db", "postgresql://user:***@host:5432/db"),
-    ("sqlite:///C:/path/to/file.db",          "sqlite:///C:/path/to/file.db"),
-    ("postgresql://user@host/db",             "postgresql://user:***@host/db"),
-    ("postgresql://:password@host/db",        "postgresql://:***@host/db"),
-    ("postgresql://user:pass:word@host/db",   "postgresql://user:***@host/db"),
-    ("just_a_string",                         "just_a_string"),
-])
+@pytest.mark.parametrize(
+    "url,expected",
+    [
+        ("postgresql://user:secret@host:5432/db", "postgresql://user:***@host:5432/db"),
+        ("sqlite:///C:/path/to/file.db", "sqlite:///C:/path/to/file.db"),
+        ("postgresql://user@host/db", "postgresql://user:***@host/db"),
+        ("postgresql://:password@host/db", "postgresql://:***@host/db"),
+        ("postgresql://user:pass:word@host/db", "postgresql://user:***@host/db"),
+        ("just_a_string", "just_a_string"),
+    ],
+)
 def test_sanitize_url_masks_password(url, expected):
     assert sanitize_url(url) == expected
 

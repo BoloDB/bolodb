@@ -15,7 +15,7 @@ export interface Provider {
 }
 
 export interface TrustLevel {
-  key: 'supervised' | 'assisted' | 'trusted';
+  key: "supervised" | "assisted" | "trusted";
   label: string;
   range: [number, number];
   idx: number;
@@ -69,12 +69,12 @@ export interface Turn {
   sql?: string;
   columns?: string[];
   rows?: string[][];
-  confidence?: 'high' | 'medium' | 'low';
+  confidence?: "high" | "medium" | "low";
   reason?: string;
   basedOn?: boolean;
   query_id?: string;
   executionError?: string | null;
-  verdict?: 'correct' | 'wrong' | null;
+  verdict?: "correct" | "wrong" | null;
   reasonChosen?: string | null;
 }
 

@@ -19,7 +19,9 @@ def get_user_by_email(email):
 
 def create_user(user_data: UserInDB):
     users = db["users"]
-    return users.insert_one(user_data.model_dump(mode="json", by_alias=True, exclude_none=True))
+    return users.insert_one(
+        user_data.model_dump(mode="json", by_alias=True, exclude_none=True)
+    )
 
 
 def get_user_by_id(user_id):

@@ -1,7 +1,13 @@
 from fastapi import HTTPException
 from fastapi.concurrency import run_in_threadpool
-from backend.app.schema_link import model_budget, link_relevant_tables, compact_schema, compute_confidence
+from backend.app.schema_link import (
+    model_budget,
+    link_relevant_tables,
+    compact_schema,
+    compute_confidence,
+)
 from backend.app.llm import generate_sql
+
 
 async def run_query(db, kb, cfg, providers, session_log, req_data):
     if not db.connected:
@@ -62,6 +68,7 @@ async def run_query(db, kb, cfg, providers, session_log, req_data):
     out["query_id"] = session_log.log_query(db.db_id, q, out)
     return out
 
+
 async def feedback(db, kb, session_log, req_data):
     if not db.connected:
         raise HTTPException(409, "No database connected")
@@ -73,11 +80,13 @@ async def feedback(db, kb, session_log, req_data):
         out["starters"] = [v["question"] for v in kb.get_verified(db.db_id)[:6]]
     return out
 
+
 async def verify(db, kb, req_data):
     if not db.connected:
         raise HTTPException(409, "No database connected")
     kb.add_verified(db.db_id, req_data.question, req_data.sql, req_data.restatement)
     return {"ok": True, "trust": kb.trust_level(db.db_id)}
+
 
 async def execute(db, req_data):
     if not db.connected:

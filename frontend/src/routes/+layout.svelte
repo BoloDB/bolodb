@@ -10,7 +10,7 @@
 <svelte:head>
   <title>BoloDB — Ask your data. Trust the answer.</title>
 </svelte:head>
-<!-- 
+<!--
 {#if appState.isLoaded && appState.dbInfo && $page.url.pathname !== '/connect' && $page.url.pathname !== '/onboard' && $page.url.pathname !== '/'}
   <div style="position: absolute; top: 16px; right: 24px; z-index: 1000; display: flex; gap: 12px; align-items: center;">
     {#if $page.url.pathname === '/chat'}

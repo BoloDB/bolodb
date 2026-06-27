@@ -27,10 +27,10 @@
 
 <div class="app-shell">
   {#if appState.isLoaded && appState.dbInfo}
-    <OnboardScreen 
-      onDone={(seedCount) => appState.setOnboardDone(seedCount)} 
-      dbInfo={appState.dbInfo} 
-      schema={appState.realSchema} 
+    <OnboardScreen
+      onDone={(seedCount) => appState.setOnboardDone(seedCount)}
+      dbInfo={appState.dbInfo}
+      schema={appState.realSchema}
     />
   {/if}
 </div>

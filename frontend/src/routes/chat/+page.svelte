@@ -24,16 +24,16 @@
 <div class="app-shell">
   {#if appState.isLoaded && appState.dbInfo}
     <AskScreen
-      engine={appState.engine} 
+      engine={appState.engine}
       setEngine={(e) => appState.engine = e}
-      modelName={appState.modelName} 
+      modelName={appState.modelName}
       setModelName={(m) => appState.modelName = m}
-      verifiedCount={appState.verifiedCount} 
+      verifiedCount={appState.verifiedCount}
       onVerify={(apiCount) => appState.verify(apiCount)}
       onUpdateStarters={(s) => appState.starters = s}
-      toast={appState.toast} 
-      realSchema={appState.realSchema} 
-      dbInfo={appState.dbInfo} 
+      toast={appState.toast}
+      realSchema={appState.realSchema}
+      dbInfo={appState.dbInfo}
       starters={appState.starters}
       onDisconnect={() => appState.disconnect()}
     />
