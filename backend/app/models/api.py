@@ -12,8 +12,15 @@ class ConnectReq(BaseModel):
     db_url: str
 
 
+class ContextTurn(BaseModel):
+    question: str
+    sql: str
+    restatement: str = ""
+
+
 class QueryReq(BaseModel):
     question: str
+    context: list[ContextTurn] = []
 
 
 class VerifyReq(BaseModel):

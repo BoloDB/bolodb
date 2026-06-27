@@ -176,8 +176,27 @@ class ProviderManager:
 
 
 async def generate_sql(
-    provider, question, schema_text, dialect, glossary, retrieved, max_examples=3
+    provider,
+    question,
+    schema_text,
+    dialect,
+    glossary,
+    retrieved,
+    max_examples=3,
+    context=None,
 ):
+    if context is None:
+        context = []
+    if context:
+        short_context = context[-2::]
+        built_short_context = ""
+        for prev_context in short_context:
+            built_short_context += (
+                f"Q: {prev_context.question}\nSQL: {prev_context.sql}\n\n"
+            )
+        built_context = f"Recent conversation context (use this to resolve references like 'that', 'same', 'those'):\n{built_short_context}"
+    else:
+        built_context = ""
     gloss = (
         (
             "Term meanings:\n"
@@ -197,6 +216,7 @@ async def generate_sql(
         f"You write {dialect} SQL from questions. SELECT only.\n\n"
         f"Schema:\n{schema_text}\n\n"
         f"{gloss}{examples}"
+        f"{built_context}"
         "Reply ONLY with this JSON, nothing else:\n"
         '{"sql":"<one SELECT query, LIMIT 100 unless asking for a total/count>",'
         '"restatement":"<one plain sentence of what the query returns, no jargon>"}'
