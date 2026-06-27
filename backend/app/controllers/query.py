@@ -18,6 +18,7 @@ async def run_query(db, kb, cfg, providers, session_log, req_data):
     q = req_data.question.strip()
     if not q:
         raise HTTPException(400, "Empty question")
+    context = req_data.context
     glossary = kb.get_glossary(db.db_id)
     retrieved = kb.retrieve_similar(db.db_id, q, k=3)
     budget = model_budget(cfg.get("provider", "ollama"), cfg.get("model", ""))
@@ -35,6 +36,7 @@ async def run_query(db, kb, cfg, providers, session_log, req_data):
             glossary,
             retrieved,
             budget["max_examples"],
+            context,
         )
     except Exception:
         log.warning("SQL generation failed during run_query", exc_info=True)
