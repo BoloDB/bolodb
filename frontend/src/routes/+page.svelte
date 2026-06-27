@@ -8,7 +8,7 @@
   let fullDemoText = "Show me the top 3 customers this month by revenue";
 
   $effect(() => {
-    appState.init(false); 
+    appState.init(false);
   });
 
   onMount(() => {
@@ -22,12 +22,12 @@
         setTimeout(() => { demoPhase = 1; }, 600); // Thinking
         setTimeout(() => { demoPhase = 2; }, 1800); // Show SQL
         setTimeout(() => { demoPhase = 3; }, 2600); // Show Results
-        setTimeout(() => { 
-          demoPhase = 0; 
+        setTimeout(() => {
+          demoPhase = 0;
           demoText = "";
-          i = 0; 
+          i = 0;
           // We could restart here by calling a reset function if we wanted an infinite loop
-        }, 10000); 
+        }, 10000);
       }
     }, 40);
 
@@ -40,7 +40,7 @@
 </svelte:head>
 
 <div class="min-h-screen relative overflow-x-hidden flex flex-col" style="background: var(--bg);">
-  
+
   <!-- Ambient Orbs -->
   <div class="fixed top-[-10%] left-[-10%] w-[50%] h-[60%] rounded-full mix-blend-multiply opacity-20 pointer-events-none" style="background: var(--brand); filter: blur(100px);"></div>
   <div class="fixed top-[20%] right-[-10%] w-[40%] h-[50%] rounded-full mix-blend-multiply opacity-20 pointer-events-none" style="background: #34d399; filter: blur(100px);"></div>
@@ -66,7 +66,7 @@
 
   <!-- Main Content -->
   <main class="flex-1 max-w-7xl mx-auto px-6 pt-32 pb-24 relative z-10 w-full">
-    
+
     <!-- Hero Section -->
     <div class="text-center max-w-4xl mx-auto mb-20 rise" style="animation-delay: 0.1s;">
       <h1 class="text-5xl md:text-7xl font-extrabold tracking-tight mb-6" style="color: var(--ink); line-height: 1.1;">
@@ -83,18 +83,18 @@
 
     <!-- Mock Demo Section -->
     <div class="card p-4 md:p-8 mb-24 max-w-5xl mx-auto rise shadow-2xl" style="animation-delay: 0.3s; background: rgba(255,255,255,0.6); backdrop-filter: blur(16px);">
-      <div class="border rounded-xl bg-white overflow-hidden shadow-sm" style="border-color: var(--border);">
-        <div class="bg-gray-50 px-4 py-3 border-b flex items-center gap-2" style="border-color: var(--border);">
+      <div class="border rounded-xl overflow-hidden shadow-sm" style="border-color: var(--border); background: var(--bg);">
+        <div class="px-4 py-3 border-b flex items-center gap-2" style="border-color: var(--border); background: var(--surface);">
           <div class="w-3 h-3 rounded-full bg-red-400"></div>
           <div class="w-3 h-3 rounded-full bg-amber-400"></div>
           <div class="w-3 h-3 rounded-full bg-green-400"></div>
           <span class="ml-4 text-xs font-mono" style="color: var(--muted);">bolodb-chat-demo</span>
         </div>
-        
+
         <div class="p-6 md:p-10 min-h-[400px]">
           <!-- User Question -->
           <div class="flex items-end justify-end mb-6">
-            <div class="bg-gray-100 rounded-2xl rounded-tr-sm px-5 py-3 max-w-[80%] text-lg">
+            <div class="rounded-2xl rounded-tr-sm px-5 py-3 max-w-[80%] text-lg" style="background: var(--surface-3); color: var(--ink);">
               {#if demoText.length > 0}
                 {demoText}<span class="animate-pulse">|</span>
               {:else}
@@ -110,7 +110,7 @@
                 <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a2 2 0 0 1 2 2c-.11.66-.54 1.18-1.07 1.57C12.3 5.96 11.5 6 11 6a2 2 0 0 0 2 2 2 2 0 0 0-2 2 2 2 0 0 0 2 2c-.5.01-1.3.05-1.93.44C10.54 12.82 10.11 13.34 10 14a2 2 0 0 1-2 2 2 2 0 0 1-2-2 2 2 0 0 1 2-2c.5-.01 1.3-.05 1.93-.44C10.54 10.82 10.11 10.34 10 9a2 2 0 0 1-2-2 2 2 0 0 1-2-2 2 2 0 0 1 2-2c.5.01 1.3.05 1.93.44C10.54 4.82 10.11 4.34 10 3a2 2 0 0 1 2-2Z"/><path d="M15 14h6"/><path d="M15 10h6"/></svg>
               </div>
               <div class="flex-1 space-y-4">
-                
+
                 {#if demoPhase === 1}
                   <div class="flex items-center gap-2 text-sm font-medium" style="color: var(--muted);">
                     <div class="spin w-4 h-4 rounded-full border-2 border-brand border-t-transparent"></div>
@@ -120,8 +120,8 @@
 
                 {#if demoPhase >= 2}
                   <div class="border rounded-lg overflow-hidden rise" style="border-color: var(--border-2);">
-                    <div class="bg-gray-50 px-3 py-2 border-b text-xs font-mono font-semibold" style="border-color: var(--border-2); color: var(--muted);">Generated SQL</div>
-                    <div class="p-4 bg-gray-900 text-gray-100 font-mono text-sm overflow-x-auto">
+                    <div class="px-3 py-2 border-b text-xs font-mono font-semibold" style="border-color: var(--border-2); color: var(--muted); background: var(--surface-2);">Generated SQL</div>
+                    <div class="p-4 font-mono text-sm overflow-x-auto" style="background: var(--faint); color: #fff;">
                       <pre><code>SELECT name, email, SUM(revenue) as total_revenue
 FROM customers
 JOIN orders ON customers.id = orders.customer_id
@@ -134,9 +134,9 @@ LIMIT 3;</code></pre>
                 {/if}
 
                 {#if demoPhase >= 3}
-                  <div class="border rounded-lg overflow-hidden rise bg-white" style="border-color: var(--border-2);">
+                  <div class="border rounded-lg overflow-hidden rise" style="border-color: var(--border-2); background: var(--surface);">
                     <table class="w-full text-sm text-left">
-                      <thead class="bg-gray-50 border-b" style="border-color: var(--border-2); color: var(--muted);">
+                      <thead class="border-b" style="border-color: var(--border-2); color: var(--muted); background: var(--surface-2);">
                         <tr>
                           <th class="px-4 py-3 font-semibold">Name</th>
                           <th class="px-4 py-3 font-semibold">Email</th>
@@ -145,19 +145,19 @@ LIMIT 3;</code></pre>
                       </thead>
                       <tbody>
                         <tr class="border-b" style="border-color: var(--border-2);">
-                          <td class="px-4 py-3 font-medium text-gray-900">Acme Corp</td>
-                          <td class="px-4 py-3 text-gray-500">billing@acmecorp.com</td>
-                          <td class="px-4 py-3 text-gray-900 font-mono">$124,500.00</td>
+                          <td class="px-4 py-3 font-medium" style="color: var(--ink);">Acme Corp</td>
+                          <td class="px-4 py-3" style="color: var(--faint);">billing@acmecorp.com</td>
+                          <td class="px-4 py-3 font-mono" style="color: var(--ink);">$124,500.00</td>
                         </tr>
                         <tr class="border-b" style="border-color: var(--border-2);">
-                          <td class="px-4 py-3 font-medium text-gray-900">Globex Inc</td>
-                          <td class="px-4 py-3 text-gray-500">ap@globex.com</td>
-                          <td class="px-4 py-3 text-gray-900 font-mono">$98,200.00</td>
+                          <td class="px-4 py-3 font-medium" style="color: var(--ink);">Globex Inc</td>
+                          <td class="px-4 py-3" style="color: var(--faint);">ap@globex.com</td>
+                          <td class="px-4 py-3 font-mono" style="color: var(--ink);">$98,200.00</td>
                         </tr>
                         <tr>
-                          <td class="px-4 py-3 font-medium text-gray-900">Initech</td>
-                          <td class="px-4 py-3 text-gray-500">finance@initech.net</td>
-                          <td class="px-4 py-3 text-gray-900 font-mono">$86,450.00</td>
+                          <td class="px-4 py-3 font-medium" style="color: var(--ink);">Initech</td>
+                          <td class="px-4 py-3" style="color: var(--faint);">finance@initech.net</td>
+                          <td class="px-4 py-3 font-mono" style="color: var(--ink);">$86,450.00</td>
                         </tr>
                       </tbody>
                     </table>

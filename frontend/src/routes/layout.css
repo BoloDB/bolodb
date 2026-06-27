@@ -96,6 +96,46 @@
   --ring: rgba(43, 162, 119, 0.18);
 }
 
+/* ---------- THEME: dark (premium/linear-like) ---------- */
+[data-theme="dark"] {
+  --bg: #0a0a0a;
+  --bg-grad-a: #111214;
+  --bg-grad-b: #0a0a0a;
+  --surface: #141518;
+  --surface-2: #1e1f23;
+  --surface-3: #282a2f;
+  --ink: #f0f0f0;
+  --ink-2: #c4c5c7;
+  --muted: #8b8d91;
+  --faint: #56585c;
+  --border: #2c2e33;
+  --border-2: #3a3d42;
+  --brand: #4da6ff;
+  --brand-ink: #80bfff;
+  --brand-2: #3385ff;
+  --brand-tint: rgba(77, 166, 255, 0.15);
+  --brand-tint-2: rgba(77, 166, 255, 0.25);
+  --radius-xs: 8px;
+  --radius-sm: 11px;
+  --radius: 14px;
+  --radius-lg: 20px;
+  --radius-xl: 26px;
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.5), 0 1px 1px rgba(0, 0, 0, 0.3);
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 8px 24px -8px rgba(0, 0, 0, 0.6);
+  --shadow-lg: 0 2px 4px rgba(0, 0, 0, 0.4),
+    0 24px 48px -16px rgba(0, 0, 0, 0.8);
+  --shadow-brand: 0 8px 22px -8px rgba(77, 166, 255, 0.3);
+  --ring: rgba(77, 166, 255, 0.2);
+
+  /* Update confidence semantics for dark mode to ensure contrast */
+  --c-high-ink: #65d6a2;
+  --c-high-tint: rgba(27, 158, 107, 0.15);
+  --c-med-ink: #f5cf7b;
+  --c-med-tint: rgba(194, 137, 27, 0.15);
+  --c-low-ink: #f38f81;
+  --c-low-tint: rgba(199, 93, 78, 0.15);
+}
+
 * {
   box-sizing: border-box;
 }
@@ -147,8 +187,8 @@ select {
 
 /* ============================ shell ============================ */
 .app-shell {
-  height: 100vh;
-  width: 100vw;
+  height: 100%;
+  width: 100%;
   overflow: hidden;
   background: radial-gradient(
       1200px 700px at 82% -8%,

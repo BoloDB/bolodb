@@ -22,7 +22,7 @@
 
 <div class="app-shell" style="padding: 40px; overflow-y: auto;">
   <div class="max-w-6xl mx-auto w-full">
-    
+
     <!-- Header -->
     <div class="flex justify-between items-center mb-8 rise" style="animation-delay: 0.1s;">
       <div>
@@ -34,12 +34,12 @@
         Back to Chat
       </button>
     </div>
-    
+
     {#if appState.isLoaded && appState.dbInfo}
-      
+
       <!-- Stats Grid -->
       <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-        
+
         <!-- Connection Card -->
         <div class="card p-6 rise" style="animation-delay: 0.2s;">
           <h2 class="text-sm uppercase tracking-wider font-semibold mb-4" style="color: var(--faint);">Connection Status</h2>
@@ -93,14 +93,14 @@
       <!-- Schema Grid -->
       <div class="card p-6 rise" style="animation-delay: 0.4s;">
         <h2 class="text-sm uppercase tracking-wider font-semibold mb-6" style="color: var(--faint);">Indexed Schema Overview</h2>
-        
+
         {#if appState.realSchema && appState.realSchema.length > 0}
           <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {#each appState.realSchema as table}
               <div class="border rounded-xl p-4 transition-all hover:shadow-md" style="border-color: var(--border-2); background: var(--surface-2);">
                 <div class="flex justify-between items-center mb-4">
                   <h3 class="text-md font-bold" style="color: var(--ink);">{table.name}</h3>
-                  <span class="text-xs font-semibold px-2 py-1 rounded bg-white border" style="color: var(--muted); border-color: var(--border);">{table.cols.length} cols</span>
+                  <span class="text-xs font-semibold px-2 py-1 rounded border" style="color: var(--muted); border-color: var(--border); background: var(--surface);">{table.cols.length} cols</span>
                 </div>
                 <div class="flex flex-wrap gap-2">
                   {#each table.cols as col}
