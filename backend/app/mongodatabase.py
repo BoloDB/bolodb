@@ -3,6 +3,7 @@ from bson import ObjectId
 from bson.errors import InvalidId
 from dotenv import load_dotenv
 from pymongo import MongoClient
+from datetime import datetime
 from backend.app.models.user import UserInDB
 
 load_dotenv()
@@ -43,4 +44,41 @@ def serialize_doc(doc):
     if doc is None:
         return None
     doc["_id"] = str(doc["_id"])
+    for k, v in doc.items():
+        if isinstance(v, datetime):
+            doc[k] = v.isoformat()
     return doc
+
+
+def save_query(user_id, question, sql, result, confidence):
+    history = db["query_history"]
+    doc = {
+        "user_id": str(user_id),
+        "question": question,
+        "sql": sql,
+        "result": result,
+        "confidence": confidence,
+        "timestamp": datetime.utcnow(),
+    }
+    history.insert_one(doc)
+
+
+def get_query_history(user_id, limit=20):
+    history = db["query_history"]
+    cursor = history.find({"user_id": str(user_id)}).sort("timestamp", -1).limit(limit)
+    return [serialize_doc(doc) for doc in cursor]
+
+
+def delete_history_entry(user_id, entry_id):
+    history = db["query_history"]
+    try:
+        oid = ObjectId(entry_id)
+    except (InvalidId, TypeError):
+        return False
+    res = history.delete_one({"_id": oid, "user_id": str(user_id)})
+    return res.deleted_count > 0
+
+
+def clear_history(user_id):
+    history = db["query_history"]
+    history.delete_many({"user_id": str(user_id)})

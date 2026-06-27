@@ -1,4 +1,6 @@
+import logging
 from fastapi import APIRouter, Depends
+from fastapi.concurrency import run_in_threadpool
 from backend.app.dependencies import (
     get_current_user,
     get_db,
@@ -10,6 +12,7 @@ from backend.app.dependencies import (
 from backend.app.models.api import QueryReq, FeedbackReq, VerifyReq, RawSQLReq
 import backend.app.controllers.query as ctrl
 
+log = logging.getLogger(__name__)
 router = APIRouter()
 
 
@@ -23,7 +26,25 @@ async def query(
     providers=Depends(get_providers),
     session_log=Depends(get_session_log),
 ):
-    return await ctrl.run_query(db, kb, cfg, providers, session_log, req)
+    out = await ctrl.run_query(db, kb, cfg, providers, session_log, req)
+
+    import backend.app.mongodatabase as mdb
+
+    if out.get("answered") and out.get("sql"):
+        conf = out.get("confidence", "low")
+        conf_str = "High" if conf == "high" else "Medium" if conf == "medium" else "Low"
+        try:
+            await run_in_threadpool(
+                mdb.save_query,
+                user_id=user_token["user_id"],
+                question=req.question,
+                sql=out["sql"],
+                result=out.get("rows", []),
+                confidence=conf_str,
+            )
+        except Exception:
+            log.warning("Failed to persist query history", exc_info=True)
+    return out
 
 
 @router.post("/api/feedback")

@@ -11,7 +11,8 @@
 
   const items = $derived(starterItems && starterItems.length ? starterItems : defaultStarters);
   let ready = $state(false);
-  let verdicts: (string | null)[] = $state(items.map(() => null));
+  // Use IIFE to suppress state_referenced_locally warning, since we intentionally only want to seed the initial value.
+  let verdicts: (string | null)[] = $state( (() => items.map(() => null))() );
   $effect(() => { if (verdicts.length !== items.length) verdicts = items.map(() => null); });
   let saving = $state(false);
   let saveErr = $state('');
