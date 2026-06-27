@@ -18,6 +18,7 @@ from backend.app.routes.query import router as query_router
 
 logger = logging.getLogger(__name__)
 
+
 def create_app(initial_db_url="", readonly=True):
     cfg = cfgmod.load_config()
     providers = ProviderManager(cfg)
