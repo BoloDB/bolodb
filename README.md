@@ -1,24 +1,23 @@
 # BoloDB
 
+[![pre-commit.ci status](https://results.pre-commit.ci/badge/github/HAAHIT/bolodb/master.svg)](https://results.pre-commit.ci/latest/github/HAAHIT/bolodb/master)
+
 **Ask your data. Trust the answer.**
 
 A text-to-SQL product for non-technical users. Connect any SQL database, ask questions in plain English, get answers with a plain-English explanation and a confidence level. Every answer you confirm teaches it your database - accuracy improves with use.
 
-## Quick start (Windows)
+## Quick Start (Docker)
 
-1. Double-click **setup.bat** - installs Python packages and your DB driver (30 seconds)
-2. Double-click **run.bat** - server starts and browser opens
-3. Pick your AI engine, connect a database (or click "Try with sample data")
-4. Start asking
+The easiest and recommended way to run BoloDB is using Docker. This ensures all services (FastAPI Backend, SvelteKit Frontend, Nginx, and MongoDB) run seamlessly.
 
-## Quick start (Mac / Linux)
-
-```bash
-pip install -r requirements.txt
-python main.py
-```
-
-Then open http://localhost:4321
+1. Install [Docker Desktop](https://www.docker.com/products/docker-desktop/) (Windows/Mac) or Docker Engine (Linux).
+2. Open a terminal in the project directory.
+3. Start the application:
+   ```bash
+   docker compose up -d
+   ```
+4. Open [http://localhost:5173](http://localhost:5173) in your browser.
+5. Pick your AI engine, connect a database (or click "Try with sample data"), and start asking!
 
 ## Choose your AI engine
 
@@ -34,8 +33,21 @@ With any API engine, only the schema and your question are sent - never your act
 ### Local AI setup
 
 1. Install Ollama: https://ollama.ai
-2. Pull a model: `ollama pull llama3.2` (4GB RAM) or `ollama pull qwen2.5:0.5b` (low RAM)
-3. BoloDB auto-starts Ollama when you launch
+2. Pull a model: `ollama pull llama3.2` (4GB RAM) or `ollama pull phi4-mini` (low RAM)
+3. **Important for Linux users:** Docker containers need permission to reach your host's Ollama instance.
+   - Configure Ollama to listen on all interfaces:
+     ```bash
+     sudo systemctl edit ollama.service
+     # Add this under [Service]:
+     # Environment="OLLAMA_HOST=0.0.0.0"
+
+     sudo systemctl daemon-reload
+     sudo systemctl restart ollama
+     ```
+   - If you have a firewall (UFW), allow Docker networks to reach port 11434:
+     ```bash
+     sudo ufw allow from 172.16.0.0/12 to any port 11434 proto tcp
+     ```
 
 ## Database connection strings
 
@@ -58,29 +70,29 @@ Tip: connect with a **read-only database account** for safety.
    - The results table and SQL on a toggle
 4. **Verify** - click "Yes, correct" to save the answer. Similar future questions reuse it and show higher confidence. The trust level climbs from Supervised to Assisted to Trusted
 
-## Command-line options
+## Useful Docker Commands
 
-```
-python main.py                          # start, configure in UI
-python main.py --db sqlite:///shop.db   # pre-connect a database
-python main.py --port 8080              # different port
-python main.py --no-browser             # don't auto-open browser
+```bash
+docker compose up -d           # Start the application in the background
+docker compose logs -f         # View live logs from all services
+docker compose down            # Stop all services
+docker compose build --no-cache # Rebuild all images from scratch
 ```
 
 ## Running tests
 
 ```bash
+cd backend
 pip install -r requirements.txt
-pytest
+pytest ../tests
 ```
 
 ## Privacy
 
-- All learned knowledge is stored locally in `~/.bolodb/`
-- With a local model (Ollama), nothing leaves your machine
-- With an API model, only the schema and your question are sent to generate SQL
-- No telemetry, no cloud sync
-- Delete `~/.bolodb/` to wipe everything BoloDB has learned
+- All learned knowledge and user settings are stored in the local MongoDB container volume.
+- With a local model (Ollama), nothing leaves your machine.
+- With an API model, only the schema and your question are sent to generate SQL.
+- No telemetry, no cloud sync.
 
 ## License
 
