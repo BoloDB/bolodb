@@ -55,6 +55,7 @@
         sql: turn.sql,
         restatement: turn.restatement})
     }
+    build_context.reverse();
     turns = [...turns, { id, question: q, thinking: true }];
     try {
       const data = await apiCall('/api/query', { question: q, context: build_context });
