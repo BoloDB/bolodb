@@ -14,7 +14,8 @@ async def connect(
     kb=Depends(get_kb),
     cfg=Depends(get_cfg),
 ):
-    return await ctrl.connect(db, kb, cfg, req)
+    user_id = user_token["user_id"]
+    return await ctrl.connect(user_id, db, kb, cfg, req)
 
 
 @router.post("/api/connect-sample")
@@ -24,18 +25,21 @@ async def connect_sample(
     kb=Depends(get_kb),
     cfg=Depends(get_cfg),
 ):
-    return await ctrl.connect_sample(db, kb, cfg)
+    user_id = user_token["user_id"]
+    return await ctrl.connect_sample(user_id, db, kb, cfg)
 
 
 @router.post("/api/disconnect")
 async def disconnect(
     user_token=Depends(get_current_user), db=Depends(get_db), cfg=Depends(get_cfg)
 ):
-    return await ctrl.disconnect(db, cfg)
+    user_id = user_token["user_id"]
+    return await ctrl.disconnect(user_id, db, cfg)
 
 
 @router.get("/api/schema")
 async def schema(
     refresh: bool = False, user_token=Depends(get_current_user), db=Depends(get_db)
 ):
-    return await ctrl.get_schema(db, refresh)
+    user_id = user_token["user_id"]
+    return await ctrl.get_schema(user_id, db, refresh)

@@ -26,7 +26,8 @@ async def query(
     providers=Depends(get_providers),
     session_log=Depends(get_session_log),
 ):
-    out = await ctrl.run_query(db, kb, cfg, providers, session_log, req)
+    user_id = user_token["user_id"]
+    out = await ctrl.run_query(user_id, db, kb, cfg, providers, session_log, req)
 
     import backend.app.mongodatabase as mdb
 
@@ -55,7 +56,8 @@ async def feedback(
     kb=Depends(get_kb),
     session_log=Depends(get_session_log),
 ):
-    return await ctrl.feedback(db, kb, session_log, req)
+    user_id = user_token["user_id"]
+    return await ctrl.feedback(user_id, db, kb, session_log, req)
 
 
 @router.post("/api/verify")
@@ -65,11 +67,13 @@ async def verify(
     db=Depends(get_db),
     kb=Depends(get_kb),
 ):
-    return await ctrl.verify(db, kb, req)
+    user_id = user_token["user_id"]
+    return await ctrl.verify(user_id, db, kb, req)
 
 
 @router.post("/api/execute")
 async def execute(
     req: RawSQLReq, user_token=Depends(get_current_user), db=Depends(get_db)
 ):
-    return await ctrl.execute(db, req)
+    user_id = user_token["user_id"]
+    return await ctrl.execute(user_id, db, req)

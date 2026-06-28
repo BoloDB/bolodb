@@ -7,6 +7,7 @@ import sqlglot
 import sqlglot.expressions as exp
 from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.exc import SQLAlchemyError
+from fastapi.exceptions import HTTPException
 
 logger = logging.getLogger(__name__)
 
@@ -50,35 +51,31 @@ def db_id_for(url):
 
 class DatabaseManager:
     def __init__(self, readonly=True, sample_rows=3, max_rows=500):
+        self._connections = {}
         self.readonly = readonly
         self.sample_rows = sample_rows
         self.max_rows = max_rows
-        self.engine = None
-        self.url = None
-        self.db_id = None
-        self.dialect = None
-        self._schema_cache = None
-        self._table_count = 0
 
-    @property
-    def connected(self):
-        return self.engine is not None
+    def connected(self, user_id):
+        return user_id in self._connections
 
-    def disconnect(self):
+    def _get(self, user_id):
+        try:
+            return self._connections[user_id]
+        except KeyError:
+            raise HTTPException(409, "No Database Connected")
+
+    def disconnect(self, user_id):
         """Reset all connection state so the server accepts a new connect call."""
-        if self.engine is not None:
-            try:
-                self.engine.dispose()  # release pooled connections
-            except Exception as e:
-                logger.warning("Error disposing engine on disconnect: %s", e)
-        self.engine = None
-        self.url = None
-        self.db_id = None
-        self.dialect = None
-        self._schema_cache = None
-        self._table_count = 0
+        if user_id not in self._connections:
+            return
+        try:
+            self._connections[user_id]["engine"].dispose()  # release pooled connections
+        except Exception as e:
+            logger.warning("Error disposing engine on disconnect: %s", e)
+        del self._connections[user_id]
 
-    def connect(self, url):
+    def connect(self, user_id, url):
         import os
 
         if os.environ.get("RUNNING_IN_DOCKER") == "true":
@@ -91,33 +88,40 @@ class DatabaseManager:
             engine = create_engine(url)
             with engine.connect() as c:
                 c.execute(text("SELECT 1"))
-            self.engine = engine
-            self.url = url
-            self.db_id = db_id_for(url)
-            self.dialect = url.split(":")[0].split("+")[0]
-            self._schema_cache = None
             tables = len(inspect(engine).get_table_names())
-            self._table_count = tables
+            old_connection = self._connections.get(user_id)
+            self._connections[user_id] = {
+                "engine": engine,
+                "url": url,
+                "db_id": db_id_for(url),
+                "dialect": url.split(":")[0].split("+")[0],
+                "_schema_cache": None,
+                "_table_count": tables,
+            }
+            if old_connection:
+                old_connection["engine"].dispose()
             return {
                 "ok": True,
-                "dialect": self.dialect,
+                "dialect": self._connections[user_id]["dialect"],
                 "tables": tables,
-                "db_id": self.db_id,
+                "db_id": self._connections[user_id]["db_id"],
                 "url": sanitize_url(url),
             }
         except Exception as e:
             return {"ok": False, "error": str(e)}
 
-    def _q(self, n):
+    def _q(self, user_id, n):
+        c = self._get(user_id)
         n = str(n)
-        if self.dialect == "mysql":
+        if c["dialect"] == "mysql":
             return f"`{n.replace('`', '``')}`"
-        return f'"{n.replace(chr(34), chr(34)*2)}"'
+        return f'"{n.replace(chr(34), chr(34) * 2)}"'
 
-    def get_schema(self, refresh=False):
-        if self._schema_cache and not refresh:
-            return self._schema_cache
-        inspector = inspect(self.engine)
+    def get_schema(self, user_id, refresh=False):
+        c = self._get(user_id)
+        if c["_schema_cache"] and not refresh:
+            return c["_schema_cache"]
+        inspector = inspect(c["engine"])
         schema = {}
         MAX_T = 40
         BIG = 100_000
@@ -150,18 +154,18 @@ class DatabaseManager:
             multi_pks = {}
             multi_fks = {}
 
-        with self.engine.connect() as conn:
+        with c["engine"].connect() as conn:
             # Fetch approximate row counts from DB stats tables in one shot (postgres/mysql/mssql)
             bulk_counts = {}
             try:
-                if self.dialect == "postgresql":
+                if c["dialect"] == "postgresql":
                     r = conn.execute(
                         text(
                             "SELECT relname, reltuples FROM pg_class WHERE relkind IN ('r','p')"
                         )
                     )
                     bulk_counts = {row[0]: int(row[1]) for row in r}
-                elif self.dialect == "mysql":
+                elif c["dialect"] == "mysql":
                     r = conn.execute(
                         text(
                             "SELECT table_name, table_rows FROM information_schema.tables WHERE table_schema = DATABASE()"
@@ -170,7 +174,7 @@ class DatabaseManager:
                     bulk_counts = {
                         row[0]: int(row[1]) if row[1] is not None else 0 for row in r
                     }
-                elif self.dialect == "mssql":
+                elif c["dialect"] == "mssql":
                     r = conn.execute(
                         text(
                             "SELECT t.name, SUM(p.rows) FROM sys.tables t JOIN sys.partitions p ON t.object_id=p.object_id WHERE p.index_id IN (0,1) GROUP BY t.name"
@@ -220,11 +224,11 @@ class DatabaseManager:
                     ]
                     columns = [
                         {
-                            "name": c["name"],
-                            "type": str(c["type"]),
-                            "primary_key": c["name"] in pk,
+                            "name": col["name"],
+                            "type": str(col["type"]),
+                            "primary_key": col["name"] in pk,
                         }
-                        for c in cols_raw
+                        for col in cols_raw
                     ]
                 except Exception as e:
                     logger.warning("Error inspecting columns for %s: %s", tbl, e)
@@ -232,7 +236,9 @@ class DatabaseManager:
 
                 try:
                     res = conn.execute(
-                        text(f"SELECT * FROM {self._q(tbl)} LIMIT {self.sample_rows}")
+                        text(
+                            f"SELECT * FROM {self._q(user_id, tbl)} LIMIT {self.sample_rows}"
+                        )
                     )
                     names = list(res.keys())
                     samples = [dict(zip(names, row)) for row in res.fetchall()]
@@ -248,7 +254,7 @@ class DatabaseManager:
                 if rc is None:
                     try:
                         rc = conn.execute(
-                            text(f"SELECT COUNT(*) FROM {self._q(tbl)}")
+                            text(f"SELECT COUNT(*) FROM {self._q(user_id, tbl)}")
                         ).scalar()
                     except Exception as e:
                         logger.warning("Error fetching row count for %s: %s", tbl, e)
@@ -256,27 +262,27 @@ class DatabaseManager:
 
                 low_card = {}
                 if rc is None or rc <= BIG:
-                    for c in columns:
-                        if any(s in c["name"].lower() for s in SKIP):
+                    for col in columns:
+                        if any(s in col["name"].lower() for s in SKIP):
                             continue
                         if any(
-                            t in c["type"].lower()
+                            t in col["type"].lower()
                             for t in ("char", "text", "enum", "varchar")
                         ):
                             try:
                                 dv = conn.execute(
                                     text(
-                                        f"SELECT DISTINCT {self._q(c['name'])} FROM {self._q(tbl)} LIMIT 12"
+                                        f"SELECT DISTINCT {self._q(user_id, col['name'])} FROM {self._q(user_id, tbl)} LIMIT 12"
                                     )
                                 ).fetchall()
                                 vals = [row[0] for row in dv if row[0] is not None]
                                 if 0 < len(vals) <= 8:
-                                    low_card[c["name"]] = vals
+                                    low_card[col["name"]] = vals
                             except Exception as e:
                                 logger.warning(
                                     "Error fetching distinct values for %s.%s: %s",
                                     tbl,
-                                    c["name"],
+                                    col["name"],
                                     e,
                                 )
 
@@ -287,12 +293,13 @@ class DatabaseManager:
                     "row_count": rc,
                     "distinct_values": low_card,
                 }
-        self._schema_cache = schema
+        c["_schema_cache"] = schema
         return schema
 
-    def schema_as_text(self):
-        schema = self.get_schema()
-        lines = [f"Database dialect: {self.dialect}"]
+    def schema_as_text(self, user_id):
+        c = self._get(user_id)
+        schema = self.get_schema(user_id)
+        lines = [f"Database dialect: {c['dialect']}"]
         for tbl, info in schema.items():
             rc = (
                 f"  (~{info['row_count']} rows)"
@@ -305,18 +312,18 @@ class DatabaseManager:
                 for fk in info.get("foreign_keys", [])
                 if fk.get("column")
             }
-            for c in info["columns"]:
-                flags = " PK" if c.get("primary_key") else ""
-                if c["name"] in fk_map:
-                    flags += f"->{fk_map[c['name']]}"
-                dv = info["distinct_values"].get(c["name"])
+            for cc in info["columns"]:
+                flags = " PK" if cc.get("primary_key") else ""
+                if cc["name"] in fk_map:
+                    flags += f"->{fk_map[cc['name']]}"
+                dv = info["distinct_values"].get(cc["name"])
                 dv_str = f"[{','.join(str(v) for v in dv[:6])}]" if dv else ""
-                lines.append(f"  {c['name']} {c['type']}{flags}{dv_str}")
+                lines.append(f"  {cc['name']} {cc['type']}{flags}{dv_str}")
             if info["sample_rows"]:
                 lines.append(f"  sample: {info['sample_rows'][:1]}")
         return "\n".join(lines)
 
-    def _readonly_violation(self, cleaned):
+    def _readonly_violation(self, user_id, cleaned):
         """Return an error string if `cleaned` is not a safe read-only query, else None.
 
         Primary check parses the SQL into an AST (sqlglot) and rejects anything
@@ -328,7 +335,8 @@ class DatabaseManager:
         """
         if not cleaned:
             return "Empty statement."
-        glot_dialect = _GLOT_DIALECT.get(self.dialect, self.dialect)
+        c = self._get(user_id)
+        glot_dialect = _GLOT_DIALECT.get(c["dialect"], c["dialect"])
         try:
             stmts = sqlglot.parse(cleaned, dialect=glot_dialect)
         except Exception:
@@ -364,14 +372,15 @@ class DatabaseManager:
             return "SELECT INTO is not allowed."
         return None
 
-    def execute(self, sql):
+    def execute(self, user_id, sql):
+        c = self._get(user_id)
         cleaned = sql.strip().rstrip(";").strip()
         if self.readonly:
-            violation = self._readonly_violation(cleaned)
+            violation = self._readonly_violation(user_id, cleaned)
             if violation:
                 return {"error": violation, "sql": cleaned}
         try:
-            with self.engine.connect() as conn:
+            with c["engine"].connect() as conn:
                 res = conn.execute(text(cleaned))
                 cols = list(res.keys())
                 raw = res.fetchmany(self.max_rows + 1)
@@ -379,8 +388,8 @@ class DatabaseManager:
                 rows = []
                 for row in raw[: self.max_rows]:
                     d = {}
-                    for c, v in zip(cols, row):
-                        d[c] = v.isoformat() if hasattr(v, "isoformat") else v
+                    for col, val in zip(cols, row):
+                        d[col] = val.isoformat() if hasattr(val, "isoformat") else val
                     rows.append(d)
                 return {
                     "columns": cols,
@@ -391,3 +400,18 @@ class DatabaseManager:
                 }
         except SQLAlchemyError as e:
             return {"error": str(e), "sql": cleaned}
+
+    def get_db_id(self, user_id):
+        return self._get(user_id)["db_id"]
+
+    def get_dialect(self, user_id):
+        return self._get(user_id)["dialect"]
+
+    def get_info(self, user_id):
+        c = self._get(user_id)
+        return {
+            "url": sanitize_url(c["url"]),
+            "dialect": c["dialect"],
+            "tables": c["_table_count"],
+            "db_id": c["db_id"],
+        }

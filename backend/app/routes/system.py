@@ -19,7 +19,8 @@ async def state(
     cfg=Depends(get_cfg),
     kb=Depends(get_kb),
 ):
-    return await ctrl.get_state(db, cfg, kb)
+    user_id = user_token["user_id"]
+    return await ctrl.get_state(user_id, db, cfg, kb)
 
 
 @router.get("/api/ollama-check")
@@ -29,9 +30,10 @@ async def ollama_check(cfg=Depends(get_cfg)):
 
 @router.get("/api/health")
 async def health(
-    cfg=Depends(get_cfg), providers=Depends(get_providers), db=Depends(get_db)
+    cfg=Depends(get_cfg),
+    providers=Depends(get_providers),
 ):
-    return await ctrl.get_health(cfg, providers, db)
+    return await ctrl.get_health(cfg, providers)
 
 
 @router.post("/api/config")
