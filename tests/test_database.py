@@ -3,15 +3,17 @@
 import pytest
 from backend.app.database import DatabaseManager, sanitize_url, db_id_for
 
+TEST_USER = "test-user-123"
+
 
 @pytest.fixture
 def db():
     mgr = DatabaseManager(readonly=True, max_rows=5)
-    result = mgr.connect("sqlite:///:memory:")
+    result = mgr.connect(TEST_USER, "sqlite:///:memory:")
     assert result["ok"]
     from sqlalchemy import text
 
-    with mgr.engine.connect() as conn:
+    with mgr._connections[TEST_USER]["engine"].connect() as conn:
         conn.execute(text("CREATE TABLE items (id INTEGER PRIMARY KEY, name TEXT)"))
         for i in range(8):
             conn.execute(text("INSERT INTO items(name) VALUES (:n)"), {"n": f"item{i}"})
@@ -20,7 +22,7 @@ def db():
 
 
 def test_select_allowed(db):
-    res = db.execute("SELECT * FROM items")
+    res = db.execute(TEST_USER, "SELECT * FROM items")
     assert "error" not in res
     assert res["columns"] == ["id", "name"]
 
@@ -37,27 +39,29 @@ def test_select_allowed(db):
     ],
 )
 def test_write_statements_rejected(db, sql):
-    res = db.execute(sql)
+    res = db.execute(TEST_USER, sql)
     assert "error" in res
 
 
 def test_stacked_statement_rejected(db):
-    res = db.execute("SELECT * FROM items\nDROP TABLE items")
+    res = db.execute(TEST_USER, "SELECT * FROM items\nDROP TABLE items")
     assert "error" in res
 
 
 def test_data_modifying_cte_rejected(db):
-    res = db.execute("WITH gone AS (DELETE FROM items RETURNING *) SELECT * FROM gone")
+    res = db.execute(
+        TEST_USER, "WITH gone AS (DELETE FROM items RETURNING *) SELECT * FROM gone"
+    )
     assert "error" in res
 
 
 def test_select_into_rejected(db):
-    res = db.execute("SELECT * INTO backup FROM items")
+    res = db.execute(TEST_USER, "SELECT * INTO backup FROM items")
     assert "error" in res
 
 
 def test_pragma_rejected(db):
-    res = db.execute("PRAGMA table_info(items)")
+    res = db.execute(TEST_USER, "PRAGMA table_info(items)")
     assert "error" in res
 
 
@@ -65,12 +69,12 @@ def test_keyword_inside_identifier_is_not_blocked(db):
     """Column/table names that merely contain a write keyword must still work."""
     from sqlalchemy import text
 
-    with db.engine.connect() as conn:
+    with db._connections[TEST_USER]["engine"].connect() as conn:
         conn.execute(
             text("CREATE TABLE updates_log (id INTEGER PRIMARY KEY, created_at TEXT)")
         )
         conn.commit()
-    res = db.execute("SELECT created_at FROM updates_log")
+    res = db.execute(TEST_USER, "SELECT created_at FROM updates_log")
     assert "error" not in res
 
 
@@ -80,21 +84,23 @@ def test_keyword_inside_string_literal_is_not_blocked(db):
     The AST guard inspects the parse tree, so 'DELETE' as data is allowed where a
     naive keyword regex would have wrongly blocked the whole query.
     """
-    res = db.execute("SELECT * FROM items WHERE name = 'please DELETE this later'")
+    res = db.execute(
+        TEST_USER, "SELECT * FROM items WHERE name = 'please DELETE this later'"
+    )
     assert "error" not in res
 
 
 def test_explain_select_allowed(db):
-    res = db.execute("EXPLAIN SELECT * FROM items")
+    res = db.execute(TEST_USER, "EXPLAIN SELECT * FROM items")
     assert "error" not in res
 
 
 def test_truncation_flag_is_exact(db):
-    res = db.execute("SELECT * FROM items LIMIT 5")
+    res = db.execute(TEST_USER, "SELECT * FROM items LIMIT 5")
     assert res["row_count"] == 5
     assert res["truncated"] is False
 
-    res = db.execute("SELECT * FROM items")
+    res = db.execute(TEST_USER, "SELECT * FROM items")
     assert res["row_count"] == 5
     assert res["truncated"] is True
 
@@ -129,9 +135,9 @@ def test_db_id_differs_for_different_targets():
 
 
 def test_q_escapes_embedded_quotes(db):
-    assert db._q("normal_table") == '"normal_table"'
-    assert db._q('bad"table') == '"bad""table"'
-    db.dialect = "mysql"
+    assert db._q(TEST_USER, "normal_table") == '"normal_table"'
+    assert db._q(TEST_USER, 'bad"table') == '"bad""table"'
+    db._connections[TEST_USER]["dialect"] = "mysql"
     assert db._q("normal_table") == "`normal_table`"
     assert db._q("bad`table") == "`bad``table`"
-    db.dialect = "sqlite"  # restore
+    db._connections[TEST_USER]["dialect"] = "sqlite"  # restore

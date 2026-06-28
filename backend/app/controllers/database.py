@@ -1,5 +1,4 @@
 from fastapi import HTTPException
-from backend.app import config as cfgmod
 from backend.sample_data import ensure_sample_db
 import logging
 
@@ -10,8 +9,8 @@ async def connect(user_id, db, kb, cfg, req_data):
     result = db.connect(user_id, req_data.db_url)
     if not result["ok"]:
         raise HTTPException(400, result["error"])
-    cfg["last_db_url"] = req_data.db_url
-    cfgmod.save_config(cfg)
+    # cfg["last_db_url"] = req_data.db_url
+    # cfgmod.save_config(cfg)
     result["trust"] = kb.trust_level(db.get_db_id(user_id))
     result["glossary"] = kb.get_glossary(db.get_db_id(user_id))
     result["has_knowledge"] = kb.count_verified(db.get_db_id(user_id)) > 0
@@ -26,8 +25,8 @@ async def connect_sample(user_id, db, kb, cfg):
     result = db.connect(user_id, url)
     if not result["ok"]:
         raise HTTPException(500, result["error"])
-    cfg["last_db_url"] = url
-    cfgmod.save_config(cfg)
+    # cfg["last_db_url"] = url
+    # cfgmod.save_config(cfg)
 
     if kb.count_verified(db.get_db_id(user_id)) == 0:
         kb.set_glossary(
@@ -81,12 +80,12 @@ async def connect_sample(user_id, db, kb, cfg):
 
 async def disconnect(user_id, db, cfg):
     db.disconnect(user_id)
-    cfg.pop("last_db_url", None)
-    try:
-        cfgmod.save_config(cfg)
-    except Exception as e:
-        logger.warning("Failed to save config after disconnect: %s", e)
-    return {"ok": True}
+    # cfg.pop("last_db_url", None)
+    # try:
+    # cfgmod.save_config(cfg)
+    # except Exception as e:
+    #     logger.warning("Failed to save config after disconnect: %s", e)
+    # return {"ok": True}
 
 
 async def get_schema(user_id, db, refresh):

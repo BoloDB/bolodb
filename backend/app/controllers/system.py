@@ -1,5 +1,4 @@
 from backend.app import config as cfgmod
-from backend.app.database import sanitize_url
 import httpx as _httpx
 
 
@@ -7,7 +6,7 @@ async def get_state(user_id, db, cfg, kb):
     s = {"connected": db.connected(user_id), "config": cfgmod.public_config(cfg)}
     if db.connected(user_id):
         s["database"] = {
-            "url": sanitize_url(db.url) if db.url else None,
+            "url": db.get_info(user_id)["url"],
             "dialect": db.get_dialect(user_id),
             "db_id": db.get_db_id(user_id),
             "tables": db.get_info(user_id)["tables"],
