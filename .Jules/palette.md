@@ -1,7 +1,0 @@
-## 2026-06-11 - Form Labels
-**Learning:** In a heavily inline-styled React app, converting `div` wrappers to semantic `<label>` tags often requires adding `display: block` to preserve layout while improving accessibility.
-**Action:** Always check the element display type when migrating `div`s to semantic inline elements like `<label>`.
-
-## 2026-06-25 - Playwright character encoding with standalone React
-**Learning:** When mocking an HTML document to test specific React components (like `ResultTable` in `index.html`) using Playwright, if the mock lacks a proper `<meta charset="UTF-8"/>` tag, unicode characters like the "✓" checkmark may render as garbled mojibake (e.g. "âœ"") in the resulting screenshots, obscuring the UX validation.
-**Action:** Always include `<meta charset="UTF-8"/>` within the `<head>` of mocked HTML documents constructed for Playwright verification to ensure correct visual rendering of unicode text and icons.
