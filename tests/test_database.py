@@ -138,6 +138,6 @@ def test_q_escapes_embedded_quotes(db):
     assert db._q(TEST_USER, "normal_table") == '"normal_table"'
     assert db._q(TEST_USER, 'bad"table') == '"bad""table"'
     db._connections[TEST_USER]["dialect"] = "mysql"
-    assert db._q("normal_table") == "`normal_table`"
-    assert db._q("bad`table") == "`bad``table`"
+    assert db._q(TEST_USER, "normal_table") == "`normal_table`"
+    assert db._q(TEST_USER, "bad`table") == "`bad``table`"
     db._connections[TEST_USER]["dialect"] = "sqlite"  # restore
