@@ -1,3 +1,0 @@
-## 2026-06-25 - Memoizing Tokenization Utilities
-**Learning:** In text-to-SQL tasks, utility functions like `_tokens()` are frequently called with identical inputs (like table names and specific search terms) during schema linking and similarity retrieval. Regex extraction in these repeated utility functions can create CPU bottlenecks.
-**Action:** When memoizing functions that return collections (using `@functools.lru_cache`), ensure the return type is changed to an immutable collection (e.g., `set` -> `frozenset`) to prevent unintended state mutations by downstream callers from poisoning the cache.
