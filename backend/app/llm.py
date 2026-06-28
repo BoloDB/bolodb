@@ -213,7 +213,7 @@ async def generate_sql(
     gloss = (
         (
             "Term meanings:\n"
-            + "\n".join(f'- {g["term"]} = {g["maps_to"]}' for g in glossary)
+            + "\n".join(f"- {g['term']} = {g['maps_to']}" for g in glossary)
             + "\n"
         )
         if glossary
@@ -222,7 +222,7 @@ async def generate_sql(
     examples = ""
     if retrieved:
         ex_lines = [
-            f'Q: {e["question"]}\nSQL: {e["sql"]}' for e in retrieved[:max_examples]
+            f"Q: {e['question']}\nSQL: {e['sql']}" for e in retrieved[:max_examples]
         ]
         examples = "Confirmed examples (reuse patterns):\n" + "\n".join(ex_lines) + "\n"
     system = (

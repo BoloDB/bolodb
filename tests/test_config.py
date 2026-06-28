@@ -8,8 +8,9 @@ def test_load_config_no_file(tmp_path):
     config_dir = tmp_path / ".bolodb"
     config_file = config_dir / "config.json"
 
-    with patch("backend.app.config.CONFIG_DIR", config_dir), patch(
-        "backend.app.config.CONFIG_FILE", config_file
+    with (
+        patch("backend.app.config.CONFIG_DIR", config_dir),
+        patch("backend.app.config.CONFIG_FILE", config_file),
     ):
         cfg = load_config()
         assert cfg == dict(DEFAULTS)
@@ -29,8 +30,9 @@ def test_load_config_with_valid_file(tmp_path):
     }
     config_file.write_text(json.dumps(custom_data))
 
-    with patch("backend.app.config.CONFIG_DIR", config_dir), patch(
-        "backend.app.config.CONFIG_FILE", config_file
+    with (
+        patch("backend.app.config.CONFIG_DIR", config_dir),
+        patch("backend.app.config.CONFIG_FILE", config_file),
     ):
         cfg = load_config()
         assert cfg["provider"] == "claude"
@@ -48,8 +50,9 @@ def test_load_config_invalid_json(tmp_path):
 
     config_file.write_text("invalid json {")
 
-    with patch("backend.app.config.CONFIG_DIR", config_dir), patch(
-        "backend.app.config.CONFIG_FILE", config_file
+    with (
+        patch("backend.app.config.CONFIG_DIR", config_dir),
+        patch("backend.app.config.CONFIG_FILE", config_file),
     ):
         cfg = load_config()
         assert cfg == dict(DEFAULTS)
@@ -59,8 +62,9 @@ def test_save_config(tmp_path):
     config_dir = tmp_path / ".bolodb"
     config_file = config_dir / "config.json"
 
-    with patch("backend.app.config.CONFIG_DIR", config_dir), patch(
-        "backend.app.config.CONFIG_FILE", config_file
+    with (
+        patch("backend.app.config.CONFIG_DIR", config_dir),
+        patch("backend.app.config.CONFIG_FILE", config_file),
     ):
         from backend.app.config import save_config
 

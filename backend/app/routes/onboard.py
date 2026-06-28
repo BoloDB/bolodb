@@ -12,7 +12,8 @@ async def onboard_glossary(
     db=Depends(get_db),
     providers=Depends(get_providers),
 ):
-    return await ctrl.get_glossary(db, providers)
+    user_id = user_token["user_id"]
+    return await ctrl.get_glossary(user_id, db, providers)
 
 
 @router.post("/api/onboard/starters")
@@ -21,7 +22,8 @@ async def onboard_starters(
     db=Depends(get_db),
     providers=Depends(get_providers),
 ):
-    return await ctrl.get_starters(db, providers)
+    user_id = user_token["user_id"]
+    return await ctrl.get_starters(user_id, db, providers)
 
 
 @router.post("/api/onboard/save")
@@ -31,4 +33,5 @@ async def onboard_save(
     db=Depends(get_db),
     kb=Depends(get_kb),
 ):
-    return await ctrl.save(db, kb, req)
+    user_id = user_token["user_id"]
+    return await ctrl.save(user_id, db, kb, req)
