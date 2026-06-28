@@ -3,19 +3,21 @@ from backend.app.database import sanitize_url
 import httpx as _httpx
 
 
-async def get_state(db, cfg, kb):
-    s = {"connected": db.connected, "config": cfgmod.public_config(cfg)}
-    if db.connected:
+async def get_state(user_id, db, cfg, kb):
+    s = {"connected": db.connected(user_id), "config": cfgmod.public_config(cfg)}
+    if db.connected(user_id):
         s["database"] = {
             "url": sanitize_url(db.url) if db.url else None,
-            "dialect": db.dialect,
-            "db_id": db.db_id,
-            "tables": db._table_count,
-            "has_knowledge": kb.count_verified(db.db_id) > 0,
+            "dialect": db.get_dialect(user_id),
+            "db_id": db.get_db_id(user_id),
+            "tables": db.get_info(user_id)["tables"],
+            "has_knowledge": kb.count_verified(db.get_db_id(user_id)) > 0,
         }
-        s["trust"] = kb.trust_level(db.db_id)
-        s["glossary"] = kb.get_glossary(db.db_id)
-        s["starters"] = [v["question"] for v in kb.get_verified(db.db_id)[:6]]
+        s["trust"] = kb.trust_level(db.get_db_id(user_id))
+        s["glossary"] = kb.get_glossary(db.get_db_id(user_id))
+        s["starters"] = [
+            v["question"] for v in kb.get_verified(db.get_db_id(user_id))[:6]
+        ]
     return s
 
 
@@ -31,9 +33,12 @@ async def check_ollama(cfg):
         return {"ok": False, "error": "Failed to contact Ollama service", "url": url}
 
 
-async def get_health(cfg, providers, db):
+async def get_health(user_id, cfg, providers, db):
     ph = await providers.get().health_check()
-    return {"provider": {"name": cfg["provider"], **ph}, "connected": db.connected}
+    return {
+        "provider": {"name": cfg["provider"], **ph},
+        "connected": db.connected(user_id),
+    }
 
 
 async def update_config(cfg, providers, req_data):
