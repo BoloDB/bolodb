@@ -30,13 +30,10 @@ async def ollama_check(cfg=Depends(get_cfg)):
 
 @router.get("/api/health")
 async def health(
-    user_token=Depends(get_current_user),
     cfg=Depends(get_cfg),
     providers=Depends(get_providers),
-    db=Depends(get_db),
 ):
-    user_id = user_token["user_id"]
-    return await ctrl.get_health(user_id, cfg, providers, db)
+    return await ctrl.get_health(cfg, providers)
 
 
 @router.post("/api/config")
