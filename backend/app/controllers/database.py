@@ -85,7 +85,7 @@ async def disconnect(user_id, db, cfg):
     # cfgmod.save_config(cfg)
     # except Exception as e:
     #     logger.warning("Failed to save config after disconnect: %s", e)
-    # return {"ok": True}
+    return {"ok": True}
 
 
 async def get_schema(user_id, db, refresh):

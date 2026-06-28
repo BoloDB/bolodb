@@ -3,7 +3,10 @@ import httpx as _httpx
 
 
 async def get_state(user_id, db, cfg, kb):
-    s = {"connected": db.connected(user_id), "config": cfgmod.public_config(cfg)}
+    # s = {"connected": db.connected(user_id), "config": cfgmod.public_config(cfg)}
+    config = cfgmod.public_config(cfg)
+    config.pop("last_db_url", None)
+    s = {"connected": db.connected(user_id), "config": config}
     if db.connected(user_id):
         s["database"] = {
             "url": db.get_info(user_id)["url"],
@@ -32,11 +35,11 @@ async def check_ollama(cfg):
         return {"ok": False, "error": "Failed to contact Ollama service", "url": url}
 
 
-async def get_health(user_id, cfg, providers, db):
+async def get_health(cfg, providers):
     ph = await providers.get().health_check()
     return {
+        "status": "ok",
         "provider": {"name": cfg["provider"], **ph},
-        "connected": db.connected(user_id),
     }
 
 
