@@ -89,6 +89,7 @@ class DatabaseManager:
             with engine.connect() as c:
                 c.execute(text("SELECT 1"))
             tables = len(inspect(engine).get_table_names())
+            old_connection = self._connections.get(user_id)
             self._connections[user_id] = {
                 "engine": engine,
                 "url": url,
@@ -97,6 +98,8 @@ class DatabaseManager:
                 "_schema_cache": None,
                 "_table_count": tables,
             }
+            if old_connection:
+                old_connection["engine"].dispose()
             return {
                 "ok": True,
                 "dialect": self._connections[user_id]["dialect"],
