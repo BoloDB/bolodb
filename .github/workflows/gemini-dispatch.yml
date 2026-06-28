@@ -1,0 +1,24 @@
+name: "Gemini PR Code Review"
+
+on:
+  pull_request:
+    types: [opened, synchronize, ready_for_review]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    steps:
+      - name: "Run AI Code Review"
+        uses: petarzarkov/gemini-code-review-action@latest
+        with:
+          # Skips minified builds, lockfiles, and migrations to save tokens
+          exclude: '*.md,*.json,package-lock.json,yarn.lock,dist/*,build/*,node_modules/*,migrations/*,*.test.ts,*.spec.ts'
+          model: 'gemini-1.5-pro' # Or gemini-1.5-flash for faster, cheaper reviews
+          enable_conversation_context: true
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
