@@ -27,6 +27,50 @@ def test_select_allowed(db):
     assert res["columns"] == ["id", "name"]
 
 
+def test_cross_user_isolation(db):
+    user_a = TEST_USER
+    user_b = "test-user-456"
+
+    # user_a is already connected via the db fixture. Connect user_b.
+    res_b = db.connect(user_b, "sqlite:///:memory:")
+    assert res_b["ok"]
+
+    from sqlalchemy import text
+
+    with db._connections[user_b]["engine"].connect() as conn:
+        conn.execute(text("CREATE TABLE b_items (id INTEGER PRIMARY KEY, b_name TEXT)"))
+        conn.execute(text("INSERT INTO b_items(b_name) VALUES ('B')"))
+        conn.commit()
+
+    # Verify execution isolation
+    res_a = db.execute(user_a, "SELECT * FROM items")
+    assert "error" not in res_a
+    assert res_a["row_count"] == 5
+    assert res_a["truncated"] is True
+
+    res_b_exec = db.execute(user_b, "SELECT * FROM b_items")
+    assert "error" not in res_b_exec
+    assert res_b_exec["row_count"] == 1
+
+    # Cross query should fail
+    assert "error" in db.execute(user_a, "SELECT * FROM b_items")
+    assert "error" in db.execute(user_b, "SELECT * FROM items")
+
+    # Verify dialect isolation
+    assert db.get_dialect(user_a) == "sqlite"
+    assert db.get_dialect(user_b) == "sqlite"
+
+    db._connections[user_a]["dialect"] = "mysql"
+    assert db.get_dialect(user_a) == "mysql"
+    assert db.get_dialect(user_b) == "sqlite"
+    db._connections[user_a]["dialect"] = "sqlite"  # revert
+
+    # Verify disconnect isolation
+    db.disconnect(user_a)
+    assert not db.connected(user_a)
+    assert db.connected(user_b)
+
+
 @pytest.mark.parametrize(
     "sql",
     [
