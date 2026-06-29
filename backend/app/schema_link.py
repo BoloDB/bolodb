@@ -15,11 +15,13 @@ def model_budget(provider, model):
     return {"tier": "small", "max_tables": 8, "samples": 1, "max_examples": 3}
 
 
-def extract_table_names_from_prev_query(sql: str):
+def extract_table_names_from_prev_query(sql: str, dialect):
     if not sql:
         return set()
+    _GLOT_DIALECT = {"postgresql": "postgres", "mssql": "tsql"}
+    glot_dialect = _GLOT_DIALECT.get(dialect, dialect)
     try:
-        stmts = sqlglot.parse_one(sql)
+        stmts = sqlglot.parse_one(sql, read=glot_dialect)
         return {table.name for table in stmts.find_all(exp.Table)}
     except Exception:
         return set()
@@ -43,6 +45,7 @@ def link_relevant_tables(
         for t in all_tables:
             if table_patterns[t].search(sql_low):
                 verified_tables.add(t)
+    context_tables_lookup = {t.lower() for t in context_tables}
     scores = {}
     for t, info in schema.items():
         toks = _tokens(t)
@@ -51,7 +54,7 @@ def link_relevant_tables(
         scores[t] = (
             len(q_tokens & toks)
             + (5 if t in verified_tables else 0)
-            + (10 if t in context_tables else 0)
+            + (10 if t.lower() in context_tables_lookup else 0)
         )
     picked = [t for t, s in sorted(scores.items(), key=lambda x: -x[1])]
     if not picked:

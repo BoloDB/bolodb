@@ -25,7 +25,9 @@ async def run_query(user_id, db, kb, cfg, providers, session_log, req_data):
     budget = model_budget(cfg.get("provider", "ollama"), cfg.get("model", ""))
     full_schema = db.get_schema(user_id)
     context_tables = (
-        extract_table_names_from_prev_query(context[-1].sql) if context else set()
+        extract_table_names_from_prev_query(context[-1].sql, db.get_dialect(user_id))
+        if context
+        else set()
     )
     tables = link_relevant_tables(
         q, full_schema, glossary, retrieved, budget["max_tables"], context_tables
