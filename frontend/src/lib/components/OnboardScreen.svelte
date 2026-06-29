@@ -56,7 +56,7 @@
     {/if}
 
     {#if step === 'profile'}
-      <ProfileStep onNext={() => { loadOnboardData(); step = 'glossary'; }} {schema} />
+      <ProfileStep onNext={async () => { await loadOnboardData(); step = 'glossary'; }} {schema} />
     {:else if step === 'glossary'}
       <GlossaryStep glossaryItems={realGlossary} onNext={(g) => { confirmedGlossary = g; step = 'starters'; }} />
     {:else if step === 'starters'}
