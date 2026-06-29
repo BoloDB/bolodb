@@ -33,13 +33,15 @@ def small_schema():
 
 
 def test_link_returns_all_tables_when_under_max(small_schema):
-    result = link_relevant_tables("test question", small_schema, [], [], max_tables=10)
+    result = link_relevant_tables(
+        "test question", small_schema, [], [], max_tables=10, context_tables=set()
+    )
     assert set(result) == {"users", "orders", "products"}
 
 
 def test_link_prioritises_token_matched_tables(small_schema):
     result = link_relevant_tables(
-        "show me all orders", small_schema, [], [], max_tables=1
+        "show me all orders", small_schema, [], [], max_tables=1, context_tables=set()
     )
     assert "orders" in result
 
@@ -49,7 +51,7 @@ def test_link_includes_fk_referenced_tables(small_schema):
     # even if max_tables=1 matches only "orders",
     # "users" should be pulled in as a FK dependency
     result = link_relevant_tables(
-        "show me all orders", small_schema, [], [], max_tables=1
+        "show me all orders", small_schema, [], [], max_tables=1, context_tables=set()
     )
     assert "users" in result
 
@@ -63,7 +65,12 @@ def test_link_uses_verified_sql_as_boost(small_schema):
         }
     ]
     result = link_relevant_tables(
-        "expensive items", small_schema, [], retrieved, max_tables=1
+        "expensive items",
+        small_schema,
+        [],
+        retrieved,
+        max_tables=1,
+        context_tables=set(),
     )
     assert "products" in result
 

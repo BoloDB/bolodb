@@ -2,6 +2,8 @@
 
 import re
 from backend.app.utils import _tokens
+import sqlglot
+from sqlglot import exp
 
 
 def model_budget(provider, model):
@@ -13,7 +15,21 @@ def model_budget(provider, model):
     return {"tier": "small", "max_tables": 8, "samples": 1, "max_examples": 3}
 
 
-def link_relevant_tables(question, schema, glossary, retrieved, max_tables):
+def extract_table_names_from_prev_query(sql: str, dialect):
+    if not sql:
+        return set()
+    _GLOT_DIALECT = {"postgresql": "postgres", "mssql": "tsql"}
+    glot_dialect = _GLOT_DIALECT.get(dialect, dialect)
+    try:
+        stmts = sqlglot.parse_one(sql, read=glot_dialect)
+        return {table.name for table in stmts.find_all(exp.Table)}
+    except Exception:
+        return set()
+
+
+def link_relevant_tables(
+    question, schema, glossary, retrieved, max_tables, context_tables
+):
     all_tables = list(schema.keys())
     if len(all_tables) <= max_tables:
         return all_tables
@@ -29,13 +45,18 @@ def link_relevant_tables(question, schema, glossary, retrieved, max_tables):
         for t in all_tables:
             if table_patterns[t].search(sql_low):
                 verified_tables.add(t)
+    context_tables_lookup = {t.lower() for t in context_tables}
     scores = {}
     for t, info in schema.items():
         toks = _tokens(t)
         for c in info.get("columns", []):
             toks |= _tokens(c["name"])
-        scores[t] = len(q_tokens & toks) + (5 if t in verified_tables else 0)
-    picked = [t for t, s in sorted(scores.items(), key=lambda x: -x[1]) if s > 0]
+        scores[t] = (
+            len(q_tokens & toks)
+            + (5 if t in verified_tables else 0)
+            + (10 if t.lower() in context_tables_lookup else 0)
+        )
+    picked = [t for t, s in sorted(scores.items(), key=lambda x: -x[1])]
     if not picked:
         picked = sorted(all_tables, key=lambda t: -(schema[t].get("row_count") or 0))
     selected = set(picked[:max_tables])

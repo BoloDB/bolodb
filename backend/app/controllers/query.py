@@ -6,6 +6,7 @@ from backend.app.schema_link import (
     link_relevant_tables,
     compact_schema,
     compute_confidence,
+    extract_table_names_from_prev_query,
 )
 from backend.app.llm import generate_sql
 
@@ -23,8 +24,13 @@ async def run_query(user_id, db, kb, cfg, providers, session_log, req_data):
     retrieved = kb.retrieve_similar(db.get_db_id(user_id), q, k=3)
     budget = model_budget(cfg.get("provider", "ollama"), cfg.get("model", ""))
     full_schema = db.get_schema(user_id)
+    context_tables = (
+        extract_table_names_from_prev_query(context[-1].sql, db.get_dialect(user_id))
+        if context
+        else set()
+    )
     tables = link_relevant_tables(
-        q, full_schema, glossary, retrieved, budget["max_tables"]
+        q, full_schema, glossary, retrieved, budget["max_tables"], context_tables
     )
     schema_text = compact_schema(full_schema, tables, budget["samples"])
     try:
