@@ -1,6 +1,5 @@
 import logging
 from fastapi import APIRouter, Depends, BackgroundTasks
-from fastapi.concurrency import run_in_threadpool
 from backend.app.dependencies import (
     get_current_user,
     get_db,
