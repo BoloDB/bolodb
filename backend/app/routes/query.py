@@ -17,6 +17,7 @@ router = APIRouter()
 
 def _save_query_background(user_id, question, sql, result, confidence):
     import backend.app.mongodatabase as mdb
+
     try:
         mdb.save_query(
             user_id=user_id,
