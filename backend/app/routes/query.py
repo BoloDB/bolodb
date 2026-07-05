@@ -23,6 +23,7 @@ def _save_query_task(user_id, question, sql, result, confidence):
     """
     try:
         import backend.app.mongodatabase as mdb
+
         mdb.save_query(
             user_id=user_id,
             question=question,
@@ -32,6 +33,7 @@ def _save_query_task(user_id, question, sql, result, confidence):
         )
     except Exception:
         log.warning("Failed to persist query history in background", exc_info=True)
+
 
 @router.post("/api/query")
 async def query(
