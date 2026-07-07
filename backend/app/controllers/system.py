@@ -52,6 +52,8 @@ async def update_config(cfg, providers, req_data):
         cfg["ollama_url"] = req_data.ollama_url
     if req_data.api_key and req_data.provider in ("claude", "openai", "groq"):
         cfg["api_keys"][req_data.provider] = req_data.api_key
+    elif req_data.clear_api_key and req_data.provider in ("claude", "openai", "groq"):
+        cfg["api_keys"][req_data.provider] = ""
 
     cfgmod.save_config(cfg)
     providers.reconfigure(cfg)

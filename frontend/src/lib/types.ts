@@ -76,6 +76,7 @@ export interface Turn {
   executionError?: string | null;
   verdict?: "correct" | "wrong" | null;
   reasonChosen?: string | null;
+  isDirect?: boolean;
 }
 
 export interface Toast {

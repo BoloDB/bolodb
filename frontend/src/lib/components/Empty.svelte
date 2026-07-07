@@ -42,4 +42,9 @@
       <p style="font-size:12px;color:var(--faint);margin-top:12px;margin-bottom:0;line-height:1.5">As you verify answers, questions specific to your data will appear here.</p>
     </div>
   {/if}
+
+  <div style="display:flex;align-items:center;justify-content:center;gap:7px;margin-top:22px;font-size:12.5px;color:var(--faint);font-weight:550">
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none"><path d="M4 17l6-6-6-6M12 19h8" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    Power user? Type <code style="background:var(--surface-2);padding:1px 6px;border-radius:4px;font-family:var(--font-mono);font-size:12px">/sql SELECT ...</code> to run SQL directly.
+  </div>
 </div>

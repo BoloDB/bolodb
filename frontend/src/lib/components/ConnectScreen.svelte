@@ -8,6 +8,7 @@
   import Spinner from '$lib/components/ui/Spinner.svelte';
   import Section from '$lib/components/ui/Section.svelte';
   import EngineCard from '$lib/components/EngineCard.svelte';
+  import { onMount } from 'svelte';
 
   let { engine, setEngine, onConnect }:
     { engine: string; setEngine: (e: string) => void; onConnect: (isSample: boolean, res: DbInfo) => void } = $props();
@@ -25,6 +26,10 @@
     openai: 'https://platform.openai.com/api-keys',
     groq: 'https://console.groq.com/keys',
   };
+  const DIALECT_LABELS: Record<string, string> = {
+    postgresql: 'PostgreSQL', mysql: 'MySQL', sqlite: 'SQLite',
+    mssql: 'SQL Server', duckdb: 'DuckDB',
+  };
 
   let dbType = $state('postgresql');
   let formMode = $state(true);
@@ -38,8 +43,17 @@
   let connecting: string | null = $state(null);
   let error = $state('');
   let ollamaStatus: string | null = $state(null);
+  let recentConnections: any[] = $state([]);
+  let reconnecting: string | null = $state(null);
 
   const isFileBased = $derived(dbType === 'sqlite' || dbType === 'duckdb');
+
+  onMount(async () => {
+    try {
+      const data = await apiCall('/api/connections');
+      recentConnections = data.connections || [];
+    } catch {}
+  });
 
   $effect(() => {
     if (engine !== 'ollama') return;
@@ -93,6 +107,36 @@
       connecting = null;
     }
   }
+
+  async function reconnect(conn: any) {
+    reconnecting = conn.db_id; error = '';
+    try {
+      await apiCall('/api/config', { provider: engine });
+      const res: DbInfo = await apiCall('/api/reconnect', { db_id: conn.db_id });
+      onConnect(false, res);
+    } catch (e: any) {
+      error = humanError(e.message) || 'Reconnection failed — the database may no longer be available.';
+      reconnecting = null;
+    }
+  }
+
+  async function removeRecent(conn: any) {
+    try {
+      await apiCall(`/api/connections/${conn._id}`, undefined, 'DELETE');
+      recentConnections = recentConnections.filter(c => c._id !== conn._id);
+    } catch {}
+  }
+
+  function timeAgo(iso: string): string {
+    const diff = Date.now() - new Date(iso).getTime();
+    const mins = Math.floor(diff / 60000);
+    if (mins < 1) return 'just now';
+    if (mins < 60) return `${mins}m ago`;
+    const hrs = Math.floor(mins / 60);
+    if (hrs < 24) return `${hrs}h ago`;
+    const days = Math.floor(hrs / 24);
+    return `${days}d ago`;
+  }
 </script>
 
 <div class="page" style="overflow-y:auto">
@@ -114,6 +158,48 @@
         Pick where the AI runs, connect your database, and start asking questions — no SQL knowledge needed.
       </p>
     </div>
+
+    <!-- recent databases -->
+    {#if recentConnections.length > 0}
+      <div class="rise" style="margin-bottom:30px">
+        <div style="display:flex;align-items:center;gap:9px;margin-bottom:14px">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" style="color:var(--brand)"><path d="M4 12a8 8 0 1 0 2.5-5.8M4 4v4h4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M12 8v4l3 2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          <span style="font-weight:700;font-size:15px">Recent databases</span>
+          <span style="font-size:12.5px;color:var(--faint);font-weight:550">Pick up where you left off</span>
+        </div>
+        <div style="display:flex;flex-wrap:wrap;gap:10px">
+          {#each recentConnections as conn}
+            <div class="card" style="padding:14px 18px;display:flex;align-items:center;gap:14px;min-width:280px;flex:1;max-width:460px;transition:border-color .15s;border-color:{reconnecting===conn.db_id?'var(--brand)':'var(--border)'}">
+              <div style="width:36px;height:36px;border-radius:10px;background:var(--brand-tint);color:var(--brand);display:grid;place-items:center;flex-shrink:0">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><ellipse cx="12" cy="6" rx="7" ry="3" stroke="currentColor" stroke-width="1.9"/><path d="M5 6v6c0 1.66 3.13 3 7 3s7-1.34 7-3V6M5 12v6c0 1.66 3.13 3 7 3s7-1.34 7-3v-6" stroke="currentColor" stroke-width="1.9"/></svg>
+              </div>
+              <div style="flex:1;min-width:0">
+                <div style="display:flex;align-items:center;gap:7px;margin-bottom:3px">
+                  <span style="font-weight:700;font-size:13.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{conn.display_url?.split('/').pop() || conn.dialect || 'Database'}</span>
+                  <span style="padding:2px 8px;border-radius:99px;background:var(--surface-3);font-size:11px;font-weight:700;color:var(--muted);flex-shrink:0">{DIALECT_LABELS[conn.dialect] || conn.dialect}</span>
+                </div>
+                <div style="font-size:12px;color:var(--faint);font-weight:550;display:flex;align-items:center;gap:8px">
+                  <span>{conn.table_count || 0} table{conn.table_count === 1 ? '' : 's'}</span>
+                  <span>·</span>
+                  <span>{conn.connected_at ? timeAgo(conn.connected_at) : ''}</span>
+                </div>
+              </div>
+              <button onclick={() => reconnect(conn)} disabled={!!reconnecting || !!connecting}
+                style="padding:7px 14px;border-radius:var(--radius-sm);background:var(--brand);color:#fff;border:none;font-weight:700;font-size:12.5px;cursor:pointer;white-space:nowrap;display:flex;align-items:center;gap:6px;transition:opacity .15s;opacity:{reconnecting||connecting?'0.6':'1'}">
+                {#if reconnecting === conn.db_id}<Spinner light />{:else}<svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M5 12h14M13 6l6 6-6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>{/if}
+                {reconnecting === conn.db_id ? 'Connecting…' : 'Connect'}
+              </button>
+              <button onclick={() => removeRecent(conn)} aria-label="Remove" title="Remove from recent"
+                style="padding:5px;border-radius:var(--radius-sm);background:none;border:none;cursor:pointer;color:var(--faint);transition:color .15s"
+                onmouseenter={(e) => (e.currentTarget as HTMLElement).style.color='var(--c-low-ink)'}
+                onmouseleave={(e) => (e.currentTarget as HTMLElement).style.color='var(--faint)'}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>
+              </button>
+            </div>
+          {/each}
+        </div>
+      </div>
+    {/if}
 
     <!-- step 1 — engine -->
     <Section num="1" title="Choose your AI engine" hint="You can switch anytime in Settings. Not sure? Start with Local — it's free and private.">
@@ -204,9 +290,10 @@
                   <input class="field mono" bind:value={filePath}
                     placeholder={dbType === 'sqlite' ? '/Users/you/data/mydb.db' : '/Users/you/data/mydb.duckdb'}
                     style="font-size:13.5px;margin-bottom:6px" />
-                  <div style="font-size:12px;color:var(--faint);font-weight:550">
-                    The full path to your {dbType === 'sqlite' ? '.db or .sqlite' : 'DuckDB'} file on disk.
-                    {#if dbType === 'duckdb'} Leave empty to use an in-memory database.{/if}
+                  <div style="font-size:12px;color:var(--faint);font-weight:550;line-height:1.45">
+                    The absolute path to your {dbType === 'sqlite' ? '.db or .sqlite' : 'DuckDB'} file.
+                    If using Docker, drop the file in the project's <code style="background:var(--surface);padding:2px 4px;border-radius:3px">data</code> folder and use <code style="background:var(--surface);padding:2px 4px;border-radius:3px">/app/data/filename.db</code>.
+                    {#if dbType === 'duckdb'} <br/>Leave empty to use an in-memory database.{/if}
                   </div>
                 </div>
               {:else}

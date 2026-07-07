@@ -13,9 +13,76 @@ def parse_json(text):
     return json.loads(s)
 
 
+# JSON schema for the SQL-generation response. Passed to providers that support
+# structured outputs so the model is constrained to this exact shape, and used
+# to document the contract in one place.
+SQL_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "sql": {
+            "type": "string",
+            "description": "One read-only SELECT query answering the question.",
+        },
+        "restatement": {
+            "type": "string",
+            "description": "One plain sentence describing what the query returns, no jargon.",
+        },
+        "assumptions": {
+            "type": "array",
+            "items": {"type": "string"},
+            "description": (
+                "Any assumptions made while interpreting the question — e.g. how a "
+                "vague term or date range was resolved. Empty list if none."
+            ),
+        },
+    },
+    "required": ["sql", "restatement", "assumptions"],
+    "additionalProperties": False,
+}
+
+
+def parse_sql_output(raw):
+    """Normalize a model SQL response into ``{sql, restatement, assumptions}``.
+
+    Accepts either a ``dict`` (already-parsed structured output) or raw text
+    (parsed tolerantly via :func:`parse_json`). Missing or wrongly-typed fields
+    get safe defaults — this never raises, so callers can treat an empty ``sql``
+    as "generation failed".
+    """
+    if isinstance(raw, dict):
+        obj = raw
+    else:
+        try:
+            obj = parse_json(raw)
+        except Exception:
+            obj = {}
+    if not isinstance(obj, dict):
+        obj = {}
+
+    sql = obj.get("sql")
+    restatement = obj.get("restatement")
+
+    assumptions = obj.get("assumptions")
+    if isinstance(assumptions, str):
+        assumptions = [assumptions] if assumptions.strip() else []
+    elif isinstance(assumptions, list):
+        assumptions = [str(a) for a in assumptions if str(a).strip()]
+    else:
+        assumptions = []
+
+    sql = (sql if isinstance(sql, str) else ("" if sql is None else str(sql))).strip()
+    restatement = (
+        restatement
+        if isinstance(restatement, str)
+        else ("" if restatement is None else str(restatement))
+    ).strip()
+
+    return {"sql": sql, "restatement": restatement, "assumptions": assumptions}
+
+
 class LLMProvider(ABC):
     @abstractmethod
-    async def complete(self, system, user, json_mode=False): ...
+    async def complete(self, system, user, json_mode=False, schema=None): ...
     @abstractmethod
     async def health_check(self): ...
 
@@ -25,7 +92,7 @@ class OllamaProvider(LLMProvider):
         self.model = model or "bolodb-sql"
         self.base_url = base_url.rstrip("/")
 
-    async def complete(self, system, user, json_mode=False):
+    async def complete(self, system, user, json_mode=False, schema=None):
         body = {
             "model": self.model,
             "messages": [
@@ -35,7 +102,12 @@ class OllamaProvider(LLMProvider):
             "stream": False,
             "options": {"temperature": 0.05, "num_predict": 1200},
         }
-        if json_mode:
+        if schema is not None:
+            # Ollama accepts a JSON schema as `format` for structured outputs;
+            # models that don't honor it still return JSON text, which the
+            # caller parses tolerantly (graceful fallback).
+            body["format"] = schema
+        elif json_mode:
             body["format"] = "json"
         async with httpx.AsyncClient(timeout=120) as c:
             r = await c.post(f"{self.base_url}/api/chat", json=body)
@@ -71,9 +143,23 @@ class APIKeyProvider(LLMProvider):
 class ClaudeProvider(APIKeyProvider):
     DEFAULT = "claude-haiku-4-5-20251001"
 
-    async def complete(self, system, user, json_mode=False):
-        if json_mode:
-            system += "\n\nRespond with ONLY a valid JSON object, no other text."
+    async def complete(self, system, user, json_mode=False, schema=None):
+        body = {
+            "model": self.model,
+            "max_tokens": 1500,
+            "system": system,
+            "messages": [{"role": "user", "content": user}],
+        }
+        if schema is not None:
+            # Structured outputs (GA on Haiku 4.5 / Sonnet 4.6 / Opus 4.x):
+            # constrain the response to the schema instead of prompt-nudging.
+            body["output_config"] = {
+                "format": {"type": "json_schema", "schema": schema}
+            }
+        elif json_mode:
+            body["system"] = (
+                system + "\n\nRespond with ONLY a valid JSON object, no other text."
+            )
         async with httpx.AsyncClient(timeout=60) as c:
             r = await c.post(
                 "https://api.anthropic.com/v1/messages",
@@ -82,12 +168,7 @@ class ClaudeProvider(APIKeyProvider):
                     "anthropic-version": "2023-06-01",
                     "content-type": "application/json",
                 },
-                json={
-                    "model": self.model,
-                    "max_tokens": 1500,
-                    "system": system,
-                    "messages": [{"role": "user", "content": user}],
-                },
+                json=body,
             )
             r.raise_for_status()
             return r.json()["content"][0]["text"]
@@ -96,7 +177,7 @@ class ClaudeProvider(APIKeyProvider):
 class OpenAIProvider(APIKeyProvider):
     DEFAULT = "gpt-4o-mini"
 
-    async def complete(self, system, user, json_mode=False):
+    async def complete(self, system, user, json_mode=False, schema=None):
         body = {
             "model": self.model,
             "temperature": 0.05,
@@ -106,7 +187,12 @@ class OpenAIProvider(APIKeyProvider):
                 {"role": "user", "content": user},
             ],
         }
-        if json_mode:
+        if schema is not None:
+            body["response_format"] = {
+                "type": "json_schema",
+                "json_schema": {"name": "sql_output", "strict": True, "schema": schema},
+            }
+        elif json_mode:
             body["response_format"] = {"type": "json_object"}
         async with httpx.AsyncClient(timeout=60) as c:
             r = await c.post(
@@ -121,7 +207,7 @@ class OpenAIProvider(APIKeyProvider):
 class GroqProvider(APIKeyProvider):
     DEFAULT = "llama-3.3-70b-versatile"
 
-    async def complete(self, system, user, json_mode=False):
+    async def complete(self, system, user, json_mode=False, schema=None):
         body = {
             "model": self.model,
             "temperature": 0.05,
@@ -131,7 +217,7 @@ class GroqProvider(APIKeyProvider):
                 {"role": "user", "content": user},
             ],
         }
-        if json_mode:
+        if schema is not None or json_mode:
             body["response_format"] = {"type": "json_object"}
         async with httpx.AsyncClient(timeout=30) as c:
             r = await c.post(
@@ -231,16 +317,24 @@ async def generate_sql(
         f"{built_context}"
         "Reply ONLY with this JSON, nothing else:\n"
         '{"sql":"<one SELECT query, LIMIT 100 unless asking for a total/count>",'
-        '"restatement":"<one plain sentence of what the query returns, no jargon>"}'
+        '"restatement":"<one plain sentence of what the query returns, no jargon>",'
+        '"assumptions":["<any assumption you made, e.g. how you read a vague term '
+        'or date range; empty list if none>"]}'
     )
-    raw = await provider.complete(system, question, json_mode=True)
-    try:
-        return parse_json(raw)
-    except Exception:
-        raw = await provider.complete(
-            system + "\nReturn ONLY valid JSON.", question, json_mode=True
+    result = parse_sql_output(
+        await provider.complete(system, question, json_mode=True, schema=SQL_SCHEMA)
+    )
+    if not result["sql"]:
+        # Retry once if the model returned nothing usable.
+        result = parse_sql_output(
+            await provider.complete(
+                system + "\nReturn ONLY valid JSON.",
+                question,
+                json_mode=True,
+                schema=SQL_SCHEMA,
+            )
         )
-        return parse_json(raw)
+    return result
 
 
 async def generate_glossary(provider, schema_text):

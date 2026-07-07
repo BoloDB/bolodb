@@ -3,6 +3,7 @@
   import { apiCall } from '$lib/api';
   import Button from '$lib/components/ui/Button.svelte';
   import Spinner from '$lib/components/ui/Spinner.svelte';
+  import { onMount } from 'svelte';
 
   let { engine, setEngine, modelName, setModelName, onClose, onDisconnect }:
     { engine: string; setEngine: (e: string) => void; modelName: string; setModelName: (m: string) => void; onClose: () => void; onDisconnect?: () => void } = $props();
@@ -12,17 +13,57 @@
   let apiKey = $state('');
   let saving = $state(false);
   let error = $state('');
+  let keysSet: Record<string, string> = $state({});
+  let editingKey = $state(false);
   const prov = $derived(providers.find(p => p.id === sel)!);
+  const currentKeyIsSet = $derived(!!(keysSet[sel]));
+
+  onMount(async () => {
+    try {
+      const s = await apiCall('/api/state');
+      if (s.config?.api_keys_set) {
+        keysSet = s.config.api_keys_set;
+      }
+    } catch {}
+  });
+
+  // Reset editing state when switching providers
+  $effect(() => {
+    sel; // track
+    editingKey = false;
+    apiKey = '';
+  });
 
   async function save() {
     saving = true; error = '';
     try {
-      await apiCall('/api/config', { provider: sel, model: sel === 'ollama' ? localModel : '', api_key: sel !== 'ollama' ? (apiKey || undefined) : undefined });
+      const body: any = { provider: sel, model: sel === 'ollama' ? localModel : '' };
+      if (sel !== 'ollama') {
+        if (editingKey && apiKey.trim()) {
+          body.api_key = apiKey.trim();
+        }
+        // If not editing and key is set, don't send anything — preserves existing
+      }
+      await apiCall('/api/config', body);
       setEngine(sel);
       setModelName(sel === 'ollama' ? localModel : '');
       onClose();
     } catch (e: any) {
       error = e.message || 'Could not save settings.';
+      saving = false;
+    }
+  }
+
+  async function removeKey() {
+    saving = true; error = '';
+    try {
+      await apiCall('/api/config', { provider: sel, clear_api_key: true });
+      keysSet = { ...keysSet, [sel]: '' };
+      editingKey = false;
+      apiKey = '';
+      saving = false;
+    } catch (e: any) {
+      error = e.message || 'Could not remove key.';
       saving = false;
     }
   }
@@ -79,8 +120,37 @@
       {:else}
         <div>
           <div style="font-size:13px;font-weight:700;color:var(--ink-2);margin-bottom:8px">{prov.name} API key</div>
-          <input class="field mono" type="password" bind:value={apiKey}
-            placeholder={sel==='claude'?'sk-ant-•••':sel==='openai'?'sk-•••':'gsk_•••'} style="font-size:13.5px" />
+
+          {#if currentKeyIsSet && !editingKey}
+            <!-- Key is already configured -->
+            <div style="display:flex;align-items:center;gap:10px;padding:12px 15px;background:var(--brand-tint);border:1px solid var(--brand-tint-2);border-radius:var(--radius-sm);margin-bottom:10px">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" style="flex-shrink:0;color:var(--brand)"><path d="M5 12.5l4.2 4.2L19 7" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              <span style="flex:1;font-size:13.5px;font-weight:650;color:var(--brand-ink)">API key configured</span>
+              <button onclick={() => { editingKey = true; apiKey = ''; }}
+                style="font-size:12.5px;font-weight:700;color:var(--brand-ink);background:none;border:none;cursor:pointer;padding:4px 8px;border-radius:var(--radius-sm);transition:background .15s"
+                onmouseenter={(e) => (e.currentTarget as HTMLElement).style.background='var(--brand-tint-2)'}
+                onmouseleave={(e) => (e.currentTarget as HTMLElement).style.background='none'}>
+                Change
+              </button>
+              <button onclick={removeKey} disabled={saving}
+                style="font-size:12.5px;font-weight:700;color:var(--c-low-ink);background:none;border:none;cursor:pointer;padding:4px 8px;border-radius:var(--radius-sm);transition:background .15s"
+                onmouseenter={(e) => (e.currentTarget as HTMLElement).style.background='var(--c-low-tint)'}
+                onmouseleave={(e) => (e.currentTarget as HTMLElement).style.background='none'}>
+                Remove
+              </button>
+            </div>
+          {:else}
+            <!-- No key set, or user is editing -->
+            <input class="field mono" type="password" bind:value={apiKey}
+              placeholder={sel==='claude'?'sk-ant-•••':sel==='openai'?'sk-•••':'gsk_•••'} style="font-size:13.5px" />
+            {#if editingKey}
+              <button onclick={() => { editingKey = false; apiKey = ''; }}
+                style="font-size:12.5px;color:var(--faint);background:none;border:none;cursor:pointer;font-weight:600;padding:4px 0;margin-top:6px">
+                ← Cancel, keep existing key
+              </button>
+            {/if}
+          {/if}
+
           <div style="display:flex;align-items:center;gap:8px;margin-top:12px;padding:10px 13px;background:var(--c-med-tint);border-radius:var(--radius-sm);color:var(--c-med-ink);font-size:12.5px;font-weight:550">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" style="flex-shrink:0"><rect x="5" y="10.5" width="14" height="9.5" rx="2.4" stroke="currentColor" stroke-width="1.8"/><path d="M8 10.5V8a4 4 0 018 0v2.5" stroke="currentColor" stroke-width="1.8"/></svg>
             Stored locally only. Schema + question are sent to {prov.name} to generate SQL — never your table data.

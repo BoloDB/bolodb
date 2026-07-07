@@ -33,6 +33,29 @@
 
     {#if turn.thinking}
       <Thinking />
+    {:else if turn.isDirect}
+      <!-- Direct SQL execution mode -->
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:14px;margin-bottom:15px">
+        <div style="flex:1">
+          <div style="font-size:11px;font-weight:800;color:var(--faint);letter-spacing:.07em;margin-bottom:6px">DIRECT SQL</div>
+          <div style="font-size:14px;font-weight:500;line-height:1.4;color:var(--ink);font-family:var(--font-mono);word-break:break-all">{turn.sql || turn.question}</div>
+        </div>
+        <div style="flex-shrink:0">
+          <span style="display:inline-flex;align-items:center;gap:5px;padding:5px 11px;border-radius:99px;font-size:12px;font-weight:700;background:var(--surface-3);color:var(--ink-2);border:1px solid var(--border)">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none"><path d="M4 17l6-6-6-6M12 19h8" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            Direct SQL
+          </span>
+        </div>
+      </div>
+
+      {#if turn.executionError}
+        <div style="padding:14px 16px;background:var(--c-low-tint);border:1px solid #EBC6BD;border-radius:var(--radius-sm);margin-bottom:14px;font-size:13.5px;line-height:1.55;color:var(--c-low-ink)">
+          <div style="font-weight:700;margin-bottom:4px">SQL execution failed</div>
+          <div style="font-weight:500;font-family:var(--font-mono);font-size:12.5px;opacity:.85">{turn.executionError}</div>
+        </div>
+      {:else}
+        <ResultTable columns={turn.columns || []} rows={turn.rows || []} />
+      {/if}
     {:else}
       <!-- restatement + confidence -->
       <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:14px;margin-bottom:15px">

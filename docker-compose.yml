@@ -19,6 +19,7 @@ services:
       - "4321:4321"                       # Exposed to host for development
     volumes:
       - bolodb-data:/home/bolodb/.bolodb  # Persist config + knowledge DB
+      - ./data:/app/data                  # Drop local SQLite/DuckDB files here
     environment:
       - JWT_SECRET=${JWT_SECRET:?JWT_SECRET must be set}
       - PYTHONUNBUFFERED=1

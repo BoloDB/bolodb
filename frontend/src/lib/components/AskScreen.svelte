@@ -42,6 +42,37 @@
     if (!q) return;
     input = ''; loading = true;
     const id = Math.random().toString(36).slice(2, 10);
+
+    // Direct SQL mode: /sql <query>
+    const sqlMatch = q.match(/^\/sql\s+(.+)/is);
+    if (sqlMatch) {
+      const rawSql = sqlMatch[1].trim();
+      turns = [...turns, { id, question: rawSql, thinking: true, isDirect: true }];
+      try {
+        const data = await apiCall('/api/execute', { sql: rawSql });
+        const rows2d = rowsToArrays(data.columns || [], data.rows || []);
+        turns = turns.map(x => x.id === id ? {
+          ...x, thinking: false, sql: data.sql || rawSql,
+          columns: data.columns || [], rows: rows2d,
+          confidence: 'high' as const, reason: 'Direct SQL execution',
+          basedOn: false, query_id: id,
+          executionError: null, verdict: null, isDirect: true
+        } : x);
+        historyTrigger++;
+      } catch (e: any) {
+        turns = turns.map(x => x.id === id ? {
+          ...x, thinking: false, sql: rawSql,
+          columns: [], rows: [],
+          confidence: 'low' as const, reason: 'Execution failed',
+          basedOn: false, query_id: id,
+          executionError: e.message || 'SQL execution failed',
+          verdict: null, isDirect: true
+        } : x);
+      } finally { loading = false; }
+      return;
+    }
+
+    // Normal LLM query flow
     let build_context = []
     for(let turn of turns.toReversed()){
       if(build_context.length >= 2){

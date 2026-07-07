@@ -6,6 +6,7 @@ class ConfigUpdate(BaseModel):
     model: str | None = None
     ollama_url: str | None = None
     api_key: str | None = None
+    clear_api_key: bool = False
 
 
 class ConnectReq(BaseModel):
