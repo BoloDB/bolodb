@@ -71,14 +71,18 @@ def test_connect_sample_uses_result_metadata_for_recent_connection(monkeypatch):
             return "sample-db"
 
     saved = {}
-    monkeypatch.setattr(database_ctrl, "ensure_sample_db", lambda: "sqlite:///sample.db")
+    monkeypatch.setattr(
+        database_ctrl, "ensure_sample_db", lambda: "sqlite:///sample.db"
+    )
     monkeypatch.setattr(
         database_ctrl.mdb,
         "save_recent_connection",
         lambda **kwargs: saved.update(kwargs),
     )
 
-    result = asyncio.run(database_ctrl.connect_sample(DummyDB(), DummyKB(), {}, user_id="u1"))
+    result = asyncio.run(
+        database_ctrl.connect_sample(DummyDB(), DummyKB(), {}, user_id="u1")
+    )
 
     assert result["is_sample"] is True
     assert saved["dialect"] == "sqlite"
