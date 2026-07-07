@@ -217,12 +217,7 @@ class GroqProvider(APIKeyProvider):
                 {"role": "user", "content": user},
             ],
         }
-        if schema is not None:
-            body["response_format"] = {
-                "type": "json_schema",
-                "json_schema": {"name": "sql_output", "strict": True, "schema": schema},
-            }
-        elif json_mode:
+        if schema is not None or json_mode:
             body["response_format"] = {"type": "json_object"}
         async with httpx.AsyncClient(timeout=30) as c:
             r = await c.post(
