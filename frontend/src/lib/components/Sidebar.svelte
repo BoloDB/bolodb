@@ -13,7 +13,6 @@
   let openTable: string | null = $state(null);
   let history: HistoryEntry[] = $state([]);
   let openHistory: boolean = $state(true);
-  let hoveredHistoryId: string | null = $state(null);
 
   const schemaData = $derived(schema || defaultSchema);
   const dbLabel = $derived(dbInfo ? (dbInfo.url || '').split('/').pop() || dbInfo.dialect || 'your database' : 'your database');
@@ -112,14 +111,12 @@
            <div class="mono" style="font-size:11.5px;color:var(--faint);padding:3px 0;font-style:italic">No history yet</div>
         {:else}
           {#each history as h (h._id)}
-            <div role="presentation" onmouseenter={() => hoveredHistoryId = h._id} onmouseleave={() => hoveredHistoryId = null} style="position:relative;margin-bottom:2px">
+            <div class="group" style="position:relative;margin-bottom:2px">
               <button onclick={() => onHistorySelect && onHistorySelect(h)} style="width:100%;text-align:left;background:transparent;border:none;padding:5px 0;cursor:pointer;display:flex;align-items:center;gap:8px">
                 <span style="width:4px;height:4px;border-radius:99px;background:{h.confidence==='High'?'var(--brand)':h.confidence==='Medium'?'var(--c-med)':'var(--border-2)'};flex-shrink:0"></span>
                 <span style="font-size:12px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1">{h.question}</span>
               </button>
-              {#if hoveredHistoryId === h._id}
-                <button onclick={(e) => { e.stopPropagation(); handleDelete(h._id); }} style="position:absolute;right:8px;top:50%;transform:translateY(-50%);background:var(--surface);border:none;color:var(--faint);cursor:pointer;padding:4px;font-size:10px;border-radius:4px;display:flex;align-items:center;justify-content:center" title="Delete">✕</button>
-              {/if}
+              <button onclick={(e) => { e.stopPropagation(); handleDelete(h._id); }} aria-label="Delete history entry" class="opacity-0 group-hover:opacity-100 focus:opacity-100 focus-visible:opacity-100 transition-opacity" style="position:absolute;right:8px;top:50%;transform:translateY(-50%);background:var(--surface);border:none;color:var(--faint);cursor:pointer;padding:4px;font-size:10px;border-radius:4px;display:flex;align-items:center;justify-content:center" title="Delete">✕</button>
             </div>
           {/each}
         {/if}
