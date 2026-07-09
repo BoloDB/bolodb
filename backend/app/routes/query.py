@@ -1,6 +1,5 @@
 import logging
-from fastapi import APIRouter, Depends
-from fastapi.concurrency import run_in_threadpool
+from fastapi import APIRouter, Depends, BackgroundTasks
 from backend.app.dependencies import (
     get_current_user,
     get_db,
@@ -16,9 +15,25 @@ log = logging.getLogger(__name__)
 router = APIRouter()
 
 
+def _save_query_task(user_id, question, sql, result, confidence):
+    import backend.app.mongodatabase as mdb
+
+    try:
+        mdb.save_query(
+            user_id=user_id,
+            question=question,
+            sql=sql,
+            result=result,
+            confidence=confidence,
+        )
+    except Exception:
+        log.warning("Failed to persist query history", exc_info=True)
+
+
 @router.post("/api/query")
 async def query(
     req: QueryReq,
+    background_tasks: BackgroundTasks,
     user_token=Depends(get_current_user),
     db=Depends(get_db),
     kb=Depends(get_kb),
@@ -29,22 +44,20 @@ async def query(
     user_id = user_token["user_id"]
     out = await ctrl.run_query(user_id, db, kb, cfg, providers, session_log, req)
 
-    import backend.app.mongodatabase as mdb
-
     if out.get("answered") and out.get("sql"):
         conf = out.get("confidence", "low")
         conf_str = "High" if conf == "high" else "Medium" if conf == "medium" else "Low"
-        try:
-            await run_in_threadpool(
-                mdb.save_query,
-                user_id=user_token["user_id"],
-                question=req.question,
-                sql=out["sql"],
-                result=out.get("rows", []),
-                confidence=conf_str,
-            )
-        except Exception:
-            log.warning("Failed to persist query history", exc_info=True)
+
+        # ⚡ Optimization: Use BackgroundTasks for fire-and-forget DB write
+        # instead of awaiting run_in_threadpool which blocks the API response.
+        background_tasks.add_task(
+            _save_query_task,
+            user_id=user_token["user_id"],
+            question=req.question,
+            sql=out["sql"],
+            result=out.get("rows", []),
+            confidence=conf_str,
+        )
     return out
 
 
