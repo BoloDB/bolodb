@@ -15,7 +15,7 @@ log = logging.getLogger(__name__)
 router = APIRouter()
 
 
-def _save_query_task(user_id, question, sql, result, confidence):
+def _safe_save_query(user_id, question, sql, result, confidence):
     import backend.app.mongodatabase as mdb
 
     try:
@@ -27,7 +27,7 @@ def _save_query_task(user_id, question, sql, result, confidence):
             confidence=confidence,
         )
     except Exception:
-        log.warning("Failed to persist query history", exc_info=True)
+        log.warning("Failed to persist query history in background", exc_info=True)
 
 
 @router.post("/api/query")
@@ -47,11 +47,8 @@ async def query(
     if out.get("answered") and out.get("sql"):
         conf = out.get("confidence", "low")
         conf_str = "High" if conf == "high" else "Medium" if conf == "medium" else "Low"
-
-        # ⚡ Optimization: Use BackgroundTasks for fire-and-forget DB write
-        # instead of awaiting run_in_threadpool which blocks the API response.
         background_tasks.add_task(
-            _save_query_task,
+            _safe_save_query,
             user_id=user_token["user_id"],
             question=req.question,
             sql=out["sql"],

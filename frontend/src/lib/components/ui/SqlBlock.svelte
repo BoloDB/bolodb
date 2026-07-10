@@ -1,6 +1,41 @@
 <script lang="ts">
   let { sql }: { sql: string } = $props();
   let open = $state(false);
+  let copied = $state(false);
+  let copiedTimer: ReturnType<typeof setTimeout> | undefined;
+
+  function copySQL() {
+    const fallbackCopy = () => {
+      const ta = document.createElement("textarea");
+      ta.value = sql;
+      ta.style.position = "fixed";
+      ta.style.opacity = "0";
+      document.body.appendChild(ta);
+      ta.select();
+      try {
+        if (document.execCommand("copy")) {
+          copied = true;
+          clearTimeout(copiedTimer);
+          copiedTimer = setTimeout(() => (copied = false), 2000);
+        }
+      } finally {
+        document.body.removeChild(ta);
+      }
+    };
+
+    if (navigator.clipboard?.writeText) {
+      navigator.clipboard
+        .writeText(sql)
+        .then(() => {
+          copied = true;
+          clearTimeout(copiedTimer);
+          copiedTimer = setTimeout(() => (copied = false), 2000);
+        })
+        .catch(fallbackCopy);
+      return;
+    }
+    fallbackCopy();
+  }
 </script>
 
 <div style="margin-top:2px">
@@ -12,6 +47,16 @@
     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" style="transform:{open ? 'rotate(180deg)' : 'none'};transition:transform .2s"><path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"/></svg>
   </button>
   {#if open}
-    <pre class="mono" style="margin:8px 0 0;padding:14px 16px;background:var(--surface-3);border:1px solid var(--border);border-radius:var(--radius-sm);font-size:12.5px;line-height:1.6;color:var(--ink-2);overflow-x:auto;white-space:pre;animation:rise .25s var(--ease) both">{sql}</pre>
+    <div style="position:relative;margin:8px 0 0;animation:rise .25s var(--ease) both">
+      <pre class="mono" style="margin:0;padding:14px 16px;background:var(--surface-3);border:1px solid var(--border);border-radius:var(--radius-sm);font-size:12.5px;line-height:1.6;color:var(--ink-2);overflow-x:auto;white-space:pre">{sql}</pre>
+      <button
+        onclick={copySQL}
+        title="Copy SQL query"
+        aria-live="polite"
+        style="position:absolute;top:8px;right:8px;display:inline-flex;align-items:center;gap:5px;padding:4px 8px;border-radius:4px;background:{copied ? 'var(--brand-tint)' : 'var(--surface)'};border:1px solid {copied ? 'var(--brand-tint-2)' : 'var(--border-2)'};color:{copied ? 'var(--brand-ink)' : 'var(--faint)'};font-size:11px;font-weight:650;cursor:pointer;transition:all .15s"
+      >
+        {copied ? "✓ Copied!" : "Copy"}
+      </button>
+    </div>
   {/if}
 </div>
