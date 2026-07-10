@@ -94,7 +94,7 @@ The test suite needs no network and no API key — all AI calls are faked.
 
 ## Privacy
 
-- All learned knowledge and user settings are stored locally (`~/.bolodb/`) and in the local MongoDB container volume.
+- All learned knowledge and user settings are stored locally (`~/.bolodb/`) and in the local MongoDB container volume. The Gemini API key is encrypted at rest.
 - Only the schema and your question are sent to the AI to generate SQL — never your row data.
 - Queries run strictly read-only.
 - No telemetry, no cloud sync.

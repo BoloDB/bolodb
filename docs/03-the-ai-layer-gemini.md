@@ -39,9 +39,12 @@ choice also changes how much schema the prompt may contain — see
 
 - Get a free key at https://aistudio.google.com/apikey.
 - Enter it during onboarding (`ConnectScreen.svelte`, step 1) or later in
-  Settings. It is saved **locally only**, in `~/.bolodb/config.json`
-  (`backend/app/config.py` → `save_config()`); the frontend is never shown the
-  key itself, only whether one is set (`public_config()`).
+  Settings. It is saved **locally only**, in `~/.bolodb/config.json`, and
+  **encrypted at rest**: a per-install secret (`~/.bolodb/.secret`, generated
+  once, owner-only file permissions) encrypts the key before it is written and
+  decrypts it on load (`backend/app/config.py` → `save_config()` /
+  `load_config()`). The frontend is never shown the key itself, only whether
+  one is set (`public_config()`).
 - Deployments can instead set the `GEMINI_API_KEY` environment variable —
   picked up in `load_config()`. A key saved in Settings wins over the
   environment variable.

@@ -92,7 +92,7 @@ learning SQL.
 
 | Artifact | Location | Written by |
 |---|---|---|
-| Settings (model, API key) | `~/.bolodb/config.json` | `backend/app/config.py` |
+| Settings (model, API key — key encrypted at rest) | `~/.bolodb/config.json` + `~/.bolodb/.secret` | `backend/app/config.py` |
 | Verified answers + glossary | `~/.bolodb/knowledge.db` | `backend/app/knowledge.py` |
 | Session query/feedback log | `~/.bolodb/sessions/session-*.jsonl` | `backend/app/logbook.py` |
 | Per-user query history | MongoDB (Docker volume) | `backend/app/mongodatabase.py` |

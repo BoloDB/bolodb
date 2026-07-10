@@ -123,6 +123,16 @@ Model names get retired. The allowed list lives in one place —
 `frontend/src/lib/components/Settings.svelte` mirrors it. Update both when
 Google renames models.
 
+### The saved API key stopped working after files were moved/restored
+
+The key in `config.json` is encrypted with the per-install secret in
+`~/.bolodb/.secret` (`backend/app/config.py` → `_fernet()`). If `.secret` is
+deleted or the config is copied to another machine without it, the stored key
+can no longer be decrypted — Gemini will reject it as invalid.
+**Fix:** re-enter the key in Settings (it gets re-encrypted with the current
+secret). When backing up `~/.bolodb`, keep `config.json` and `.secret`
+together.
+
 ### Old config from the multi-provider era
 
 Config files written before the Gemini-only switch (provider `ollama` /
