@@ -5,14 +5,22 @@
   import ResultTable from '$lib/components/ui/ResultTable.svelte';
   import SqlBlock from '$lib/components/ui/SqlBlock.svelte';
   import Button from '$lib/components/ui/Button.svelte';
+  import ChartToggle from '$lib/components/ui/ChartToggle.svelte';
+  import ResultChart from '$lib/components/charts/ResultChart.svelte';
   import Thinking from '$lib/components/Thinking.svelte';
   import Flywheel from '$lib/components/Flywheel.svelte';
+  import { detectChartData } from '$lib/components/charts/chartUtils';
 
   let { turn, onVerify, isLatest }:
     { turn: Turn; onVerify: (id: string, verdict: string, reason: string | null) => void; isLatest: boolean } = $props();
 
   let showReasons = $state(false);
   let justVerified = $state(false);
+  let viewMode = $state<'table' | 'chart'>('table');
+
+  const hasChartData = $derived(
+    detectChartData(turn.columns || [], (turn.rows || []).map(r => r.map(String))) !== null
+  );
 
   function yes() { justVerified = true; onVerify(turn.id, 'correct', null); setTimeout(() => justVerified = false, 1600); }
   function no(reason: string) { showReasons = false; onVerify(turn.id, 'wrong', reason); }
@@ -98,7 +106,16 @@
       {/if}
 
       {#if !turn.executionError}
-        <ResultTable columns={turn.columns || []} rows={turn.rows || []} />
+        <div style="display:flex;align-items:center;justify-content:flex-end;margin-bottom:8px;gap:6px;">
+          {#if hasChartData}
+            <ChartToggle mode={viewMode} onToggle={() => viewMode = viewMode === 'table' ? 'chart' : 'table'} />
+          {/if}
+        </div>
+        {#if viewMode === 'chart' && hasChartData}
+          <ResultChart columns={turn.columns || []} rows={(turn.rows || []).map(r => r.map(String))} />
+        {:else}
+          <ResultTable columns={turn.columns || []} rows={turn.rows || []} />
+        {/if}
       {/if}
       <SqlBlock sql={turn.sql || ''} />
 
