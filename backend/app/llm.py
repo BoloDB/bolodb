@@ -270,6 +270,7 @@ async def generate_sql(
     retrieved,
     max_examples=3,
     context=None,
+    feedback="",
 ):
     if context is None:
         context = []
@@ -321,6 +322,8 @@ async def generate_sql(
         '"assumptions":["<any assumption you made, e.g. how you read a vague term '
         'or date range; empty list if none>"]}'
     )
+    if feedback:
+        system += f"\n\nPrevious attempt had errors — correct them:\n{feedback}\nReturn ONLY the corrected JSON."
     result = parse_sql_output(
         await provider.complete(system, question, json_mode=True, schema=SQL_SCHEMA)
     )
