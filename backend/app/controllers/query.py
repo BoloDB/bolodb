@@ -360,7 +360,6 @@ async def run_query_stream(user_id, db, kb, cfg, providers, session_log, req_dat
 
         sql = (gen_result.get("sql") or "").strip()
         restatement = (gen_result.get("restatement") or "").strip()
-        last_sql = sql
         last_restatement = restatement
 
         if not sql:
