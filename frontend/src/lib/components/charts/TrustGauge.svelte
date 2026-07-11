@@ -19,18 +19,19 @@
 </script>
 
 <div style="display:flex;flex-direction:column;align-items:center;padding:8px 0;">
-  <div style="width:200px;height:120px;">
+  <div style="width:180px;height:180px;">
     <ArcChart
       data={[{ key: 'progress', label: 'Progress', value: progress * 100 }]}
       key="key"
       label="label"
       value="value"
       maxValue={100}
-      range={[225, -45]}
-      innerRadius={0.6}
+      range={[0, 360]}
+      innerRadius={0.65}
       outerRadius={0.9}
       cornerRadius={8}
       padAngle={0}
+      tooltipContext={false}
       series={[{ key: 'progress', color: barColor }]}
       props={{ arc: { track: { fill: 'var(--surface-3)', fillOpacity: 1 } } }}
     />
