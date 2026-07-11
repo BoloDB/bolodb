@@ -271,9 +271,13 @@ class GeminiProvider(LLMProvider):
             generation_config["responseSchema"] = to_gemini_schema(schema)
         elif json_mode:
             generation_config["responseMimeType"] = "application/json"
-        # thinkingConfig only exists on 2.5-series models; sending it to older
-        # models is a hard 400, so gate on the model name.
-        if thinking_budget is not None and "2.5" in self.model:
+        # thinkingConfig is supported on Gemini 2.5+, 3.x, and Gemma 4+.
+        # Sending it to older models (1.x, pre-2.5) is a hard 400, so we
+        # gate on known unsupported prefixes.
+        _NO_THINKING = ("1.0", "1.5", "gemini-1")
+        if thinking_budget is not None and not any(
+            p in self.model for p in _NO_THINKING
+        ):
             generation_config["thinkingConfig"] = {"thinkingBudget": thinking_budget}
         return {
             "system_instruction": {"parts": [{"text": system}]},

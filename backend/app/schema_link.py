@@ -41,18 +41,20 @@ _FK_EXTRA_SLOTS = 4  # how many tables FK expansion may add beyond max_tables
 
 
 def model_budget(model):
-    """Prompt budget for the configured Gemini model.
+    """Prompt budget for the configured model.
 
-    All Gemini models have huge context windows, so the limit here is not what
-    *fits* but what keeps cost low and accuracy high — more schema than needed
-    measurably degrades text-to-SQL quality. Bigger models get a bigger budget
-    because they are better at ignoring irrelevant tables.
+    All supported models have large context windows, so the limit here is not
+    what *fits* but what keeps cost low and accuracy high — more schema than
+    needed measurably degrades text-to-SQL quality. Bigger models get a bigger
+    budget because they are better at ignoring irrelevant tables.
     """
     m = (model or "").lower()
     if "lite" in m:
         return {"tier": "lite", "max_tables": 12, "samples": 1, "max_examples": 3}
     if "pro" in m:
         return {"tier": "pro", "max_tables": 25, "samples": 2, "max_examples": 5}
+    if "gemma" in m:
+        return {"tier": "gemma", "max_tables": 15, "samples": 1, "max_examples": 3}
     return {"tier": "flash", "max_tables": 20, "samples": 2, "max_examples": 5}
 
 
