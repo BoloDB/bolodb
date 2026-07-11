@@ -3,6 +3,7 @@
   import { apiCall } from "$lib/api";
   import { humanError } from "$lib/data";
   import type { DbInfo } from "$lib/types";
+  import posthog from "posthog-js";
   import Logo from "$lib/components/ui/Logo.svelte";
   import Button from "$lib/components/ui/Button.svelte";
   import Spinner from "$lib/components/ui/Spinner.svelte";
@@ -76,8 +77,10 @@
       keyIsSet = true;
       editingKey = false;
       geminiKey = "";
+      posthog.capture("api_key_configured", { provider: "gemini" });
     } catch (e: any) {
       keyError = e.message || "Could not save the API key.";
+      posthog.captureException(e);
     }
     keySaving = false;
   }
@@ -109,6 +112,11 @@
       let res: DbInfo;
       if (kind === "sample") {
         res = await apiCall("/api/connect-sample", {});
+        posthog.capture("database_connected", {
+          is_sample: true,
+          dialect: res.dialect,
+          table_count: res.tables,
+        });
       } else {
         const url = formMode ? buildUrl() : dbUrl.trim();
         if (!url) {
@@ -117,12 +125,18 @@
           return;
         }
         res = await apiCall("/api/connect", { db_url: url });
+        posthog.capture("database_connected", {
+          is_sample: false,
+          dialect: res.dialect,
+          table_count: res.tables,
+        });
       }
       onConnect(kind === "sample", res);
     } catch (e: any) {
       error =
         humanError(e.message) ||
         "Connection failed — check your details and try again.";
+      posthog.captureException(e);
       connecting = null;
     }
   }
@@ -134,11 +148,16 @@
       const res: DbInfo = await apiCall("/api/reconnect", {
         db_id: conn.db_id,
       });
+      posthog.capture("database_reconnected", {
+        dialect: conn.dialect,
+        table_count: conn.table_count,
+      });
       onConnect(false, res);
     } catch (e: any) {
       error =
         humanError(e.message) ||
         "Reconnection failed — the database may no longer be available.";
+      posthog.captureException(e);
       reconnecting = null;
     }
   }
@@ -401,18 +420,18 @@
                 onclick={saveGeminiKey}
               >
                 {#snippet icon()}{#if keySaving}<Spinner />{:else}<svg
-                    width="16"
-                    height="16"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    ><path
-                      d="M5 12.5l4.2 4.2L19 7"
-                      stroke="currentColor"
-                      stroke-width="2.3"
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                    /></svg
-                  >{/if}{/snippet}
+                      width="16"
+                      height="16"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      ><path
+                        d="M5 12.5l4.2 4.2L19 7"
+                        stroke="currentColor"
+                        stroke-width="2.3"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      /></svg
+                    >{/if}{/snippet}
                 {keySaving ? "Saving…" : "Save key"}
               </Button>
             </div>

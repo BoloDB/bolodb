@@ -2,6 +2,7 @@ import { trustFor, schemaObjToDisplay } from "$lib/data";
 import { apiCall } from "$lib/api";
 import type { DbInfo, SchemaTable, Toast } from "$lib/types";
 import { goto } from "$app/navigation";
+import { browser } from "$app/environment";
 
 class AppState {
   engine = $state("gemini");
@@ -88,6 +89,11 @@ class AppState {
     try {
       await apiCall("/api/auth/logout", {});
     } catch {}
+    if (browser) {
+      const { default: posthog } = await import("posthog-js");
+      posthog.capture("user_logged_out");
+      posthog.reset();
+    }
     this.dbInfo = null;
     this.realSchema = null;
     this.verifiedCount = 0;
@@ -121,6 +127,13 @@ class AppState {
       if (s.starters) this.starters = s.starters;
     } catch {
       this.verifiedCount = seedCount;
+    }
+    if (browser) {
+      const { default: posthog } = await import("posthog-js");
+      posthog.capture("onboarding_completed", {
+        seed_count: seedCount,
+        dialect: this.dbInfo?.dialect,
+      });
     }
     goto("/chat");
   }
