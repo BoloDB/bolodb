@@ -12,7 +12,7 @@ async def connect(db, kb, cfg, req_data, user_id=None):
     result = db.connect(user_id, req_data.db_url)
     if not result["ok"]:
         raise HTTPException(400, result["error"])
-    cfg["last_db_url"] = req_data.db_url
+    cfg["last_db_url"] = cfgmod.encrypt_db_url(req_data.db_url)
     cfgmod.save_config(cfg)
     db_id = result["db_id"]
     result["trust"] = kb.trust_level(db_id)
