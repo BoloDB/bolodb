@@ -27,6 +27,7 @@ from backend.app.schema_link import (
     model_budget,
 )
 from backend.app.sqlvalidate import validate_sql
+import backend.app.mongodatabase as mdb
 
 log = logging.getLogger(__name__)
 
@@ -294,7 +295,7 @@ async def run_query_stream(user_id, db, kb, cfg, providers, session_log, req_dat
 
     glossary = kb.get_glossary(db.get_db_id(user_id))
     retrieved = kb.retrieve_similar(db.get_db_id(user_id), q, k=3)
-    budget = model_budget(cfg.get("provider", "ollama"), cfg.get("model", ""))
+    budget = model_budget(cfg.get("model", ""))
     full_schema = db.get_schema(user_id)
     context_tables = (
         extract_table_names_from_prev_query(context[-1].sql, db.get_dialect(user_id))
@@ -452,5 +453,28 @@ async def run_query_stream(user_id, db, kb, cfg, providers, session_log, req_dat
     if "error" in exec_result:
         out["execution_error"] = exec_result["error"]
     out["query_id"] = session_log.log_query(db.get_db_id(user_id), q, out)
+
+    # Persist to query history so the dashboard and history reflect streamed
+    # queries too (the /api/query/stream route can't save after the response
+    # has started streaming, so we do it here — mirrors the non-streaming route).
+    if out.get("sql") and not out.get("execution_error"):
+        conf_str = (
+            "High"
+            if confidence == "high"
+            else "Medium"
+            if confidence == "medium"
+            else "Low"
+        )
+        try:
+            await run_in_threadpool(
+                mdb.save_query,
+                user_id=user_id,
+                question=q,
+                sql=out["sql"],
+                result=out.get("rows", []),
+                confidence=conf_str,
+            )
+        except Exception:
+            log.warning("Failed to persist streamed query history", exc_info=True)
 
     yield {"kind": "result", "data": out}

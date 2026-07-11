@@ -581,11 +581,6 @@ async def generate_sql(
     system = build_sql_system_prompt(
         schema_text, dialect, glossary, retrieved, max_examples, context
     )
-    if context is None:
-        context = []
-    system = build_sql_system_prompt(
-        schema_text, dialect, glossary, retrieved, max_examples, context
-    )
     user = question if not feedback else f"{question}\n\n{feedback}"
     result = parse_sql_output(
         await provider.complete(system, user, json_mode=True, schema=SQL_SCHEMA)

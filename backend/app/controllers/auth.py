@@ -31,6 +31,10 @@ def login(email: EmailStr, password: str):
     user_details = get_user_by_email(email)
     if user_details is None:
         raise HTTPException(status_code=401, detail="Invalid credentials")
+    # Google-only accounts have no password hash; reject cleanly instead of
+    # letting bcrypt raise on an empty salt (which would surface as a 500).
+    if not user_details.get("hashed_pass"):
+        raise HTTPException(status_code=401, detail="Invalid credentials")
     user_bytes = password.encode()
     if bcrypt.checkpw(user_bytes, user_details["hashed_pass"].encode("utf-8")):
         return create_jwt(str(user_details["_id"]), user_details["role"])
@@ -93,6 +97,12 @@ def google_login(id_token_str, client_id):
     email = user_info.get("email", "")
     if not email:
         raise HTTPException(status_code=400, detail="Google account has no email")
+
+    # Only trust the email once Google says it is verified. Without this,
+    # a token carrying an unverified email could be used to link into — and
+    # take over — an existing password account that happens to share it.
+    if user_info.get("email_verified", False) not in (True, "true", "True"):
+        raise HTTPException(status_code=401, detail="Google email is not verified")
 
     existing = get_user_by_google_id(google_id)
     if existing:
