@@ -41,7 +41,11 @@ async def query(
                 sql=out["sql"],
                 result=out.get("rows", []),
                 confidence=conf_str,
+                conversation_id=req.conversation_id,
+                restatement=out.get("restatement", ""),
             )
+            if req.conversation_id:
+                await run_in_threadpool(mdb.touch_conversation, req.conversation_id)
         except Exception:
             log.warning("Failed to persist query history", exc_info=True)
     return out

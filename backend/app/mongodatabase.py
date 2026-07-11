@@ -106,7 +106,9 @@ def serialize_doc(doc):
     return doc
 
 
-def save_query(user_id, question, sql, result, confidence):
+def save_query(
+    user_id, question, sql, result, confidence, conversation_id=None, restatement=""
+):
     history = db["query_history"]
     doc = {
         "user_id": str(user_id),
@@ -114,8 +116,11 @@ def save_query(user_id, question, sql, result, confidence):
         "sql": sql,
         "result": result,
         "confidence": confidence,
+        "restatement": restatement,
         "timestamp": datetime.utcnow(),
     }
+    if conversation_id:
+        doc["conversation_id"] = str(conversation_id)
     history.insert_one(doc)
 
 
@@ -282,3 +287,110 @@ def get_recent_connection_by_db_id(user_id, db_id):
     if doc and "db_url" in doc:
         doc["db_url"] = _decrypt_connection_url(doc["db_url"])
     return serialize_doc(doc) if doc else None
+
+
+# ---------------------------------------------------------------------------
+# Conversations
+# ---------------------------------------------------------------------------
+
+
+def create_conversation(user_id, title="", database_id=None):
+    conversations = db["conversations"]
+    now = datetime.utcnow()
+    doc = {
+        "user_id": str(user_id),
+        "title": title,
+        "database_id": database_id,
+        "created_at": now,
+        "updated_at": now,
+    }
+    result = conversations.insert_one(doc)
+    doc["_id"] = result.inserted_id
+    return serialize_doc(doc)
+
+
+def get_conversations(user_id):
+    conversations = db["conversations"]
+    history = db["query_history"]
+    cursor = conversations.find({"user_id": str(user_id)}).sort("updated_at", -1)
+    results = []
+    for conv in cursor:
+        conv = serialize_doc(conv)
+        # Count turns and get last question
+        turn_count = history.count_documents({"conversation_id": conv["_id"]})
+        last_turn = history.find_one(
+            {"conversation_id": conv["_id"]},
+            sort=[("timestamp", -1)],
+        )
+        conv["turn_count"] = turn_count
+        conv["last_question"] = last_turn["question"] if last_turn else ""
+        results.append(conv)
+    return results
+
+
+def get_conversation(user_id, conversation_id):
+    conversations = db["conversations"]
+    try:
+        oid = ObjectId(conversation_id)
+    except (InvalidId, TypeError):
+        return None
+    conv = conversations.find_one({"_id": oid, "user_id": str(user_id)})
+    if not conv:
+        return None
+    conv = serialize_doc(conv)
+    # Fetch turns
+    history = db["query_history"]
+    cursor = history.find({"conversation_id": conv["_id"]}).sort("timestamp", 1)
+    conv["turns"] = [serialize_doc(doc) for doc in cursor]
+    return conv
+
+
+def rename_conversation(user_id, conversation_id, title):
+    conversations = db["conversations"]
+    try:
+        oid = ObjectId(conversation_id)
+    except (InvalidId, TypeError):
+        return False
+    result = conversations.update_one(
+        {"_id": oid, "user_id": str(user_id)},
+        {"$set": {"title": title, "updated_at": datetime.utcnow()}},
+    )
+    return result.modified_count > 0
+
+
+def touch_conversation(conversation_id):
+    """Update the updated_at timestamp (called after each new turn)."""
+    conversations = db["conversations"]
+    try:
+        oid = ObjectId(conversation_id)
+    except (InvalidId, TypeError):
+        return
+    conversations.update_one(
+        {"_id": oid},
+        {"$set": {"updated_at": datetime.utcnow()}},
+    )
+
+
+def delete_conversation(user_id, conversation_id):
+    conversations = db["conversations"]
+    history = db["query_history"]
+    try:
+        oid = ObjectId(conversation_id)
+    except (InvalidId, TypeError):
+        return False
+    result = conversations.delete_one({"_id": oid, "user_id": str(user_id)})
+    if result.deleted_count > 0:
+        # Cascade delete turns
+        history.delete_many({"conversation_id": conversation_id})
+        return True
+    return False
+
+
+def clear_conversations(user_id):
+    conversations = db["conversations"]
+    history = db["query_history"]
+    conv_cursor = conversations.find({"user_id": str(user_id)}, {"_id": 1})
+    conv_ids = [str(c["_id"]) for c in conv_cursor]
+    conversations.delete_many({"user_id": str(user_id)})
+    if conv_ids:
+        history.delete_many({"conversation_id": {"$in": conv_ids}})

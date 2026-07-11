@@ -23,6 +23,7 @@ class ContextTurn(BaseModel):
 class QueryReq(BaseModel):
     question: str
     context: list[ContextTurn] = []
+    conversation_id: str | None = None
 
 
 class VerifyReq(BaseModel):
