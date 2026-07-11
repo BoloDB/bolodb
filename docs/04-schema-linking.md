@@ -102,6 +102,15 @@ for small text columns) · `~38104 rows` = approximate size.
 Those `[values]` matter more than they look: they're why the AI writes
 `WHERE status = 'completed'` instead of guessing `WHERE status = 'complete'`.
 
+## Current limitation: the 40-table introspection cap
+
+Schema linking can only rank tables that introspection collected, and
+`get_schema()` (`backend/app/database.py`, constant `MAX_T`) currently stops
+at the **first 40 tables**. On a database larger than that, tables beyond the
+cap are invisible to both scoring and the AI. The fix — collecting structure
+for every table and capping only the expensive sampling — lands in the
+follow-up schema-linking PR.
+
 ## Debugging: which tables were picked, and why?
 
 - Every `/api/query` response includes `tables_used` — the exact list that

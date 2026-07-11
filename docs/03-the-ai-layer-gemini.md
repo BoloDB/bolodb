@@ -64,7 +64,9 @@ in `build_sql_system_prompt()` in `llm.py`, in this order:
    *sample values* for short text columns (e.g. `status[completed,pending]`)
    and optionally one sample row per table.
 3. **Your confirmed glossary terms** (`_glossary_block()`).
-4. **Up to 5 previously verified Q→SQL examples** (`_examples_block()`).
+4. **The most similar previously verified Q→SQL examples** — up to 3 (the
+   retrieval in `run_query` uses `retrieve_similar(k=3)`; the model budget's
+   `max_examples` caps it further for lite models) (`_examples_block()`).
 5. **The last 2 conversation turns**, for follow-up questions
    (`_context_block()`).
 6. **Your question** (plus, on repair attempts, the error to fix).
@@ -122,8 +124,10 @@ The product decision today is: **users don't choose the AI — it's Gemini.**
 But the code keeps the door open. To add another vendor later:
 
 1. Write a class in `llm.py` implementing the two-method `LLMProvider`
-   interface: `complete(system, user, json_mode, schema)` and
-   `health_check()`.
+   interface:
+   `complete(system, user, json_mode=False, schema=None, thinking_budget=None)`
+   (a provider without a thinking concept may accept and ignore
+   `thinking_budget`) and `health_check()`.
 2. Add a branch for it in `create_provider()`.
 3. Add its name to the config/Settings surface
    (`backend/app/config.py`, `backend/app/controllers/system.py`,

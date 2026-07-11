@@ -30,10 +30,13 @@ against your database, and shows you:
   isn't a plain SELECT (code: `backend/app/database.py` →
   `_readonly_violation()`), and we recommend connecting with a read-only
   database account as a third layer.
-- When the AI is asked to write SQL, it is sent your **database structure**
-  (table names, column names, a few sample values) and your **question** —
-  never the rows inside your tables. The results of queries stay on your
-  machine.
+- When the AI is asked to write SQL, it is sent your **question** plus the
+  context BoloDB builds around it: the **database structure** (table and
+  column names, keys), a few **sample values and sample rows** per table (so
+  the AI matches your wording to real data), your confirmed **glossary
+  terms**, previously **verified question→SQL examples**, and the last couple
+  of conversation turns. It is **never** sent bulk table contents, query
+  results, or credentials — see chapter 3 for the exact prompt contents.
 
 ### 2. You can trust the answers — and check them
 
