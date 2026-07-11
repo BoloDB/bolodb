@@ -65,7 +65,7 @@
       <span style="flex:1;height:1px;background:var(--border)"></span>
     </div>
 
-    <GoogleSignIn onSuccess={onLogin} mode="signin" />
+    <GoogleSignIn onSuccess={onLogin} />
 
     <div style="text-align:center;margin-top:24px;font-size:13.5px;color:var(--muted)">
       Don't have an account? <a href="/signup" style="color:var(--brand-ink);font-weight:650;text-decoration:none">Sign up</a>

@@ -27,6 +27,7 @@ services:
       - RUNNING_IN_DOCKER=true
       - MONGO_URI=mongodb://mongodb:27017
       - OLLAMA_URL=http://host.docker.internal:11434
+      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
     extra_hosts:
       - "host.docker.internal:host-gateway"
     networks:
