@@ -40,7 +40,7 @@ _MAX_VALUE_POINTS = 4.0
 _FK_EXTRA_SLOTS = 4  # how many tables FK expansion may add beyond max_tables
 
 
-def model_budget(provider, model):
+def model_budget(model):
     """Prompt budget for the configured Gemini model.
 
     All Gemini models have huge context windows, so the limit here is not what

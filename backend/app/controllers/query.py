@@ -68,7 +68,7 @@ async def run_query(user_id, db, kb, cfg, providers, session_log, req_data):
     retrieved = kb.retrieve_similar(db_id, q, k=3)
 
     # Step 2 — schema linking: budget for the configured model, then pick tables.
-    budget = model_budget(cfg.get("provider", "gemini"), cfg.get("model", ""))
+    budget = model_budget(cfg.get("model", ""))
     full_schema = db.get_schema(user_id)
     dialect = db.get_dialect(user_id)
     context_tables = (
