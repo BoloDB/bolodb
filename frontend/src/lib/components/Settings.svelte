@@ -11,12 +11,12 @@
   // Which Gemini model answers questions. Ordered cheapest → most capable;
   // must stay in sync with ALLOWED_MODELS in backend/app/config.py.
   const MODELS = [
-    { id: 'gemini-2.5-flash-lite', label: 'Fastest & cheapest — fine for small, simple databases' },
-    { id: 'gemini-2.5-flash', label: 'Balanced — recommended for most uses (default)' },
-    { id: 'gemini-2.5-pro', label: 'Most accurate — for large schemas and hard questions' },
+    { id: 'gemini-3.1-flash-lite', label: 'Fastest & cheapest — fine for small, simple databases' },
+    { id: 'gemini-flash-latest', label: 'Balanced — recommended for most uses (default)' },
+    { id: 'gemma-4-26b-a4b-it', label: 'Most accurate — for large schemas and hard questions' },
   ];
 
-  let model = $state( (() => modelName || 'gemini-2.5-flash')() );
+  let model = $state( (() => modelName || 'gemini-flash-latest')() );
   let apiKey = $state('');
   let saving = $state(false);
   let error = $state('');

@@ -31,13 +31,13 @@ CONFIG_FILE = CONFIG_DIR / "config.json"
 SECRET_FILE = CONFIG_DIR / ".secret"
 KB_FILE = CONFIG_DIR / "knowledge.db"
 
-DEFAULT_MODEL = "gemini-2.5-flash"
+DEFAULT_MODEL = "gemini-flash-latest"
 
 # Models the Settings API accepts. Ordered cheapest → most capable.
 ALLOWED_MODELS = (
-    "gemini-2.5-flash-lite",  # cheapest; fine for small, simple databases
-    "gemini-2.5-flash",  # default; best cost/accuracy balance
-    "gemini-2.5-pro",  # most accurate; for large schemas / hard questions
+    "gemini-3.1-flash-lite",  # cheapest; fine for small, simple databases
+    "gemini-flash-latest",  # default; best cost/accuracy balance
+    "gemma-4-26b-a4b-it",  # most accurate; for large schemas / hard questions
 )
 
 DEFAULTS = {

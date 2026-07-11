@@ -40,14 +40,14 @@ def test_load_config_with_valid_file(tmp_path):
             json.dumps(
                 {
                     "provider": "gemini",
-                    "model": "gemini-2.5-pro",
+                    "model": "gemini-flash-latest",
                     "api_keys": {"gemini": "AIza-test-123"},  # legacy plaintext
                 }
             )
         )
         cfg = load_config()
         assert cfg["provider"] == "gemini"
-        assert cfg["model"] == "gemini-2.5-pro"
+        assert cfg["model"] == "gemini-flash-latest"
         # plaintext keys from pre-encryption configs are migrated to encrypted
         # form on load, and decrypt back to the original at the point of use
         assert cfg["api_keys"]["gemini"] != "AIza-test-123"

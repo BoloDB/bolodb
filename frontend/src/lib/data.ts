@@ -125,7 +125,7 @@ export const providers: Provider[] = [
     cost: "Free tier available, then pay per use",
     accuracy: "Highest",
     badge: "Default",
-    model: "gemini-2.5-flash",
+    model: "gemini-flash-latest",
     tier: "large",
   },
 ];

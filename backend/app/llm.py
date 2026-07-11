@@ -37,7 +37,7 @@ log = logging.getLogger(__name__)
 
 # The model used when the config doesn't name one. Flash is the sweet spot:
 # near-Pro accuracy on text-to-SQL at a fraction of the cost, with a free tier.
-DEFAULT_GEMINI_MODEL = "gemini-2.5-flash"
+DEFAULT_GEMINI_MODEL = "gemini-flash-latest"
 
 GEMINI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta"
 
@@ -291,8 +291,8 @@ class GeminiProvider(LLMProvider):
                     r = await client.post(
                         url,
                         headers={
-                            "x-goog-api-key": self.api_key,
-                            "content-type": "application/json",
+                            "X-goog-api-key": self.api_key,
+                            "Content-Type": "application/json",
                         },
                         json=body,
                     )
