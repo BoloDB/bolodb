@@ -58,11 +58,16 @@ export function detectChartData(
       if (numericRatio < 0.4) continue;
 
       const data = rows
-        .map((r) => ({
-          label: String(r?.[colIdx] ?? ""),
-          value: parseNumeric(String(r?.[valIdx] ?? "")) ?? 0,
-        }))
-        .filter((d) => d.label !== "" && d.value !== 0);
+        .map((r) => {
+          const parsed = parseNumeric(String(r?.[valIdx] ?? ""));
+          return parsed !== null
+            ? { label: String(r?.[colIdx] ?? ""), value: parsed }
+            : null;
+        })
+        .filter(
+          (d): d is { label: string; value: number } =>
+            d !== null && d.label !== "",
+        );
 
       if (data.length < 1) continue;
 

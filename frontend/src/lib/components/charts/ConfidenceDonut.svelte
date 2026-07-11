@@ -34,7 +34,7 @@
         innerRadius={0.55}
         cornerRadius={4}
         padAngle={0.02}
-        labels={{ placement: 'centroid', format: (v: any) => { const n = Number(v); return n >= 5 ? `${Math.round((n / total) * 100)}%` : ''; } }}
+        labels={{ placement: 'centroid', format: (v: any) => { const n = Number(v); const pct = Math.round((n / total) * 100); return pct >= 5 ? `${pct}%` : ''; } }}
       />
     </div>
     <div style="flex:1;min-width:0;">

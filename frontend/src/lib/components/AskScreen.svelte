@@ -37,7 +37,7 @@
   // Slash command menu state
   let showSlashMenu = $state(false);
   let slashFilter = $state('');
-  let selectedCommandIndex = $state(0);
+  let inputRef: HTMLInputElement | undefined = $state(undefined);
 
   // Configurable slash commands - add new commands here
   const slashCommands: SlashCommand[] = [
@@ -58,19 +58,18 @@
     if (value === '/') {
       showSlashMenu = true;
       slashFilter = '';
-      selectedCommandIndex = 0;
     }
     // Close menu when "/" is deleted
     else if (value === '' && showSlashMenu) {
       showSlashMenu = false;
     }
+    // Close menu when space is typed after command
+    else if (showSlashMenu && value.includes(' ')) {
+      showSlashMenu = false;
+    }
     // Update filter when menu is shown
     else if (showSlashMenu && value.startsWith('/')) {
       slashFilter = value.slice(1);
-    }
-    // Close menu when space is typed after command
-    else if (showSlashMenu && value.startsWith('/') && value.includes(' ')) {
-      showSlashMenu = false;
     }
     // Close menu if input doesn't start with "/"
     else if (showSlashMenu && !value.startsWith('/')) {
@@ -229,15 +228,15 @@
         {#if showSlashMenu}
           <SlashCommandMenu
             commands={slashCommands}
-            selectedIndex={selectedCommandIndex}
             onSelect={handleSlashCommandSelect}
             onClose={handleSlashMenuClose}
             filter={slashFilter}
+            {inputRef}
           />
         {/if}
         <form onsubmit={handleSubmit}
           style="display:flex;align-items:center;gap:10px;padding:7px 7px 7px 18px;border:1.5px solid var(--border-2);border-radius:var(--radius-lg);background:var(--surface);box-shadow:var(--shadow-sm);transition:border-color .15s, box-shadow .15s">
-          <input bind:value={input} oninput={handleInput} placeholder="Ask anything about your data…"
+          <input bind:value={input} oninput={handleInput} bind:this={inputRef} placeholder="Ask anything about your data…"
             aria-label="Ask a question about your data" autofocus
             style="flex:1;border:none;outline:none;background:transparent;font-size:15.5px;color:var(--ink)" />
           <Button kind="primary" type="submit" disabled={!input.trim() || loading}>

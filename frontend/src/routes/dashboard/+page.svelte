@@ -14,6 +14,7 @@
   let stats = $state<HistoryStats | null>(null);
   let statsLoading = $state(true);
   let statsError = $state(false);
+  let statsEpoch = 0;
 
   onMount(() => {
     if (!appState.isLoaded) {
@@ -34,15 +35,21 @@
   });
 
   async function loadStats() {
+    const epoch = ++statsEpoch;
     statsLoading = true;
     statsError = false;
     try {
-      stats = await getHistoryStats();
+      const result = await getHistoryStats();
+      if (epoch !== statsEpoch) return;
+      stats = result;
     } catch (e) {
+      if (epoch !== statsEpoch) return;
       console.error('Failed to load dashboard stats:', e);
       statsError = true;
     } finally {
-      statsLoading = false;
+      if (epoch === statsEpoch) {
+        statsLoading = false;
+      }
     }
   }
 </script>

@@ -153,8 +153,9 @@ def get_query_stats(user_id):
                 "count": {"$sum": 1},
             }
         },
-        {"$sort": {"_id": 1}},
+        {"$sort": {"_id": -1}},
         {"$limit": 90},
+        {"$sort": {"_id": 1}},
     ]
     daily = [
         {"date": doc["_id"], "count": doc["count"]}
@@ -163,6 +164,7 @@ def get_query_stats(user_id):
 
     sql_pipeline = [
         {"$match": user_filter},
+        {"$sort": {"timestamp": -1}},
         {"$project": {"sql": 1}},
         {"$limit": 200},
     ]
@@ -177,7 +179,14 @@ def get_query_stats(user_id):
                     break
                 start = pos + len(keyword)
                 end = start
-                while end < len(sql) and sql[end] not in (" ", "\n", "\t", ";", "("):
+                while end < len(sql) and sql[end] not in (
+                    " ",
+                    "\n",
+                    "\t",
+                    ";",
+                    "(",
+                    ",",
+                ):
                     end += 1
                 tbl = sql[start:end].strip().strip('"').strip("'").strip("`")
                 if (

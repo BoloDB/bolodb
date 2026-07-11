@@ -7,19 +7,20 @@
 
   let {
     commands = [],
-    selectedIndex = 0,
     onSelect,
     onClose,
-    filter = ''
+    filter = '',
+    inputRef
   }: {
     commands: SlashCommand[];
-    selectedIndex: number;
     onSelect: (command: SlashCommand) => void;
     onClose: () => void;
     filter: string;
+    inputRef?: HTMLInputElement;
   } = $props();
 
   let menuRef: HTMLDivElement | undefined = $state(undefined);
+  let selectedIndex = $state(0);
 
   const filteredCommands = $derived(
     commands.filter(cmd =>
@@ -28,13 +29,23 @@
     )
   );
 
+  $effect(() => {
+    filteredCommands;
+    selectedIndex = 0;
+  });
+
   function handleClickOutside(event: MouseEvent) {
-    if (menuRef && !menuRef.contains(event.target as Node)) {
+    const target = event.target as Node;
+    if (
+      menuRef && !menuRef.contains(target) &&
+      (!inputRef || !inputRef.contains(target))
+    ) {
       onClose();
     }
   }
 
   function handleKeydown(event: KeyboardEvent) {
+    if (!filteredCommands.length) return;
     switch (event.key) {
       case 'Escape':
         onClose();
