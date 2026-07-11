@@ -115,7 +115,7 @@
       <span style="flex:1;height:1px;background:var(--border)"></span>
     </div>
 
-    <GoogleSignIn onSuccess={onLogin} mode="signin" />
+    <GoogleSignIn onSuccess={onLogin} />
 
     <div
       style="text-align:center;margin-top:24px;font-size:13.5px;color:var(--muted)"
