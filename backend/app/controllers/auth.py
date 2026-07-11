@@ -1,7 +1,12 @@
 import bcrypt
 from pydantic import EmailStr
 from fastapi import HTTPException
-from backend.app.models.user import UserSignup, UserInDB, Role
+from backend.app.models.user import (
+    UserSignup,
+    UserInDB,
+    Role,
+    validate_password_strength,
+)
 from backend.app.mongodatabase import (
     create_user,
     get_user_by_email,
@@ -66,6 +71,7 @@ def signup(user: UserSignup):
 
 
 def change_password(user_id, old_password, new_password):
+    validate_password_strength(new_password)
     user_details = get_user_by_id(user_id)
     if user_details is None:
         raise HTTPException(status_code=404, detail="User not found")
