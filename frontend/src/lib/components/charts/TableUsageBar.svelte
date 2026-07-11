@@ -31,6 +31,7 @@
       cRange={CHART_COLORS}
       bandPadding={0.3}
       padding={{ left: 10, right: 16, top: 4, bottom: 4 }}
+      props={{ yAxis: { tickLabelProps: { truncate: { maxChars: 16 } } } }}
       tooltipContext={{ mode: 'band' }}
       grid={{ y: false }}
     />

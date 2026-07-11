@@ -22,6 +22,7 @@
       c="date"
       cRange={['var(--brand)']}
       padding={{ left: 8, right: 8, top: 8, bottom: 8 }}
+      props={{ xAxis: { tickLabelProps: { truncate: { maxChars: 12 } } } }}
       tooltipContext={{ mode: 'band' }}
       grid
     />

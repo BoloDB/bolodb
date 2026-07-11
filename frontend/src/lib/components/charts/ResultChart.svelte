@@ -37,6 +37,7 @@
       cRange={CHART_COLORS}
       bandPadding={0.3}
       padding={{ left: 10, right: 16, top: 4, bottom: 4 }}
+      props={{ yAxis: { tickLabelProps: { truncate: { maxChars: 18 } } } }}
       tooltipContext={{ mode: 'band' }}
       grid={{ y: false }}
     />
@@ -88,6 +89,7 @@
       c="label"
       cRange={['var(--brand)']}
       padding={{ left: 8, right: 8, top: 8, bottom: 8 }}
+      props={{ xAxis: { tickLabelProps: { truncate: { maxChars: 12 } } } }}
       tooltipContext={{ mode: 'band' }}
       grid
     />
