@@ -1,6 +1,7 @@
 """Per-database knowledge base: verified Q->SQL pairs, glossary, trust."""
 
 import sqlite3
+import threading
 import time
 from difflib import SequenceMatcher
 from pathlib import Path
@@ -22,12 +23,20 @@ def _similarity(a, b, tb=None, b_lower=None):
 class KnowledgeBase:
     def __init__(self, db_path):
         Path(db_path).parent.mkdir(parents=True, exist_ok=True)
-        self.conn = sqlite3.connect(str(db_path), check_same_thread=False)
-        self.conn.row_factory = sqlite3.Row
-        self._init()
+        self._db_path = str(db_path)
+        self._local = threading.local()
+        self._init_schema()
 
-    def _init(self):
-        self.conn.executescript(
+    def _get_conn(self):
+        """Return a thread-local SQLite connection, creating one if needed."""
+        if not hasattr(self._local, "conn"):
+            self._local.conn = sqlite3.connect(self._db_path)
+            self._local.conn.row_factory = sqlite3.Row
+        return self._local.conn
+
+    def _init_schema(self):
+        conn = self._get_conn()
+        conn.executescript(
             """
             CREATE TABLE IF NOT EXISTS verified (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -40,29 +49,32 @@ class KnowledgeBase:
             CREATE INDEX IF NOT EXISTS ix_g ON glossary(db_id);
         """
         )
-        self.conn.commit()
+        conn.commit()
 
     def add_verified(self, db_id, question, sql, restatement=""):
+        conn = self._get_conn()
         tb = _tokens(question)
         b_lower = question.lower()
         for e in self.get_verified(db_id):
             if _similarity(e["question"], question, tb, b_lower) > 0.92:
                 return
-        self.conn.execute(
+        conn.execute(
             "INSERT INTO verified(db_id,question,sql,restatement,created_at) VALUES(?,?,?,?,?)",
             (db_id, question, sql, restatement, time.time()),
         )
-        self.conn.commit()
+        conn.commit()
 
     def get_verified(self, db_id):
-        rows = self.conn.execute(
+        conn = self._get_conn()
+        rows = conn.execute(
             "SELECT question,sql,restatement FROM verified WHERE db_id=? ORDER BY created_at DESC",
             (db_id,),
         ).fetchall()
         return [dict(r) for r in rows]
 
     def count_verified(self, db_id):
-        return self.conn.execute(
+        conn = self._get_conn()
+        return conn.execute(
             "SELECT COUNT(*) FROM verified WHERE db_id=?", (db_id,)
         ).fetchone()[0]
 
@@ -78,18 +90,20 @@ class KnowledgeBase:
         return scored[:k]
 
     def set_glossary(self, db_id, terms):
-        self.conn.execute("DELETE FROM glossary WHERE db_id=?", (db_id,))
+        conn = self._get_conn()
+        conn.execute("DELETE FROM glossary WHERE db_id=?", (db_id,))
         for t in terms:
-            self.conn.execute(
+            conn.execute(
                 "INSERT INTO glossary(db_id,term,maps_to,sql_hint) VALUES(?,?,?,?)",
                 (db_id, t.get("term", ""), t.get("maps_to", ""), t.get("sql_hint", "")),
             )
-        self.conn.commit()
+        conn.commit()
 
     def get_glossary(self, db_id):
+        conn = self._get_conn()
         return [
             dict(r)
-            for r in self.conn.execute(
+            for r in conn.execute(
                 "SELECT term,maps_to,sql_hint FROM glossary WHERE db_id=?", (db_id,)
             ).fetchall()
         ]
