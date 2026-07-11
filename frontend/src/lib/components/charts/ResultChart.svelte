@@ -11,15 +11,6 @@
   } = $props();
 
   const detection = $derived(detectChartData(columns, rows));
-
-  const barData = $derived(
-    detection?.type === 'bar'
-      ? detection.data.map((d) => ({
-          ...d,
-          label: d.label.length > 20 ? d.label.slice(0, 18) + '…' : d.label,
-        }))
-      : detection?.data ?? [],
-  );
 </script>
 
 {#if !detection || !detection.type}
@@ -29,14 +20,15 @@
 {:else if detection.type === 'bar'}
   <div style="height:{Math.max(150, Math.min(detection.data.length * 40, 300))}px;border:1px solid var(--border);border-radius:var(--radius);background:var(--surface);padding:12px;">
     <BarChart
-      data={barData}
+      data={detection.data}
       x="value"
       y="label"
       orientation="horizontal"
       c="label"
       cRange={CHART_COLORS}
       bandPadding={0.3}
-      padding={{ left: 10, right: 16, top: 4, bottom: 4 }}
+      padding={{ left: 60, right: 16, top: 4, bottom: 4 }}
+      clip
       props={{ yAxis: { tickLabelProps: { truncate: { maxChars: 18 } } } }}
       tooltipContext={{ mode: 'band' }}
       grid={{ y: false }}
@@ -89,6 +81,7 @@
       c="label"
       cRange={['var(--brand)']}
       padding={{ left: 8, right: 8, top: 8, bottom: 8 }}
+      clip
       props={{ xAxis: { tickLabelProps: { truncate: { maxChars: 12 } } } }}
       tooltipContext={{ mode: 'band' }}
       grid

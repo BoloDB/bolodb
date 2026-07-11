@@ -111,7 +111,7 @@
         </div>
 
         <!-- Trust Gauge -->
-        <div class="card p-5 rise" style="animation-delay:0.25s;">
+        <div class="card p-5 rise" style="animation-delay:0.25s;overflow:hidden;">
           <h3 style="font-size:13px;font-weight:800;color:var(--faint);letter-spacing:.07em;text-transform:uppercase;margin:0 0 4px;">Trust Level</h3>
           <TrustGauge verifiedCount={appState.verifiedCount} />
         </div>
@@ -164,7 +164,7 @@
 
       <!-- Row 4: Detailed Schema Grid -->
       {#if appState.realSchema && appState.realSchema.length > 0}
-        <div class="card p-6 rise" style="animation-delay:0.5s;">
+        <div class="card p-6 rise" style="animation-delay:0.5s;overflow:hidden;">
           <h3 style="font-size:13px;font-weight:800;color:var(--faint);letter-spacing:.07em;text-transform:uppercase;margin:0 0 16px;">Indexed Schema Details</h3>
           <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {#each appState.realSchema as table}

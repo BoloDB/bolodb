@@ -8,12 +8,7 @@
     data: { table: string; count: number }[];
   } = $props();
 
-  const chartData = $derived(
-    data.slice(0, 8).map((d) => ({
-      ...d,
-      label: d.table.length > 18 ? d.table.slice(0, 16) + '…' : d.table,
-    })),
-  );
+  const chartData = $derived(data.slice(0, 8).map((d) => ({ ...d, label: d.table })));
 </script>
 
 {#if chartData.length === 0}
@@ -30,7 +25,8 @@
       c="label"
       cRange={CHART_COLORS}
       bandPadding={0.3}
-      padding={{ left: 10, right: 16, top: 4, bottom: 4 }}
+      padding={{ left: 60, right: 16, top: 4, bottom: 4 }}
+      clip
       props={{ yAxis: { tickLabelProps: { truncate: { maxChars: 16 } } } }}
       tooltipContext={{ mode: 'band' }}
       grid={{ y: false }}
