@@ -19,6 +19,7 @@ _use_mongo = bool(mongouri and str(mongouri).strip())
 
 if _use_mongo:
     from pymongo import MongoClient
+
     client = MongoClient(mongouri, serverSelectionTimeoutMS=3000)
     db = client["bolodb"]
 else:
@@ -40,6 +41,7 @@ else:
 
     def _next_id():
         import secrets
+
         return secrets.token_hex(12)
 
 
@@ -102,6 +104,7 @@ def create_user(user_data: UserInDB):
 def get_user_by_id(user_id):
     if _use_mongo:
         from bson import ObjectId, errors as bson_errors
+
         try:
             oid = ObjectId(user_id)
         except (bson_errors.InvalidId, TypeError):
@@ -154,22 +157,27 @@ def save_query(user_id, question, sql, result, confidence):
         return
     with _lock:
         data = _load()
-        data["query_history"].insert(0, {
-            "_id": _next_id(),
-            "user_id": str(user_id),
-            "question": question,
-            "sql": sql,
-            "result": result,
-            "confidence": confidence,
-            "timestamp": datetime.utcnow().isoformat(),
-        })
+        data["query_history"].insert(
+            0,
+            {
+                "_id": _next_id(),
+                "user_id": str(user_id),
+                "question": question,
+                "sql": sql,
+                "result": result,
+                "confidence": confidence,
+                "timestamp": datetime.utcnow().isoformat(),
+            },
+        )
         _save(data)
 
 
 def get_query_history(user_id, limit=20):
     if _use_mongo:
         history = db["query_history"]
-        cursor = history.find({"user_id": str(user_id)}).sort("timestamp", -1).limit(limit)
+        cursor = (
+            history.find({"user_id": str(user_id)}).sort("timestamp", -1).limit(limit)
+        )
         return [serialize_doc(doc) for doc in cursor]
     with _lock:
         data = _load()
@@ -180,6 +188,7 @@ def get_query_history(user_id, limit=20):
 def delete_history_entry(user_id, entry_id):
     if _use_mongo:
         from bson import ObjectId, errors as bson_errors
+
         try:
             oid = ObjectId(entry_id)
         except (bson_errors.InvalidId, TypeError):
@@ -190,7 +199,8 @@ def delete_history_entry(user_id, entry_id):
         data = _load()
         before = len(data["query_history"])
         data["query_history"] = [
-            e for e in data["query_history"]
+            e
+            for e in data["query_history"]
             if not (e.get("_id") == entry_id and e.get("user_id") == str(user_id))
         ]
         _save(data)
@@ -263,7 +273,9 @@ def get_recent_connections(user_id, limit=5):
         return [serialize_doc(doc) for doc in cursor]
     with _lock:
         data = _load()
-        entries = [e for e in data["recent_connections"] if e.get("user_id") == str(user_id)]
+        entries = [
+            e for e in data["recent_connections"] if e.get("user_id") == str(user_id)
+        ]
         entries.sort(key=lambda x: x.get("connected_at", ""), reverse=True)
         return entries[:limit]
 
@@ -271,6 +283,7 @@ def get_recent_connections(user_id, limit=5):
 def delete_recent_connection(user_id, connection_id):
     if _use_mongo:
         from bson import ObjectId, errors as bson_errors
+
         try:
             oid = ObjectId(connection_id)
         except (bson_errors.InvalidId, TypeError):
@@ -281,7 +294,8 @@ def delete_recent_connection(user_id, connection_id):
         data = _load()
         before = len(data["recent_connections"])
         data["recent_connections"] = [
-            c for c in data["recent_connections"]
+            c
+            for c in data["recent_connections"]
             if not (c.get("_id") == connection_id and c.get("user_id") == str(user_id))
         ]
         _save(data)

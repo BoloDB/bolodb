@@ -23,12 +23,18 @@ declare global {
       callback: (response: CredentialResponse) => void;
       auto_select?: boolean;
       cancel_on_tap_outside?: boolean;
-      context?: 'signin' | 'signup' | 'use';
+      context?: "signin" | "signup" | "use";
     }
     function initialize(config: IdConfiguration): void;
     function renderButton(
       parent: HTMLElement,
-      options: { theme?: string; size?: string; width?: number; shape?: string; logo_alignment?: string }
+      options: {
+        theme?: string;
+        size?: string;
+        width?: number;
+        shape?: string;
+        logo_alignment?: string;
+      },
     ): void;
     function disableAutoSelect(): void;
     function storeCredential(credential: string, callback?: () => void): void;

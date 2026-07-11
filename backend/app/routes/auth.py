@@ -56,7 +56,9 @@ async def login(login_data: UserLogin):
         samesite="lax",
     )
     response.set_cookie(
-        key="refresh_token", value=token["refresh_token"], httponly=True,
+        key="refresh_token",
+        value=token["refresh_token"],
+        httponly=True,
         secure=secure,
         samesite="lax",
     )
@@ -89,7 +91,9 @@ async def google_auth(google_data: GoogleLogin):
         samesite="lax",
     )
     response.set_cookie(
-        key="refresh_token", value=tokens["refresh_token"], httponly=True,
+        key="refresh_token",
+        value=tokens["refresh_token"],
+        httponly=True,
         secure=secure,
         samesite="lax",
     )

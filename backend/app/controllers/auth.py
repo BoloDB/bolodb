@@ -75,6 +75,7 @@ def google_login(id_token_str, client_id):
     """Verify a Google ID token and return JWT tokens for the user."""
     try:
         from jwt import PyJWKClient
+
         jwks_url = "https://www.googleapis.com/oauth2/v3/certs"
         jwks_client = PyJWKClient(jwks_url, cache_keys=True)
         signing_key = jwks_client.get_signing_key_from_jwt(id_token_str)

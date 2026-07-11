@@ -52,7 +52,11 @@ export async function streamApiCall(
       const { done, value } = await reader.read();
       if (done) {
         if (!receivedTerminalEvent) {
-          onError(new Error("Stream ended prematurely without a result or error event"));
+          onError(
+            new Error(
+              "Stream ended prematurely without a result or error event",
+            ),
+          );
         }
         break;
       }
@@ -83,7 +87,7 @@ export async function streamApiCall(
       }
     }
   } catch (err) {
-    if (err instanceof Error && err.name === 'AbortError') return;
+    if (err instanceof Error && err.name === "AbortError") return;
     onError(err instanceof Error ? err : new Error(String(err)));
   }
 }
@@ -106,7 +110,10 @@ export async function clearHistory(): Promise<any> {
 }
 
 export async function googleLogin(idToken: string): Promise<any> {
-  return apiCall("/api/auth/google", { id_token: idToken, client_id: window.__GOOGLE_CLIENT_ID__ || "" });
+  return apiCall("/api/auth/google", {
+    id_token: idToken,
+    client_id: window.__GOOGLE_CLIENT_ID__ || "",
+  });
 }
 
 /** Convert API rows (array of objects) to 2D string arrays for ResultTable */

@@ -35,9 +35,11 @@ async def health(
 
 @router.get("/api/config/public")
 async def public_config():
-    return JSONResponse({
-        "google_client_id": get_google_client_id(),
-    })
+    return JSONResponse(
+        {
+            "google_client_id": get_google_client_id(),
+        }
+    )
 
 
 @router.post("/api/config")
