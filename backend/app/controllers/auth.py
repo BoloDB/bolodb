@@ -2,7 +2,6 @@ import bcrypt
 from pydantic import EmailStr
 from fastapi import HTTPException
 from backend.app.models.user import UserSignup, UserInDB, Role
-from dotenv import load_dotenv
 from backend.app.mongodatabase import (
     create_user,
     get_user_by_email,
@@ -10,14 +9,10 @@ from backend.app.mongodatabase import (
     update_user,
     serialize_doc,
 )
-import os
 from bson import ObjectId
 import jwt
 from datetime import datetime, timedelta, UTC
-
-load_dotenv()
-
-jwt_secret = os.getenv("JWT_SECRET", "RANDOM-SECRET")
+from backend.app.secrets import get_jwt_secret
 
 
 def get_me(user_id):
@@ -41,19 +36,20 @@ def create_access_jwt(user_id, role):
     data = {"user_id": user_id, "role": role}
     expiry = datetime.now(UTC) + timedelta(minutes=60)
     data.update({"exp": expiry})
-    return jwt.encode(data, jwt_secret, algorithm=ALGORITHM)
+    return jwt.encode(data, get_jwt_secret(), algorithm=ALGORITHM)
 
 
 def create_jwt(user_id, role):
     ALGORITHM = "HS256"
+    secret = get_jwt_secret()
     data = {"user_id": user_id, "role": role}
     refresh_data = {"user_id": user_id, "role": role}
     access_expiry = datetime.now(UTC) + timedelta(hours=1)
     refresh_expiry = datetime.now(UTC) + timedelta(days=7)
     data.update({"exp": access_expiry})
     refresh_data.update({"exp": refresh_expiry})
-    access_encoded_jwt = jwt.encode(data, jwt_secret, algorithm=ALGORITHM)
-    refresh_encoded_jwt = jwt.encode(refresh_data, jwt_secret, algorithm=ALGORITHM)
+    access_encoded_jwt = jwt.encode(data, secret, algorithm=ALGORITHM)
+    refresh_encoded_jwt = jwt.encode(refresh_data, secret, algorithm=ALGORITHM)
     return {"access_token": access_encoded_jwt, "refresh_token": refresh_encoded_jwt}
 
 

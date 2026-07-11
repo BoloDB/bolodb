@@ -10,30 +10,61 @@ from dotenv import load_dotenv
 from pymongo import MongoClient
 
 from backend.app.models.user import UserInDB
+from backend.app.config import CONFIG_DIR
 
 load_dotenv()
 mongouri = os.getenv("MONGO_URI")
 client = MongoClient(mongouri)
 db = client["bolodb"]
 
+_CONNECTIONS_KEY_FILE = CONFIG_DIR / "connections.key"
+
 
 def _recent_connection_cipher():
-    secret = os.getenv("RECENT_CONNECTIONS_KEY") or os.getenv(
-        "JWT_SECRET", "RANDOM-SECRET"
-    )
-    key = base64.urlsafe_b64encode(hashlib.sha256(secret.encode()).digest())
-    return Fernet(key)
+    """Derive a Fernet cipher for encrypting stored database URLs.
+
+    Uses RECENT_CONNECTIONS_KEY env var if set; otherwise generates and
+    persists a key file at ~/.bolodb/connections.key.  Falls back to a
+    fresh key only for backward-compat decryption of legacy records.
+    """
+    secret = os.getenv("RECENT_CONNECTIONS_KEY")
+    if secret:
+        key = base64.urlsafe_b64encode(hashlib.sha256(secret.encode()).digest())
+        return Fernet(key), None
+
+    # Try to load or create a persisted key file.
+    CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+    if _CONNECTIONS_KEY_FILE.exists():
+        persisted = _CONNECTIONS_KEY_FILE.read_text().strip()
+        key = base64.urlsafe_b64encode(hashlib.sha256(persisted.encode()).digest())
+        return Fernet(key), None
+
+    # Generate a new key and persist it for next time.
+    new_secret = base64.urlsafe_b64encode(os.urandom(32)).decode()
+    _CONNECTIONS_KEY_FILE.write_text(new_secret)
+    key = base64.urlsafe_b64encode(hashlib.sha256(new_secret.encode()).digest())
+    return Fernet(key), None
 
 
 def _encrypt_connection_url(db_url):
-    return _recent_connection_cipher().encrypt(db_url.encode()).decode()
+    return _recent_connection_cipher()[0].encrypt(db_url.encode()).decode()
 
 
 def _decrypt_connection_url(value):
     try:
-        return _recent_connection_cipher().decrypt(value.encode()).decode()
+        return _recent_connection_cipher()[0].decrypt(value.encode()).decode()
     except (InvalidToken, ValueError, TypeError):
-        # Backward compatibility: allow reconnect from older plaintext records.
+        # Backward compatibility: try the legacy JWT_SECRET-based key.
+        jwt_secret = os.getenv("JWT_SECRET")
+        if jwt_secret:
+            try:
+                legacy_key = base64.urlsafe_b64encode(
+                    hashlib.sha256(jwt_secret.encode()).digest()
+                )
+                return Fernet(legacy_key).decrypt(value.encode()).decode()
+            except (InvalidToken, ValueError, TypeError):
+                pass
+        # Last resort: treat as plaintext (older records stored unencrypted).
         return value
 
 
