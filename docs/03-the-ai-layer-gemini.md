@@ -54,8 +54,10 @@ choice also changes how much schema the prompt may contain — see
 
 ## What exactly is sent to Google?
 
-For SQL generation (the most frequent call), the prompt contains — assembled
-in `build_sql_system_prompt()` in `llm.py`, in this order:
+For SQL generation (the most frequent call), the request has two parts.
+
+The **system prompt** — assembled in `build_sql_system_prompt()` in
+`llm.py`, in this order:
 
 1. **Instructions** — write one read-only SELECT in the right dialect, use
    only the listed tables/columns, join via the shown foreign keys, etc.
@@ -69,16 +71,20 @@ in `build_sql_system_prompt()` in `llm.py`, in this order:
    `max_examples` caps it further for lite models) (`_examples_block()`).
 5. **The last 2 conversation turns**, for follow-up questions
    (`_context_block()`).
-6. **Your question** (plus, on repair attempts, the error to fix).
+
+The **user message** — passed separately to `GeminiProvider.complete()` by
+`generate_sql()`: **your question**, plus, on repair attempts, the
+description of what was wrong with the previous SQL.
 
 **Never sent:** the rows inside your tables (beyond the small sample values
 above), credentials, or query results.
 
 ## How the call works (and fails) — `GeminiProvider`
 
-`GeminiProvider.complete()` in `llm.py` does one POST to Google's
-`generateContent` REST endpoint using plain `httpx` (no SDK dependency).
-Details that matter:
+`GeminiProvider.complete()` in `llm.py` attempts a POST to Google's
+`generateContent` REST endpoint using plain `httpx` (no SDK dependency) —
+"attempts", because transient failures are retried, so one call can produce
+up to three POSTs (see Retries below). Details that matter:
 
 - **Structured output.** We pass a JSON schema (`responseSchema`) so the
   model is *constrained* to reply in the exact shape we parse — no rambling,

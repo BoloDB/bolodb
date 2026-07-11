@@ -46,8 +46,9 @@ Deployments can instead set the `GEMINI_API_KEY` environment variable.
 context BoloDB builds around it: the database *structure* (table/column names,
 keys), a few sample values and sample rows per table, your confirmed
 business-term glossary, previously verified question→SQL examples, and the
-last couple of conversation turns. **Never sent:** bulk table contents, query
-results, or credentials. See
+last couple of conversation turns. **The prompt never includes** bulk table
+contents, query results, or credentials — the Gemini API key travels only in
+the request's authentication header. See
 [docs/03-the-ai-layer-gemini.md](docs/03-the-ai-layer-gemini.md) for exactly
 what's in every prompt.
 
@@ -99,7 +100,7 @@ The test suite needs no network and no API key — all AI calls are faked.
 ## Privacy
 
 - All learned knowledge and user settings are stored locally (`~/.bolodb/`) and in the local MongoDB container volume. The Gemini API key is encrypted at rest.
-- To generate SQL, the AI is sent your question plus context: the schema, a few sample values/rows per table, your confirmed glossary terms, verified question→SQL examples, and recent conversation turns — never bulk table data or query results.
+- To generate SQL, the AI is sent your question plus context: the schema, a few sample values/rows per table, your confirmed glossary terms, verified question→SQL examples, and recent conversation turns. The prompt never includes bulk table data, query results, or credentials (the API key is used only as the request's authentication header).
 - Queries run strictly read-only.
 - No telemetry, no cloud sync.
 

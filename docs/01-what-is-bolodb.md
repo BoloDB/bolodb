@@ -35,8 +35,10 @@ against your database, and shows you:
   column names, keys), a few **sample values and sample rows** per table (so
   the AI matches your wording to real data), your confirmed **glossary
   terms**, previously **verified question→SQL examples**, and the last couple
-  of conversation turns. It is **never** sent bulk table contents, query
-  results, or credentials — see chapter 3 for the exact prompt contents.
+  of conversation turns. The prompt **never** includes bulk table contents,
+  query results, or credentials — your Gemini API key is used only as the
+  request's authentication header. See chapter 3 for the exact prompt
+  contents.
 
 ### 2. You can trust the answers — and check them
 

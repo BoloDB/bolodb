@@ -108,8 +108,8 @@ Schema linking can only rank tables that introspection collected, and
 `get_schema()` (`backend/app/database.py`, constant `MAX_T`) currently stops
 at the **first 40 tables**. On a database larger than that, tables beyond the
 cap are invisible to both scoring and the AI. The fix — collecting structure
-for every table and capping only the expensive sampling — lands in the
-follow-up schema-linking PR.
+for every table and capping only the expensive sampling — is implemented in
+[PR #162](https://github.com/HAAHIT/bolodb/pull/162).
 
 ## Debugging: which tables were picked, and why?
 
