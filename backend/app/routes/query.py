@@ -28,7 +28,6 @@ async def _format_sse(stream):
         yield f"data: {json.dumps({'kind': 'error', 'message': str(e)})}\n\n"
 
 
-
 def _safe_save_query(user_id, question, sql, result, confidence):
     import backend.app.mongodatabase as mdb
 
@@ -86,19 +85,19 @@ async def query_stream(
 ):
     user_id = user_token["user_id"]
     stream = ctrl.run_query_stream(user_id, db, kb, cfg, providers, session_log, req)
-    
-    # Note: we can't easily save the query before the stream ends 
-    # because we don't have the final SQL yet. 
-    # The controller's run_query_stream should handle logging 
+
+    # Note: we can't easily save the query before the stream ends
+    # because we don't have the final SQL yet.
+    # The controller's run_query_stream should handle logging
     # and persistence of the result event.
-    
+
     return StreamingResponse(
-        _format_sse(stream), 
+        _format_sse(stream),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",
             "X-Accel-Buffering": "no",
-        }
+        },
     )
 
 

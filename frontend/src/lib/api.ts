@@ -52,7 +52,11 @@ export async function streamApiCall(
       const { done, value } = await reader.read();
       if (done) {
         if (!receivedTerminalEvent) {
-          onError(new Error("Stream ended prematurely without a result or error event"));
+          onError(
+            new Error(
+              "Stream ended prematurely without a result or error event",
+            ),
+          );
         }
         break;
       }
@@ -83,7 +87,7 @@ export async function streamApiCall(
       }
     }
   } catch (err) {
-    if (err instanceof Error && err.name === 'AbortError') return;
+    if (err instanceof Error && err.name === "AbortError") return;
     onError(err instanceof Error ? err : new Error(String(err)));
   }
 }
