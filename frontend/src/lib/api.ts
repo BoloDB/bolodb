@@ -105,6 +105,10 @@ export async function clearHistory(): Promise<any> {
   return apiCall("/api/history", undefined, "DELETE");
 }
 
+export async function googleLogin(idToken: string): Promise<any> {
+  return apiCall("/api/auth/google", { id_token: idToken, client_id: window.__GOOGLE_CLIENT_ID__ || "" });
+}
+
 /** Convert API rows (array of objects) to 2D string arrays for ResultTable */
 export function rowsToArrays(
   columns: string[],

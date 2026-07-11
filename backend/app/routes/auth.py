@@ -1,9 +1,9 @@
 from fastapi import APIRouter, Request, Depends, Cookie, HTTPException
 from fastapi.responses import JSONResponse
-from backend.app.models.user import UserSignup
+from backend.app.models.user import UserSignup, UserLogin, GoogleLogin
 import backend.app.controllers.auth
 from backend.app.dependencies import get_current_user
-from backend.app.secrets import get_jwt_secret, get_cookie_secure
+from backend.app.secrets import get_jwt_secret, get_cookie_secure, get_google_client_id
 import jwt
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
@@ -44,9 +44,8 @@ async def me(user_token=Depends(get_current_user)):
 
 
 @router.post("/login")
-async def login(request: Request):
-    body = await request.json()
-    token = backend.app.controllers.auth.login(body["email"], body["password"])
+async def login(login_data: UserLogin):
+    token = backend.app.controllers.auth.login(login_data.email, login_data.password)
     response = JSONResponse({"message": "Login Success"})
     secure = get_cookie_secure()
     response.set_cookie(
@@ -57,9 +56,7 @@ async def login(request: Request):
         samesite="lax",
     )
     response.set_cookie(
-        key="refresh_token",
-        value=token["refresh_token"],
-        httponly=True,
+        key="refresh_token", value=token["refresh_token"], httponly=True,
         secure=secure,
         samesite="lax",
     )
@@ -67,11 +64,36 @@ async def login(request: Request):
 
 
 @router.post("/signup")
-async def signup(request: Request):
-    body = await request.json()
-    user_data = UserSignup(email=body["email"], password=body["password"])
+async def signup(user_data: UserSignup):
     backend.app.controllers.auth.signup(user_data)
     return JSONResponse({"message": "Signup Successful"}, status_code=201)
+
+
+@router.post("/google")
+async def google_auth(google_data: GoogleLogin):
+    client_id = get_google_client_id()
+    if not client_id:
+        raise HTTPException(status_code=500, detail="Google sign-in is not configured")
+    if google_data.client_id != client_id:
+        raise HTTPException(status_code=400, detail="Client ID mismatch")
+    tokens = backend.app.controllers.auth.google_login(
+        google_data.id_token, google_data.client_id
+    )
+    response = JSONResponse({"message": "Google sign-in successful"})
+    secure = get_cookie_secure()
+    response.set_cookie(
+        key="access_token",
+        value=tokens["access_token"],
+        httponly=True,
+        secure=secure,
+        samesite="lax",
+    )
+    response.set_cookie(
+        key="refresh_token", value=tokens["refresh_token"], httponly=True,
+        secure=secure,
+        samesite="lax",
+    )
+    return response
 
 
 @router.post("/logout")

@@ -10,6 +10,7 @@ from backend.app.models.user import (
 from backend.app.mongodatabase import (
     create_user,
     get_user_by_email,
+    get_user_by_google_id,
     get_user_by_id,
     update_user,
     serialize_doc,
@@ -68,6 +69,46 @@ def signup(user: UserSignup):
     user_in_db = UserInDB(email=user.email, hashed_pass=hashed_pw, role=Role.user)
     create_user(user_in_db)
     return True
+
+
+def google_login(id_token_str, client_id):
+    """Verify a Google ID token and return JWT tokens for the user."""
+    try:
+        from jwt import PyJWKClient
+        jwks_url = "https://www.googleapis.com/oauth2/v3/certs"
+        jwks_client = PyJWKClient(jwks_url, cache_keys=True)
+        signing_key = jwks_client.get_signing_key_from_jwt(id_token_str)
+        user_info = jwt.decode(
+            id_token_str,
+            signing_key.key,
+            algorithms=["RS256"],
+            audience=client_id,
+            issuer=["https://accounts.google.com", "accounts.google.com"],
+        )
+    except Exception as e:
+        raise HTTPException(status_code=401, detail=f"Invalid Google token: {e}")
+
+    google_id = user_info["sub"]
+    email = user_info.get("email", "")
+    if not email:
+        raise HTTPException(status_code=400, detail="Google account has no email")
+
+    existing = get_user_by_google_id(google_id)
+    if existing:
+        return create_jwt(str(existing["_id"]), existing["role"])
+
+    existing_by_email = get_user_by_email(email)
+    if existing_by_email:
+        update_user(
+            {"_id": existing_by_email["_id"]},
+            {"$set": {"google_id": google_id}},
+        )
+        return create_jwt(str(existing_by_email["_id"]), existing_by_email["role"])
+
+    user_in_db = UserInDB(email=email, role=Role.user, google_id=google_id)
+    result = create_user(user_in_db)
+    uid = str(result.inserted_id)
+    return create_jwt(uid, Role.user.value)
 
 
 def change_password(user_id, old_password, new_password):

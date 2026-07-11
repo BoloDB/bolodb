@@ -3,6 +3,7 @@
   import Logo from '$lib/components/ui/Logo.svelte';
   import Button from '$lib/components/ui/Button.svelte';
   import Spinner from '$lib/components/ui/Spinner.svelte';
+  import GoogleSignIn from '$lib/components/GoogleSignIn.svelte';
   import { goto } from '$app/navigation';
 
   let email = $state('');
@@ -10,6 +11,12 @@
   let loading = $state(false);
   let error = $state('');
   let success = $state(false);
+  let googleSuccess = $state(false);
+
+  function handleGoogleSuccess() {
+    googleSuccess = true;
+    setTimeout(() => goto('/connect'), 1500);
+  }
 
   async function signup(e: Event) {
     e.preventDefault();
@@ -35,7 +42,12 @@
       <p style="margin:8px 0 0;color:var(--muted);font-size:14.5px">Join BoloDB today</p>
     </div>
 
-    {#if success}
+    {#if googleSuccess}
+      <div style="padding:16px;background:var(--brand-tint);border:1px solid var(--brand-tint-2);border-radius:var(--radius);color:var(--brand-ink);text-align:center;font-weight:550;line-height:1.5">
+        Signed in with Google!<br/>
+        Taking you to the app…
+      </div>
+    {:else if success}
       <div style="padding:16px;background:var(--brand-tint);border:1px solid var(--brand-tint-2);border-radius:var(--radius);color:var(--brand-ink);text-align:center;font-weight:550;line-height:1.5">
         Account created successfully!<br/>
         Redirecting you to login…
@@ -64,6 +76,14 @@
           {loading ? 'Creating account…' : 'Sign up'}
         </Button>
       </form>
+
+      <div style="display:flex;align-items:center;gap:12px;margin:20px 0">
+        <span style="flex:1;height:1px;background:var(--border)"></span>
+        <span style="font-size:12.5px;color:var(--muted);font-weight:500">or</span>
+        <span style="flex:1;height:1px;background:var(--border)"></span>
+      </div>
+
+      <GoogleSignIn onSuccess={handleGoogleSuccess} mode="signup" />
 
       <div style="text-align:center;margin-top:24px;font-size:13.5px;color:var(--muted)">
         Already have an account? <a href="/login" style="color:var(--brand-ink);font-weight:650;text-decoration:none">Sign in</a>

@@ -35,11 +35,17 @@ class UserSignup(BaseModel):
         return validate_password_strength(v)
 
 
+class UserLogin(BaseModel):
+    email: EmailStr
+    password: str
+
+
 class UserInDB(BaseModel):
     id: Optional[str] = Field(None, alias="_id")
     email: EmailStr
-    hashed_pass: str
+    hashed_pass: str = ""
     role: Role
+    google_id: Optional[str] = None
 
     model_config = ConfigDict(populate_by_name=True)
 
@@ -50,3 +56,8 @@ class UserPublic(BaseModel):
     role: Role
 
     model_config = ConfigDict(populate_by_name=True)
+
+
+class GoogleLogin(BaseModel):
+    id_token: str
+    client_id: str

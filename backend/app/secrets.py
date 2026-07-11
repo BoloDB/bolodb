@@ -17,3 +17,8 @@ def get_jwt_secret():
 def get_cookie_secure():
     """Return True if cookies should use the Secure flag (HTTPS only)."""
     return os.getenv("COOKIE_SECURE", "false").lower() == "true"
+
+
+def get_google_client_id():
+    """Return the Google OAuth client ID. Returns None if not configured."""
+    return os.getenv("GOOGLE_CLIENT_ID") or None

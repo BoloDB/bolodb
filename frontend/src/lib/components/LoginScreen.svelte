@@ -3,6 +3,7 @@
   import Logo from '$lib/components/ui/Logo.svelte';
   import Button from '$lib/components/ui/Button.svelte';
   import Spinner from '$lib/components/ui/Spinner.svelte';
+  import GoogleSignIn from '$lib/components/GoogleSignIn.svelte';
 
   let { onLogin }: { onLogin: () => void } = $props();
 
@@ -57,6 +58,14 @@
         {loading ? 'Signing in…' : 'Sign in'}
       </Button>
     </form>
+
+    <div style="display:flex;align-items:center;gap:12px;margin:20px 0">
+      <span style="flex:1;height:1px;background:var(--border)"></span>
+      <span style="font-size:12.5px;color:var(--muted);font-weight:500">or</span>
+      <span style="flex:1;height:1px;background:var(--border)"></span>
+    </div>
+
+    <GoogleSignIn onSuccess={onLogin} mode="signin" />
 
     <div style="text-align:center;margin-top:24px;font-size:13.5px;color:var(--muted)">
       Don't have an account? <a href="/signup" style="color:var(--brand-ink);font-weight:650;text-decoration:none">Sign up</a>
