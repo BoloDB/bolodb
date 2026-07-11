@@ -5,7 +5,7 @@ data) or **broken** (references things that don't exist, wrong syntax).
 BoloDB handles both with three independent layers. Each layer lives in its
 own file and is separately tested.
 
-```
+```text
  AI writes SQL
       │
       ▼
@@ -86,7 +86,7 @@ the first failure:
 2. If validation (①) or execution (③) fails, build a correction prompt —
    `_feedback()` produces:
 
-   ```
+   ```text
    The previous SQL attempt was:
    SELECT revenue FROM orders
    Problems found:

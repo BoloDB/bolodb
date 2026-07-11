@@ -62,7 +62,7 @@ more answers.
 ## What happens the first time you connect (onboarding)
 
 1. **Set up the AI** — paste a free Google Gemini API key
-   (get one at https://aistudio.google.com/apikey). Screen:
+   (get one at https://aistudio.google.com/app/api-keys). Screen:
    `frontend/src/lib/components/ConnectScreen.svelte`.
 2. **Connect a database** — or click *"Try with sample data"* to explore a
    realistic demo store database (`backend/sample_data.py`).
@@ -79,7 +79,7 @@ After onboarding you land in the chat screen
 
 ## The cast of components (30-second architecture)
 
-```
+```text
  Browser (SvelteKit frontend, frontend/src)
     │  HTTP calls to /api/...
     ▼

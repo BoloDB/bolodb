@@ -204,10 +204,9 @@ def link_relevant_tables(
         if len(_fk_parents(schema, t) & selected) >= 2:
             selected.add(t)
 
+    # `ranked` contains every table, so filtering it both orders and covers
+    # the whole selection.
     ordered = [t for t in ranked if t in selected]
-    for t in sorted(selected):
-        if t not in ordered:
-            ordered.append(t)
     result = ordered[: max_tables + _FK_EXTRA_SLOTS]
     log.debug(
         "schema link: question=%r selected=%s scores=%s",

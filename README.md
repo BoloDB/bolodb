@@ -30,7 +30,7 @@ The easiest and recommended way to run BoloDB is using Docker. This ensures all 
 BoloDB uses **Google Gemini** for all AI operations. You only need one thing:
 a Gemini API key — there's a free tier, and it takes about a minute:
 
-1. Go to https://aistudio.google.com/apikey (sign in with any Google account).
+1. Go to https://aistudio.google.com/app/api-keys (sign in with any Google account).
 2. Click **Create API key** and copy it.
 3. Paste it into BoloDB on the connect screen (or later in Settings).
 

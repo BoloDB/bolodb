@@ -12,12 +12,21 @@ technical knowledge; the second is for whoever maintains the deployment.
 
 The AI has no key to work with.
 **Fix:** open **Settings** (gear icon in the sidebar) → paste a key →
-Save. Get a free key at https://aistudio.google.com/apikey.
+Save. Get a free key at https://aistudio.google.com/app/api-keys.
 
-### "The Gemini API rejected the request — the API key may be invalid or expired."
+### "…the API key is malformed or not valid" / "…invalid or expired" / "…may lack permission"
 
-The key exists but Google refused it — usually a typo, a revoked key, or a
-key from the wrong Google project.
+The key exists but Google refused it. The message tells you which flavour:
+
+- **"rejected the request as invalid"** (HTTP 400) — usually a typo or a
+  truncated key. Re-copy it carefully.
+- **"was not accepted — invalid or expired"** (HTTP 401) — the key was
+  revoked or expired. Generate a fresh one.
+- **"denied access — may lack permission"** (HTTP 403) — the key is real but
+  restricted: the Generative Language API isn't enabled for its project, the
+  key has API restrictions, or your region/Workspace blocks access. Check the
+  key's settings in Google AI Studio.
+
 **Fix:** generate a fresh key in Google AI Studio and re-enter it in
 Settings. The moment a valid key is saved, everything works — no restart
 needed (saving triggers `providers.reconfigure()` in

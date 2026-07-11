@@ -33,18 +33,24 @@ _MAX_ATTEMPTS = 3
 _MAX_SECONDS = 60
 
 
-def _failure_payload(message):
-    """Response shape for 'we could not produce a working query'."""
+def _failure_payload(message, tables=None):
+    """Response shape for 'we could not produce a working query'. Mirrors the
+    success payload's fields so the frontend never meets a missing key."""
     return {
         "answered": True,
         "sql": "",
         "restatement": "",
+        "assumptions": [],
         "confidence": "low",
         "confidence_reason": message,
         "based_on_verified": False,
         "execution_error": message,
         "columns": [],
         "rows": [],
+        "truncated": False,
+        "tables_used": list(tables or []),
+        "attempts": 0,
+        "repaired": False,
     }
 
 
@@ -104,12 +110,12 @@ async def run_query(user_id, db, kb, cfg, providers, session_log, req_data):
         )
     except LLMError as e:
         log.warning("LLM error during run_query: %s", e.detail)
-        out = _failure_payload(e.user_message)
+        out = _failure_payload(e.user_message, tables)
         out["query_id"] = session_log.log_query(db_id, q, out)
         return out
     except Exception:
         log.warning("SQL generation failed during run_query", exc_info=True)
-        out = _failure_payload("Could not form a query - try rephrasing")
+        out = _failure_payload("Could not form a query - try rephrasing", tables)
         out["query_id"] = session_log.log_query(db_id, q, out)
         return out
 

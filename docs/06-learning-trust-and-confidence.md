@@ -24,7 +24,7 @@ so knowledge for one connected database never leaks into another):
 When a new question arrives, `retrieve_similar()` scores it against every
 stored verified question:
 
-```
+```text
 similarity = 0.6 × word-overlap (Jaccard) + 0.4 × character-sequence ratio
 ```
 

@@ -10,7 +10,7 @@ output, verified examples) also makes answers *better*.
 Gemini bills per token, input and output separately. For BoloDB, a
 question's cost ≈
 
-```
+```text
 (prompt: instructions + schema + glossary + examples + context)   ← input tokens
 + (the model's reply: SQL + restatement + assumptions)            ← output tokens
 + (invisible "thinking" tokens, if enabled)                       ← output tokens

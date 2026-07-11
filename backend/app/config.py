@@ -132,7 +132,7 @@ def load_config():
     # valid state instead of erroring on an unknown provider.
     if cfg.get("provider") != "gemini":
         cfg["provider"] = "gemini"
-    if not str(cfg.get("model", "")).startswith("gemini-"):
+    if cfg.get("model") not in ALLOWED_MODELS:
         cfg["model"] = DEFAULT_MODEL
 
     # Env fallback: lets deployments inject the key without touching the file.

@@ -130,7 +130,7 @@ export const providers: Provider[] = [
   },
 ];
 
-export const GEMINI_KEY_URL = "https://aistudio.google.com/apikey";
+export const GEMINI_KEY_URL = "https://aistudio.google.com/app/api-keys";
 
 export const wrongReasons: WrongReason[] = [
   { id: "numbers", label: "Wrong numbers" },

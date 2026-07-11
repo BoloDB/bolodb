@@ -119,7 +119,7 @@
         <input class="field mono" type="password" bind:value={apiKey}
           placeholder="AIza•••" style="font-size:13.5px" />
         <div style="font-size:12px;color:var(--faint);margin-top:7px;font-weight:550">
-          Get a free key at <a href={GEMINI_KEY_URL} target="_blank" rel="noopener" style="color:var(--brand-ink);font-weight:700;text-decoration:none">aistudio.google.com/apikey →</a>
+          Get a free key at <a href={GEMINI_KEY_URL} target="_blank" rel="noopener" style="color:var(--brand-ink);font-weight:700;text-decoration:none">aistudio.google.com/app/api-keys →</a>
         </div>
         {#if editingKey}
           <button onclick={() => { editingKey = false; apiKey = ''; }}

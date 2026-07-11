@@ -25,7 +25,7 @@ def main():
     if not cfg.get("api_keys", {}).get("gemini"):
         print(
             "  Note: no Gemini API key configured yet. Add one in Settings\n"
-            "  (free key: https://aistudio.google.com/apikey) or set the\n"
+            "  (free key: https://aistudio.google.com/app/api-keys) or set the\n"
             "  GEMINI_API_KEY environment variable.\n"
         )
 

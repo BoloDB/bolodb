@@ -89,7 +89,7 @@ they get more tables:
 `compact_schema()` renders each selected table as one dense line — far fewer
 tokens than a CREATE TABLE statement, but everything the AI needs:
 
-```
+```text
 orders(id PK, customer_id->customers.id, status[completed,pending,cancelled], total_amount, created_at) ~38104 rows
   e.g. {'id': 1, 'customer_id': 17, 'status': 'completed', ...}
 ```

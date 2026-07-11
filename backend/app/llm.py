@@ -277,7 +277,7 @@ class GeminiProvider(LLMProvider):
         if not self.api_key:
             raise LLMError(
                 "No Gemini API key is configured. Add one in Settings "
-                "(get a free key at https://aistudio.google.com/apikey).",
+                "(get a free key at https://aistudio.google.com/app/api-keys).",
                 detail="empty api_key",
             )
         body = self._build_body(system, user, json_mode, schema, thinking_budget)
@@ -315,11 +315,27 @@ class GeminiProvider(LLMProvider):
                 )
                 continue
 
-            if r.status_code in (400, 401, 403):
+            # Distinct messages per status. Note: Gemini returns 400 (not 401)
+            # for "API key not valid", so 400 mentions the key too.
+            if r.status_code == 400:
                 raise LLMError(
-                    "The Gemini API rejected the request — the API key may be "
-                    "invalid or expired. Check it in Settings.",
-                    detail=f"HTTP {r.status_code}: {r.text[:300]}",
+                    "The Gemini API rejected the request as invalid — most "
+                    "often the API key is malformed or not valid. Check the "
+                    "key in Settings.",
+                    detail=f"HTTP 400: {r.text[:300]}",
+                )
+            if r.status_code == 401:
+                raise LLMError(
+                    "The Gemini API key was not accepted — it may be invalid "
+                    "or expired. Check it in Settings.",
+                    detail=f"HTTP 401: {r.text[:300]}",
+                )
+            if r.status_code == 403:
+                raise LLMError(
+                    "The Gemini API denied access — the API key may lack "
+                    "permission for this model, or the project/region may be "
+                    "restricted. Check the key in Google AI Studio.",
+                    detail=f"HTTP 403: {r.text[:300]}",
                 )
             if r.status_code == 404:
                 raise LLMError(

@@ -37,7 +37,7 @@ choice also changes how much schema the prompt may contain — see
 
 ## The API key
 
-- Get a free key at https://aistudio.google.com/apikey.
+- Get a free key at https://aistudio.google.com/app/api-keys.
 - Enter it during onboarding (`ConnectScreen.svelte`, step 1) or later in
   Settings. It is saved **locally only**, in `~/.bolodb/config.json`, and
   **encrypted the moment it enters the system**: a per-install secret
@@ -98,7 +98,9 @@ Details that matter:
 | What happened | HTTP | What the user sees |
 |---|---|---|
 | No key configured | — | "No Gemini API key is configured. Add one in Settings…" |
-| Bad/expired key | 400/401/403 | "…the API key may be invalid or expired." |
+| Invalid request / malformed or invalid key | 400 | "…most often the API key is malformed or not valid. Check the key in Settings." |
+| Auth failure (expired key) | 401 | "The Gemini API key was not accepted — it may be invalid or expired." |
+| Permission / region / project restriction | 403 | "…the API key may lack permission… Check the key in Google AI Studio." |
 | Model renamed/retired | 404 | "The model '…' was not found — update the model in Settings." |
 | Rate limit / outage (after retries) | 429/5xx | "The AI service is busy right now — try again in a moment." |
 | Safety block | 200 + blockReason | "The AI declined to answer this question. Try rephrasing it." |

@@ -57,7 +57,7 @@ only the relevant ones.
 The chosen tables are rendered into a compact text form the AI reads —
 `compact_schema()` produces lines like:
 
-```
+```text
 orders(id PK, customer_id->customers.id, status[completed,pending,cancelled], total_amount, created_at) ~38104 rows
 ```
 
@@ -113,7 +113,7 @@ product's core flywheel.
 
 ## The full picture
 
-```
+```text
  Question ─▶ [1] knowledge lookup      knowledge.py
              [2] schema linking        schema_link.py
              [3] generate ◀────┐       llm.py (Gemini)
