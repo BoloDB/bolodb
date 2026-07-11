@@ -58,10 +58,18 @@ export async function streamApiCall(
         if (!trimmed.startsWith("data: ")) continue;
         try {
           const event = JSON.parse(trimmed.slice(6)) as StreamEvent;
-          if (event.kind === "result") { onDone(event.data); return; }
-          if (event.kind === "error") { onError(new Error(event.message)); return; }
+          if (event.kind === "result") {
+            onDone(event.data);
+            return;
+          }
+          if (event.kind === "error") {
+            onError(new Error(event.message));
+            return;
+          }
           onEvent(event);
-        } catch { /* skip malformed */ }
+        } catch {
+          /* skip malformed */
+        }
       }
     }
   } catch (err) {
