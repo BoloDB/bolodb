@@ -54,6 +54,32 @@
     editValue = '';
   }
 
+  function copyFallback(text: string): boolean {
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.position = 'fixed';
+    ta.style.opacity = '0';
+    document.body.appendChild(ta);
+    ta.select();
+    try {
+      return document.execCommand('copy');
+    } finally {
+      document.body.removeChild(ta);
+    }
+  }
+
+  async function copyText(text: string): Promise<boolean> {
+    if (navigator.clipboard?.writeText) {
+      try {
+        await navigator.clipboard.writeText(text);
+        return true;
+      } catch {
+        return copyFallback(text);
+      }
+    }
+    return copyFallback(text);
+  }
+
   async function copyResponse() {
     const parts: string[] = [];
     if (turn.restatement) parts.push(`What I understood: ${turn.restatement}`);
@@ -63,21 +89,15 @@
       const rows = turn.rows.map(r => r.join('\t')).join('\n');
       parts.push(`Results:\n${header}\n${rows}`);
     }
-    try {
-      await navigator.clipboard.writeText(parts.join('\n\n'));
-    } catch {
-      return;
-    }
+    const ok = await copyText(parts.join('\n\n'));
+    if (!ok) return;
     copyFeedback = 'response';
     setTimeout(() => copyFeedback = null, 1500);
   }
 
   async function copyPrompt() {
-    try {
-      await navigator.clipboard.writeText(turn.question);
-    } catch {
-      return;
-    }
+    const ok = await copyText(turn.question);
+    if (!ok) return;
     copyFeedback = 'prompt';
     setTimeout(() => copyFeedback = null, 1500);
   }
@@ -253,39 +273,57 @@
     {/if}
   </div>
 
-  {#if !turn.thinking && !turn.isDirect && turn.restatement}
-    <div class="opacity-0 group-hover:opacity-100 focus-visible:opacity-100 transition-opacity"
+  {#if !turn.thinking && !turn.isDirect && turn.restatement && !editing}
+    <div class="opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity"
       style="display:flex;gap:2px;margin-top:6px;padding-left:4px">
-      <button onclick={() => onRegenerate?.(turn.id)} title="Regenerate"
-        style="width:24px;height:24px;display:grid;place-items:center;border:none;background:transparent;color:var(--faint);border-radius:4px;cursor:pointer;transition:all .12s"
-        onmouseenter={(e) => (e.currentTarget as HTMLElement).style.color = 'var(--muted)'}
-        onmouseleave={(e) => (e.currentTarget as HTMLElement).style.color = 'var(--faint)'}>
+      <button class="tb-btn" onclick={() => onRegenerate?.(turn.id)} title="Regenerate">
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none"><path d="M1 4v6h6M23 20v-6h-6" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"/><path d="M20.5 6.5A9 9 0 004.9 9M3.5 17.5A9 9 0 0019.1 15" stroke="currentColor" stroke-width="2.1" stroke-linecap="round"/></svg>
       </button>
-      <button onclick={copyResponse} title="Copy response"
-        style="width:24px;height:24px;display:grid;place-items:center;border:none;background:transparent;color:var(--faint);border-radius:4px;cursor:pointer;transition:all .12s;position:relative"
-        onmouseenter={(e) => (e.currentTarget as HTMLElement).style.color = 'var(--muted)'}
-        onmouseleave={(e) => (e.currentTarget as HTMLElement).style.color = 'var(--faint)'}>
+      <button class="tb-btn" onclick={copyResponse} title="Copy response" style="position:relative">
         {#if copyFeedback === 'response'}
-          <span style="font-size:9px;font-weight:700;color:var(--brand);position:absolute;top:-5px;right:-3px;background:var(--surface);padding:0 2px;border-radius:2px;white-space:nowrap">Copied!</span>
+          <span class="tb-copied" aria-live="polite">Copied!</span>
         {/if}
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none"><rect x="9" y="9" width="13" height="13" rx="2" stroke="currentColor" stroke-width="1.8"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1" stroke="currentColor" stroke-width="1.8"/></svg>
       </button>
-      <button onclick={copyPrompt} title="Copy prompt"
-        style="width:24px;height:24px;display:grid;place-items:center;border:none;background:transparent;color:var(--faint);border-radius:4px;cursor:pointer;transition:all .12s;position:relative"
-        onmouseenter={(e) => (e.currentTarget as HTMLElement).style.color = 'var(--muted)'}
-        onmouseleave={(e) => (e.currentTarget as HTMLElement).style.color = 'var(--faint)'}>
+      <button class="tb-btn" onclick={copyPrompt} title="Copy prompt" style="position:relative">
         {#if copyFeedback === 'prompt'}
-          <span style="font-size:9px;font-weight:700;color:var(--brand);position:absolute;top:-5px;right:-3px;background:var(--surface);padding:0 2px;border-radius:2px;white-space:nowrap">Copied!</span>
+          <span class="tb-copied" aria-live="polite">Copied!</span>
         {/if}
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8l-6-6z" stroke="currentColor" stroke-width="1.8"/><path d="M14 2v6h6M16 13H8M16 17H8M10 9H8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
       </button>
-      <button onclick={startEdit} title="Edit prompt"
-        style="width:24px;height:24px;display:grid;place-items:center;border:none;background:transparent;color:var(--faint);border-radius:4px;cursor:pointer;transition:all .12s"
-        onmouseenter={(e) => (e.currentTarget as HTMLElement).style.color = 'var(--muted)'}
-        onmouseleave={(e) => (e.currentTarget as HTMLElement).style.color = 'var(--faint)'}>
+      <button class="tb-btn" onclick={startEdit} title="Edit prompt">
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none"><path d="M17 3a2.83 2.83 0 114 4L7.5 20.5 2 22l1.5-5.5L17 3z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
       </button>
     </div>
   {/if}
 </div>
+
+<style>
+  .tb-btn {
+    width: 24px;
+    height: 24px;
+    display: grid;
+    place-items: center;
+    border: none;
+    background: transparent;
+    color: var(--faint);
+    border-radius: 4px;
+    cursor: pointer;
+    transition: color .12s;
+  }
+  .tb-btn:hover {
+    color: var(--muted);
+  }
+  .tb-copied {
+    font-size: 9px;
+    font-weight: 700;
+    color: var(--brand);
+    position: absolute;
+    top: -5px;
+    right: -3px;
+    background: var(--surface);
+    padding: 0 2px;
+    border-radius: 2px;
+    white-space: nowrap;
+  }
+</style>

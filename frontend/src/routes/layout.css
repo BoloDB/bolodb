@@ -368,7 +368,6 @@ select {
   font-size: 13px;
   font-weight: 700;
   letter-spacing: -0.01em;
-  border: 1px solid;
   line-height: 1;
 }
 .conf .dot {
@@ -380,7 +379,6 @@ select {
 .conf-high {
   color: var(--c-high-ink);
   background: var(--c-high-tint);
-  border-color: #bfe6cf;
   --dot-halo: rgba(27, 158, 107, 0.16);
 }
 .conf-high .dot {
@@ -389,7 +387,6 @@ select {
 .conf-med {
   color: var(--c-med-ink);
   background: var(--c-med-tint);
-  border-color: #ebd7a2;
   --dot-halo: rgba(194, 137, 27, 0.16);
 }
 .conf-med .dot {
@@ -398,7 +395,6 @@ select {
 .conf-low {
   color: var(--c-low-ink);
   background: var(--c-low-tint);
-  border-color: #ebc6bd;
   --dot-halo: rgba(199, 93, 78, 0.16);
 }
 .conf-low .dot {
