@@ -1,7 +1,7 @@
 <script lang="ts">
   import { trustFor } from '$lib/data';
-  import { apiCall, rowsToArrays } from '$lib/api';
-  import type { Turn, SchemaTable, DbInfo, Toast } from '$lib/types';
+  import { apiCall, rowsToArrays, streamApiCall } from '$lib/api';
+  import type { Turn, SchemaTable, DbInfo, Toast, ThinkingArtifact, StreamEvent } from '$lib/types';
   import Sidebar from '$lib/components/Sidebar.svelte';
   import AnswerCard from '$lib/components/AnswerCard.svelte';
   import Empty from '$lib/components/Empty.svelte';
@@ -31,6 +31,7 @@
   let loading = $state(false);
   let feedRef: HTMLDivElement | undefined = $state(undefined);
   let historyTrigger = $state(0);
+  let currentArtifacts: ThinkingArtifact[] = $state([]);
 
   const trust = $derived(trustFor(verifiedCount));
 
@@ -49,30 +50,42 @@
     if (feedRef) feedRef.scrollTop = feedRef.scrollHeight;
   });
 
+  function eventToArtifact(event: StreamEvent): ThinkingArtifact | null {
+    switch (event.kind) {
+      case 'schema_linked':
+        return { kind: 'schema', data: { tables: event.tables, linked: event.linked, glossary: event.glossary } };
+      case 'hint':
+        return { kind: 'hint', data: { message: event.message, elapsed: event.elapsed } };
+      case 'sql':
+        return { kind: 'sql', data: { attempt: event.attempt, sql: event.sql } };
+      case 'validation':
+        return { kind: 'validation', data: { attempt: event.attempt, checks: event.checks, passed: event.passed } };
+      case 'repair':
+        return { kind: 'repair', data: { attempt: event.attempt, total: event.total, error: event.error, suggestion: event.suggestion, old_sql: event.old_sql } };
+      case 'execution':
+        return { kind: 'execution', data: { rows: event.rows, elapsed: event.elapsed, truncated: event.truncated } };
+      case 'confidence':
+        return { kind: 'confidence', data: { level: event.level, reason: event.reason, based_on_verified: event.based_on_verified } };
+      default:
+        return null;
+    }
+  }
+
   // Handle input changes to detect slash commands
   function handleInput(e: Event) {
     const target = e.target as HTMLInputElement;
     const value = target.value;
 
-    // Show menu when "/" is typed at the beginning
     if (value === '/') {
       showSlashMenu = true;
       slashFilter = '';
-    }
-    // Close menu when "/" is deleted
-    else if (value === '' && showSlashMenu) {
+    } else if (value === '' && showSlashMenu) {
       showSlashMenu = false;
-    }
-    // Close menu when space is typed after command
-    else if (showSlashMenu && value.includes(' ')) {
+    } else if (showSlashMenu && value.includes(' ')) {
       showSlashMenu = false;
-    }
-    // Update filter when menu is shown
-    else if (showSlashMenu && value.startsWith('/')) {
+    } else if (showSlashMenu && value.startsWith('/')) {
       slashFilter = value.slice(1);
-    }
-    // Close menu if input doesn't start with "/"
-    else if (showSlashMenu && !value.startsWith('/')) {
+    } else if (showSlashMenu && !value.startsWith('/')) {
       showSlashMenu = false;
     }
   }
@@ -87,10 +100,10 @@
     showSlashMenu = false;
     slashFilter = '';
   }
-
   async function ask(text?: string) {
     const q = (text || input).trim();
     if (!q) return;
+    if (loading) return;
     input = ''; loading = true;
     const id = Math.random().toString(36).slice(2, 10);
 
@@ -138,27 +151,50 @@
         restatement: turn.restatement})
     }
     build_context.reverse();
-    turns = [...turns, { id, question: q, thinking: true }];
+    const artifacts: ThinkingArtifact[] = [];
+    turns = [...turns, { id, question: q, thinking: true, thinkingArtifacts: artifacts }];
+    currentArtifacts = artifacts;
     try {
-      const data = await apiCall('/api/query', { question: q, context: build_context });
-      const rows2d = rowsToArrays(data.columns || [], data.rows || []);
-      turns = turns.map(x => x.id === id ? {
-        ...x, thinking: false,
-        restatement: data.restatement || '', sql: data.sql || '',
-        columns: data.columns || [], rows: rows2d,
-        confidence: data.confidence || 'medium', reason: data.confidence_reason || '',
-        basedOn: data.based_on_verified || false, query_id: data.query_id || id,
-        executionError: data.execution_error || null, verdict: null
-      } : x);
-      historyTrigger++;
-    } catch (e: any) {
-      turns = turns.map(x => x.id === id ? {
-        ...x, thinking: false,
-        restatement: 'Something went wrong — please try again.',
-        sql: '', columns: [], rows: [], confidence: 'low' as const,
-        reason: e.message || 'Request failed', basedOn: false,
-        query_id: id, verdict: null
-      } : x);
+      await streamApiCall(
+        '/api/query/stream',
+        { question: q, context: build_context },
+        (event: StreamEvent) => {
+          const artifact = eventToArtifact(event);
+          if (artifact) {
+            if (artifact.kind === 'hint') {
+              const idx = artifacts.findIndex(a => a.kind === 'hint');
+              if (idx >= 0) artifacts[idx] = artifact;
+              else artifacts.push(artifact);
+            } else {
+              artifacts.push(artifact);
+            }
+            currentArtifacts = [...artifacts];
+          }
+        },
+        (data: any) => {
+          const rows2d = rowsToArrays(data.columns || [], data.rows || []);
+          turns = turns.map(x => x.id === id ? {
+            ...x, thinking: false,
+            restatement: data.restatement || '', sql: data.sql || '',
+            columns: data.columns || [], rows: rows2d,
+            confidence: data.confidence || 'medium', reason: data.confidence_reason || '',
+            basedOn: data.based_on_verified || false, query_id: data.query_id || id,
+            executionError: data.execution_error || null, verdict: null,
+            thinkingArtifacts: [...artifacts],
+          } : x);
+          historyTrigger++;
+        },
+        (err: Error) => {
+          turns = turns.map(x => x.id === id ? {
+            ...x, thinking: false,
+            restatement: 'Something went wrong — please try again.',
+            sql: '', columns: [], rows: [], confidence: 'low' as const,
+            reason: err.message || 'Request failed', basedOn: false,
+            query_id: id, verdict: null,
+            thinkingArtifacts: [...artifacts],
+          } : x);
+        }
+      );
     } finally { loading = false; }
   }
 
@@ -216,7 +252,8 @@
           <Empty {trust} onPick={ask} {starters} />
         {:else}
           {#each turns as t, i (t.id)}
-            <AnswerCard turn={t} isLatest={i === turns.length - 1} onVerify={handleVerify} />
+            <AnswerCard turn={t} isLatest={i === turns.length - 1} onVerify={handleVerify}
+              liveArtifacts={t.thinking ? currentArtifacts : undefined} />
           {/each}
         {/if}
       </div>
