@@ -320,9 +320,7 @@ def conversation_owned_by(user_id, conversation_id):
     except (InvalidId, TypeError):
         return False
     return (
-        db["conversations"].find_one(
-            {"_id": oid, "user_id": str(user_id)}, {"_id": 1}
-        )
+        db["conversations"].find_one({"_id": oid, "user_id": str(user_id)}, {"_id": 1})
         is not None
     )
 
