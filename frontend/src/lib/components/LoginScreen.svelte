@@ -23,7 +23,14 @@
     error = "";
     try {
       await apiCall("/api/auth/login", { email, password });
-      posthog.identify(email, { email });
+      // Use a hash of the email as the analytics identity — never send
+      // plaintext PII to an analytics platform without explicit consent.
+      const anonymousId = Array.from(
+        new Uint8Array(
+          await crypto.subtle.digest("SHA-256", new TextEncoder().encode(email))
+        ).slice(0, 8)
+      ).map((b) => b.toString(16).padStart(2, "0")).join("");
+      posthog.identify(anonymousId);
       posthog.capture("user_logged_in", { method: "email" });
       onLogin();
     } catch (err: any) {
