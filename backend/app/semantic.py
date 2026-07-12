@@ -23,6 +23,7 @@ _CATALOG_KEYS = (
 
 
 def empty_catalog():
+    """An empty catalog dict with all five category lists present."""
     return {k: [] for k in _CATALOG_KEYS}
 
 
@@ -33,6 +34,7 @@ def _humanize(value):
 
 
 def _join_tables(join):
+    """The set of lower-cased table names referenced by a join entry."""
     raw = join.get("tables", "") or ""
     return {t.strip().lower() for t in re.split(r"[,\s]+", raw) if t.strip()}
 

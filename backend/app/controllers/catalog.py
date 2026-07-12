@@ -8,12 +8,14 @@ from backend.app.semantic import merge_catalog_suggestions, suggest_from_schema
 
 
 def get_catalog(user_id, db, kb):
+    """Return the stored catalog for the user's connected database."""
     if not db.connected(user_id):
         raise HTTPException(409, "No database connected")
     return {"catalog": kb.get_catalog(db.get_db_id(user_id))}
 
 
 def save_catalog(user_id, db, kb, payload):
+    """Persist ``payload`` as the connected database's catalog."""
     if not db.connected(user_id):
         raise HTTPException(409, "No database connected")
     kb.set_catalog(db.get_db_id(user_id), payload.model_dump())

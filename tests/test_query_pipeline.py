@@ -46,6 +46,8 @@ class FakeDB:
 
 
 class FakeKB:
+    """Minimal knowledge base with an optional catalog for the query tests."""
+
     def __init__(self, catalog=None):
         self._catalog = catalog or {}
 
