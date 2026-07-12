@@ -14,6 +14,7 @@
   let error = $state("");
   let loading = $state(false);
   let containerEl = $state<HTMLDivElement>();
+  let hasClientId = $state(typeof window !== "undefined" && !!window.__GOOGLE_CLIENT_ID__);
 
   function handleCredentialResponse(
     response: google.accounts.id.CredentialResponse,
@@ -69,6 +70,7 @@
       const { apiCall } = await import("$lib/api");
       const data = await apiCall("/api/config/public");
       window.__GOOGLE_CLIENT_ID__ = data.google_client_id || "";
+      hasClientId = !!window.__GOOGLE_CLIENT_ID__;
       initGIS();
     } catch {
       // Google sign-in not configured
@@ -78,6 +80,7 @@
   $effect(() => {
     if (containerEl) {
       if (window.__GOOGLE_CLIENT_ID__) {
+        hasClientId = true;
         initGIS();
       } else {
         getClientId();
@@ -100,7 +103,7 @@
       ? 'opacity:0.6;pointer-events:none;'
       : ''}"
   ></div>
-  {#if !window.__GOOGLE_CLIENT_ID__ && !error}
+  {#if !hasClientId && !error}
     <button
       onclick={getClientId}
       style="display:inline-flex;align-items:center;gap:10px;padding:10px 24px;border:1px solid var(--border);border-radius:24px;background:var(--surface);color:var(--ink);font-size:14px;font-weight:500;cursor:pointer"
