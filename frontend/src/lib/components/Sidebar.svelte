@@ -110,7 +110,7 @@
 </script>
 
 <div style="display:flex;flex-shrink:0;height:100%">
-<div style="width:{sidebarOpen ? '286px' : '0'};overflow:hidden;flex-shrink:0;border-right:1px solid var(--border);background:var(--surface);display:flex;flex-direction:column;height:100%;transition:width .2s">
+<div style="width:{sidebarOpen ? '286px' : '0'};overflow:hidden;flex-shrink:0;background:var(--surface);display:flex;flex-direction:column;height:100%;transition:width .2s">
   <!-- trust panel -->
   <div style="margin:16px 16px 14px;padding:16px;border-radius:var(--radius);background:linear-gradient(165deg, var(--brand-tint), var(--surface-2));border:1px solid var(--border)">
     <div style="display:flex;align-items:center;gap:7px;margin-bottom:11px">

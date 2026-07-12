@@ -221,7 +221,7 @@
     const sqlMatch = question.match(/^\/sql\s+(.+)/is);
     if (sqlMatch) {
       const rawSql = sqlMatch[1].trim();
-      onAddTurn({ id, question: rawSql, thinking: true, isDirect: true } as Turn);
+      onAddTurn({ id, question: rawSql, thinking: true, isDirect: true, timestamp: ts } as Turn);
       const convId = await ensureConversation(rawSql);
       try {
         const data = await apiCall("/api/execute", { sql: rawSql });
@@ -238,6 +238,7 @@
           executionError: null,
           verdict: null,
           isDirect: true,
+          timestamp: ts,
         });
         conversationTrigger++;
       } catch (e: any) {
@@ -253,6 +254,7 @@
           executionError: e.message || "SQL execution failed",
           verdict: null,
           isDirect: true,
+          timestamp: ts,
         });
       }
       return;
@@ -261,7 +263,7 @@
     // Normal LLM query flow
     const artifacts: ThinkingArtifact[] = [];
     currentArtifacts = artifacts;
-    onAddTurn({ id, question, thinking: true, thinkingArtifacts: artifacts } as Turn);
+    onAddTurn({ id, question, thinking: true, thinkingArtifacts: artifacts, timestamp: ts } as Turn);
 
     let build_context = [];
     for (let t of turns.toReversed()) {
@@ -301,6 +303,7 @@
           executionError: data.execution_error || null,
           verdict: null,
           thinkingArtifacts: [...artifacts],
+          timestamp: ts,
         });
         historyTrigger++;
       },
@@ -317,6 +320,7 @@
           query_id: id,
           verdict: null,
           thinkingArtifacts: [...artifacts],
+          timestamp: ts,
         });
       },
       signal,
