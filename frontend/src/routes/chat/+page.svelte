@@ -35,6 +35,8 @@
       dbInfo={appState.dbInfo}
       starters={appState.starters}
       onDisconnect={() => appState.disconnect()}
+      activeConversationId={appState.activeConversationId}
+      onActiveConversationChange={(id) => appState.activeConversationId = id}
     />
   {/if}
 </div>

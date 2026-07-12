@@ -488,6 +488,13 @@ async def run_query_stream(user_id, db, kb, cfg, providers, session_log, req_dat
     # Persist to query history so the dashboard and history reflect streamed
     # queries too (the /api/query/stream route can't save after the response
     # has started streaming, so we do it here — mirrors the non-streaming route).
+    # Only link the turn to a conversation the caller actually owns
+    conversation_id = req_data.conversation_id
+    if conversation_id and not await run_in_threadpool(
+        mdb.conversation_owned_by, user_id, conversation_id
+    ):
+        conversation_id = None
+
     if out.get("sql") and not out.get("execution_error"):
         conf_str = (
             "High"
@@ -504,7 +511,11 @@ async def run_query_stream(user_id, db, kb, cfg, providers, session_log, req_dat
                 sql=out["sql"],
                 result=out.get("rows", []),
                 confidence=conf_str,
+                conversation_id=conversation_id,
+                restatement=out.get("restatement", ""),
             )
+            if conversation_id:
+                await run_in_threadpool(mdb.touch_conversation, conversation_id)
         except Exception:
             log.warning("Failed to persist streamed query history", exc_info=True)
 

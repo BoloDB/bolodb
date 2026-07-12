@@ -115,6 +115,41 @@ export async function clearHistory(): Promise<any> {
   return apiCall("/api/history", undefined, "DELETE");
 }
 
+// --- Conversations ---
+
+export async function getConversations(): Promise<any> {
+  return apiCall("/api/conversations");
+}
+
+export async function createConversation(
+  title?: string,
+  databaseId?: string,
+): Promise<any> {
+  return apiCall("/api/conversations", {
+    title: title || "",
+    database_id: databaseId,
+  });
+}
+
+export async function getConversation(id: string): Promise<any> {
+  return apiCall(`/api/conversations/${id}`);
+}
+
+export async function renameConversation(
+  id: string,
+  title: string,
+): Promise<any> {
+  return apiCall(`/api/conversations/${id}`, { title }, "PATCH");
+}
+
+export async function deleteConversation(id: string): Promise<any> {
+  return apiCall(`/api/conversations/${id}`, undefined, "DELETE");
+}
+
+export async function clearConversations(): Promise<any> {
+  return apiCall("/api/conversations", undefined, "DELETE");
+}
+
 /** Convert API rows (array of objects) to 2D string arrays for ResultTable */
 export function rowsToArrays(
   columns: string[],

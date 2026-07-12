@@ -60,6 +60,13 @@ async def query(
     if out.get("answered") and out.get("sql"):
         conf = out.get("confidence", "low")
         conf_str = "High" if conf == "high" else "Medium" if conf == "medium" else "Low"
+        # Only link the turn to a conversation the caller actually owns —
+        # otherwise a request could inject turns into someone else's thread.
+        conversation_id = req.conversation_id
+        if conversation_id and not await run_in_threadpool(
+            mdb.conversation_owned_by, user_id, conversation_id
+        ):
+            conversation_id = None
         try:
             await run_in_threadpool(
                 mdb.save_query,
@@ -68,7 +75,11 @@ async def query(
                 sql=out["sql"],
                 result=out.get("rows", []),
                 confidence=conf_str,
+                conversation_id=conversation_id,
+                restatement=out.get("restatement", ""),
             )
+            if conversation_id:
+                await run_in_threadpool(mdb.touch_conversation, conversation_id)
         except Exception:
             log.warning("Failed to persist query history", exc_info=True)
     return out
