@@ -53,7 +53,9 @@
         onclick={copySQL}
         title="Copy SQL query"
         aria-live="polite"
-        style="position:absolute;top:8px;right:8px;display:inline-flex;align-items:center;gap:5px;padding:4px 8px;border-radius:4px;background:{copied ? 'var(--brand-tint)' : 'var(--surface)'};border:1px solid {copied ? 'var(--brand-tint-2)' : 'var(--border-2)'};color:{copied ? 'var(--brand-ink)' : 'var(--faint)'};font-size:11px;font-weight:650;cursor:pointer;transition:all .15s"
+        style="position:absolute;top:8px;right:8px;display:inline-flex;align-items:center;gap:4px;padding:3px 7px;border-radius:4px;border:none;background:color-mix(in srgb, var(--surface) 80%, transparent);color:{copied ? 'var(--brand)' : 'var(--faint)'};font-size:11px;font-weight:650;cursor:pointer;transition:color .15s"
+        onmouseenter={(e) => { if (!copied) e.currentTarget.style.color = 'var(--muted)'; }}
+        onmouseleave={(e) => { if (!copied) e.currentTarget.style.color = 'var(--faint)'; }}
       >
         {copied ? "✓ Copied!" : "Copy"}
       </button>
