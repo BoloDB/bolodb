@@ -252,12 +252,15 @@
     </button>
   </div>
 </div>
-<button onclick={() => sidebarOpen = !sidebarOpen} style="width:20px;flex-shrink:0;cursor:pointer;background:var(--surface);border:none;display:flex;align-items:center;justify-content:center;transition:all .15s">
-    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" style="color:var(--faint)">
+<button onclick={() => sidebarOpen = !sidebarOpen} aria-label="Toggle sidebar"
+    style="width:16px;flex-shrink:0;cursor:pointer;background:var(--surface);border:none;border-right:1px solid var(--border);border-radius:0;display:flex;align-items:center;justify-content:center;transition:background .15s, opacity .15s;opacity:.4"
+    onmouseenter={(e) => { (e.currentTarget as HTMLElement).style.opacity = '1'; (e.currentTarget as HTMLElement).style.background = 'var(--surface-2)' }}
+    onmouseleave={(e) => { (e.currentTarget as HTMLElement).style.opacity = '.4'; (e.currentTarget as HTMLElement).style.background = 'var(--surface)' }}>
+    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" style="color:var(--muted)">
       {#if sidebarOpen}
-        <path d="M15 18l-6-6 6-6" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M15 18l-6-6 6-6" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
       {:else}
-        <path d="M9 18l6-6-6-6" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M9 18l6-6-6-6" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
       {/if}
     </svg>
   </button>
