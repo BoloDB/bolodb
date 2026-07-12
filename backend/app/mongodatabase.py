@@ -400,12 +400,17 @@ def delete_conversation(user_id, conversation_id):
         oid = ObjectId(conversation_id)
     except (InvalidId, TypeError):
         return False
-    result = conversations.delete_one({"_id": oid, "user_id": str(user_id)})
-    if result.deleted_count > 0:
-        # Cascade delete turns
-        history.delete_many({"conversation_id": conversation_id})
-        return True
-    return False
+    # Confirm ownership first, then delete the turns before the conversation:
+    # if turn deletion fails the conversation is still there to retry, rather
+    # than leaving orphaned turns behind. Turn deletion is scoped to the owner.
+    if (
+        conversations.find_one({"_id": oid, "user_id": str(user_id)}, {"_id": 1})
+        is None
+    ):
+        return False
+    history.delete_many({"conversation_id": conversation_id, "user_id": str(user_id)})
+    conversations.delete_one({"_id": oid, "user_id": str(user_id)})
+    return True
 
 
 def clear_conversations(user_id):
@@ -413,6 +418,9 @@ def clear_conversations(user_id):
     history = db["query_history"]
     conv_cursor = conversations.find({"user_id": str(user_id)}, {"_id": 1})
     conv_ids = [str(c["_id"]) for c in conv_cursor]
-    conversations.delete_many({"user_id": str(user_id)})
+    # Delete turns before conversations so a partial failure never orphans turns.
     if conv_ids:
-        history.delete_many({"conversation_id": {"$in": conv_ids}})
+        history.delete_many(
+            {"conversation_id": {"$in": conv_ids}, "user_id": str(user_id)}
+        )
+    conversations.delete_many({"user_id": str(user_id)})
