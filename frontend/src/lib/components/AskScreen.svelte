@@ -1,6 +1,6 @@
 <script lang="ts">
   import { trustFor } from "$lib/data";
-  import { apiCall, rowsToArrays, streamApiCall, getConversation } from "$lib/api";
+  import { apiCall, rowsToArrays, streamApiCall, createConversation, getConversation } from "$lib/api";
   import type {
     Turn,
     SchemaTable,
@@ -194,6 +194,20 @@
     showSlashMenu = false;
     slashFilter = "";
   }
+  async function ensureConversation(firstQuestion?: string): Promise<string | null> {
+    if (activeConversationId) return activeConversationId;
+    const title = (firstQuestion || "").slice(0, 80);
+    try {
+      const conv = await createConversation(title, dbInfo?.db_id);
+      onActiveConversationChange(conv._id);
+      conversationTrigger++;
+      return conv._id;
+    } catch (e) {
+      console.error("Failed to create conversation", e);
+      return null;
+    }
+  }
+
   async function runQuery(
     question: string,
     onAddTurn: (turn: Turn) => void,
@@ -201,23 +215,65 @@
     signal?: AbortSignal,
   ) {
     const id = Math.random().toString(36).slice(2, 10);
-    const ts = Date.now();
+    const ts = new Date().toISOString();
+
+    // Direct SQL mode: /sql <query>
+    const sqlMatch = question.match(/^\/sql\s+(.+)/is);
+    if (sqlMatch) {
+      const rawSql = sqlMatch[1].trim();
+      onAddTurn({ id, question: rawSql, thinking: true, isDirect: true } as Turn);
+      const convId = await ensureConversation(rawSql);
+      try {
+        const data = await apiCall("/api/execute", { sql: rawSql });
+        const rows2d = rowsToArrays(data.columns || [], data.rows || []);
+        onUpdateTurn(id, {
+          thinking: false,
+          sql: data.sql || rawSql,
+          columns: data.columns || [],
+          rows: rows2d,
+          confidence: "high" as const,
+          reason: "Direct SQL execution",
+          basedOn: false,
+          query_id: id,
+          executionError: null,
+          verdict: null,
+          isDirect: true,
+        });
+        conversationTrigger++;
+      } catch (e: any) {
+        onUpdateTurn(id, {
+          thinking: false,
+          sql: rawSql,
+          columns: [],
+          rows: [],
+          confidence: "low" as const,
+          reason: "Execution failed",
+          basedOn: false,
+          query_id: id,
+          executionError: e.message || "SQL execution failed",
+          verdict: null,
+          isDirect: true,
+        });
+      }
+      return;
+    }
+
+    // Normal LLM query flow
     const artifacts: ThinkingArtifact[] = [];
+    currentArtifacts = artifacts;
+    onAddTurn({ id, question, thinking: true, thinkingArtifacts: artifacts } as Turn);
 
     let build_context = [];
-    for (let turn of turns.toReversed()) {
+    for (let t of turns.toReversed()) {
       if (build_context.length >= 2) break;
-      if (turn.thinking || !turn.sql || turn.executionError || turn.verdict === "wrong") continue;
-      build_context.push({ question: turn.question, sql: turn.sql, restatement: turn.restatement });
+      if (t.thinking || !t.sql || t.executionError || t.verdict === "wrong") continue;
+      build_context.push({ question: t.question, sql: t.sql, restatement: t.restatement });
     }
     build_context.reverse();
-
-    onAddTurn({ id, question, thinking: true, thinkingArtifacts: artifacts });
-    currentArtifacts = artifacts;
-
+    const convId = await ensureConversation(question);
     await streamApiCall(
       "/api/query/stream",
-      { question, context: build_context },
+      { question, context: build_context, conversation_id: convId || undefined },
       (event: StreamEvent) => {
         const artifact = eventToArtifact(event);
         if (artifact) {
@@ -273,34 +329,11 @@
     input = "";
     loading = true;
     abortController = new AbortController();
-    const id = Math.random().toString(36).slice(2, 10);
 
     posthog.capture("query_submitted", {
       is_direct_sql: q.startsWith("/sql "),
       question_length: q.length,
     });
-
-    // Direct SQL mode: /sql <query>
-    const sqlMatch = q.match(/^\/sql\s+(.+)/is);
-    if (sqlMatch) {
-      const rawSql = sqlMatch[1].trim();
-      turns = [...turns, { id, question: rawSql, thinking: true, isDirect: true }];
-      try {
-        const data = await apiCall("/api/execute", { sql: rawSql });
-        const rows2d = rowsToArrays(data.columns || [], data.rows || []);
-        turns = turns.map((x) =>
-          x.id === id ? { ...x, thinking: false, sql: data.sql || rawSql, columns: data.columns || [], rows: rows2d, confidence: "high" as const, reason: "Direct SQL execution", basedOn: false, query_id: id, executionError: null, verdict: null, isDirect: true } : x,
-        );
-        historyTrigger++;
-      } catch (e: any) {
-        turns = turns.map((x) =>
-          x.id === id ? { ...x, thinking: false, sql: rawSql, columns: [], rows: [], confidence: "low" as const, reason: "Execution failed", basedOn: false, query_id: id, executionError: e.message || "SQL execution failed", verdict: null, isDirect: true } : x,
-        );
-      } finally {
-        loading = false;
-      }
-      return;
-    }
 
     try {
       await runQuery(
