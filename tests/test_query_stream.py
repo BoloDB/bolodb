@@ -98,8 +98,8 @@ def test_stream_inline_repair_loop_feedback(monkeypatch):
     )
     provider = FakeProvider(
         [
-            _sql_json("SELECT totl FROM orders"),  # fails execution
-            _sql_json("SELECT total FROM orders"),  # succeeds
+            _sql_json("SELECT id FROM orders"),  # validates OK, fails execution
+            _sql_json("SELECT total_amount FROM orders"),  # validates + executes OK
         ]
     )
     events = _collect(provider, db=db)

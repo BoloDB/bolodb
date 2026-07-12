@@ -9,6 +9,7 @@
     ThinkingArtifact,
     StreamEvent,
     Conversation,
+    ConversationTurn,
   } from "$lib/types";
   import Sidebar from "$lib/components/Sidebar.svelte";
   import AnswerCard from "$lib/components/AnswerCard.svelte";
