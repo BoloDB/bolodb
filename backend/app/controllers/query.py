@@ -317,10 +317,11 @@ async def run_query_stream(user_id, db, kb, cfg, providers, session_log, req_dat
     }
 
     hints = _generate_hints(q, tables, glossary, retrieved)
-    max_iterations = 3
+    max_iterations = _MAX_ATTEMPTS
     feedback = ""
     last_restatement = ""
-    success = False
+    exec_result = None
+    exec_elapsed = 0
 
     for attempt in range(1, max_iterations + 1):
         llm_coro = generate_sql(
@@ -381,46 +382,78 @@ async def run_query_stream(user_id, db, kb, cfg, providers, session_log, req_dat
             "passed": passed,
         }
 
-        if passed:
-            success = True
+        if not passed:
+            if attempt < max_iterations:
+                errors = verdict.get("errors", [])
+                error_msg = errors[0] if errors else "Validation failed"
+                yield {
+                    "kind": "repair",
+                    "attempt": attempt,
+                    "total": max_iterations,
+                    "error": error_msg,
+                    "suggestion": _extract_suggestion(error_msg, full_schema)
+                    or "Retrying with corrections",
+                    "old_sql": sql,
+                }
+                fb_lines = [
+                    "The previous SQL attempt was:",
+                    sql,
+                    "",
+                    "Problems found:",
+                ]
+                fb_lines += [f"- {e}" for e in errors]
+                fb_lines.append(
+                    "Return a corrected SQL query that fixes these problems."
+                )
+                feedback = "\n".join(fb_lines)
+            continue
+
+        # Validation passed — run it. A runtime failure feeds back into the
+        # repair loop just like a validation error (parity with run_query), so
+        # a query that only breaks at execution still gets another attempt.
+        exec_start = time.monotonic()
+        try:
+            exec_result = await run_in_threadpool(db.execute, user_id, sql)
+        except Exception:
+            log.warning("Query execution failed during streaming", exc_info=True)
+            exec_result = {
+                "error": "The query could not be run against the database."
+            }
+        exec_elapsed = round(time.monotonic() - exec_start, 3)
+
+        if not exec_result.get("error"):
             break
 
         if attempt < max_iterations:
-            errors = verdict.get("errors", [])
-            error_msg = errors[0] if errors else "Validation failed"
+            err = exec_result["error"]
             yield {
                 "kind": "repair",
                 "attempt": attempt,
                 "total": max_iterations,
-                "error": error_msg,
-                "suggestion": _extract_suggestion(error_msg, full_schema)
-                or "Retrying with corrections",
+                "error": err,
+                "suggestion": "Retrying with corrections",
                 "old_sql": sql,
             }
-            fb_lines = [
-                "The previous SQL attempt was:",
-                sql,
-                "",
-                "Problems found:",
-            ]
-            fb_lines += [f"- {e}" for e in errors]
-            fb_lines.append("Return a corrected SQL query that fixes these problems.")
-            feedback = "\n".join(fb_lines)
+            feedback = "\n".join(
+                [
+                    "The previous SQL attempt was:",
+                    sql,
+                    "",
+                    "It failed to execute with this error:",
+                    f"- {err}",
+                    "Return a corrected SQL query that fixes this problem.",
+                ]
+            )
+            continue
+        # Out of attempts — fall through and surface the execution error.
+        break
 
-    if not success:
+    if exec_result is None:
         yield {
             "kind": "error",
             "message": f"Could not generate valid SQL after {max_iterations} attempts",
         }
         return
-
-    try:
-        exec_start = time.monotonic()
-        exec_result = await run_in_threadpool(db.execute, user_id, sql)
-        exec_elapsed = round(time.monotonic() - exec_start, 3)
-    except Exception as e:
-        exec_result = {"error": str(e)}
-        exec_elapsed = 0
 
     yield {
         "kind": "execution",

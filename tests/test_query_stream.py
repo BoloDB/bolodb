@@ -84,3 +84,30 @@ def test_stream_repairs_invalid_sql(monkeypatch):
     assert kinds[-1] == "result"
     data = next(e for e in events if e["kind"] == "result")["data"]
     assert data["sql"] == "SELECT total_amount FROM orders"
+
+
+def test_stream_repairs_execution_failure(monkeypatch):
+    """A query that validates but fails at execution must feed back into the
+    repair loop, matching the non-streaming run_query behaviour."""
+    monkeypatch.setattr(query_ctrl.mdb, "save_query", lambda **kw: None, raising=True)
+    # both SQLs validate fine; the first fails at execution, the second works
+    db = FakeDB(
+        exec_results=[
+            {"error": "no such column: totl"},
+            {"columns": ["n"], "rows": [{"n": 1}], "truncated": False},
+        ]
+    )
+    provider = FakeProvider(
+        [
+            _sql_json("SELECT id FROM orders"),
+            _sql_json("SELECT total_amount FROM orders"),
+        ]
+    )
+    events = _collect(provider, db=db)
+    kinds = [e["kind"] for e in events]
+    assert "repair" in kinds  # execution failure triggered a repair
+    assert kinds[-1] == "result"
+    data = next(e for e in events if e["kind"] == "result")["data"]
+    assert data["sql"] == "SELECT total_amount FROM orders"
+    assert "execution_error" not in data
+    assert data["rows"] == [{"n": 1}]

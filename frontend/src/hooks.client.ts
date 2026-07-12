@@ -7,9 +7,12 @@ export async function init() {
   // Analytics is optional — skip init entirely when no token is configured
   // (local dev, self-hosters) instead of initialising with an empty key.
   if (!token) return;
+  const apiHost = env.PUBLIC_POSTHOG_HOST || "https://us.i.posthog.com";
   posthog.init(token, {
-    api_host: env.PUBLIC_POSTHOG_HOST || "https://us.i.posthog.com",
-    ui_host: "https://us.posthog.com",
+    api_host: apiHost,
+    // Derive the UI host from the configured host so EU installs
+    // (eu.i.posthog.com) don't point session replay/toolbar at the US app.
+    ui_host: apiHost.replace("i.posthog.com", "posthog.com"),
     defaults: "2026-01-30",
     capture_exceptions: true,
   });

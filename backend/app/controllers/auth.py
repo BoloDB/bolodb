@@ -1,3 +1,5 @@
+import logging
+
 import bcrypt
 from pydantic import EmailStr
 from fastapi import HTTPException
@@ -19,6 +21,8 @@ from bson import ObjectId
 import jwt
 from datetime import datetime, timedelta, UTC
 from backend.app.secrets import get_jwt_secret
+
+log = logging.getLogger(__name__)
 
 
 def get_me(user_id):
@@ -91,7 +95,10 @@ def google_login(id_token_str, client_id):
             issuer=["https://accounts.google.com", "accounts.google.com"],
         )
     except Exception as e:
-        raise HTTPException(status_code=401, detail=f"Invalid Google token: {e}")
+        # Log the real cause but don't echo raw verification internals to the
+        # client — a generic 401 is all the caller needs.
+        log.warning("Google ID token verification failed: %s", e)
+        raise HTTPException(status_code=401, detail="Invalid Google token")
 
     google_id = user_info["sub"]
     email = user_info.get("email", "")

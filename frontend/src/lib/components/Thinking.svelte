@@ -75,7 +75,7 @@
           <div style="padding:7px 14px;font-size:11px;font-weight:700;color:var(--faint);background:var(--surface-2);border-bottom:1px solid var(--border);letter-spacing:.06em;display:flex;align-items:center;gap:6px">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none"><path d="M8 8l-4 4 4 4M16 8l4 4-4 4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
             Attempt {(d.attempt as number)}
-            {#if i === artifacts.length - 1 || (artifacts[i + 1]?.kind === "validation" && artifacts[i + 1]?.data?.passed)}
+            {#if artifacts[i + 1]?.kind === "validation" && artifacts[i + 1]?.data?.passed}
               <span style="margin-left:auto;color:var(--brand-ink);background:var(--brand-tint);padding:1px 7px;border-radius:99px;font-size:10px">✓ Passed</span>
             {/if}
           </div>
