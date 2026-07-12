@@ -52,6 +52,10 @@
       const data = await apiCall('/api/config/public');
       if (data.google_client_id) {
         clientId = data.google_client_id;
+        // googleLogin() reads this when POSTing to /api/auth/google; without it
+        // the request sends an empty client_id and the backend rejects every
+        // sign-in with "Client ID mismatch".
+        window.__GOOGLE_CLIENT_ID__ = data.google_client_id;
       }
     } catch {
       error = 'Google sign-in is not configured';
