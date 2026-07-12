@@ -252,7 +252,7 @@
     </button>
   </div>
 </div>
-<button onclick={() => sidebarOpen = !sidebarOpen} style="width:20px;flex-shrink:0;cursor:pointer;background:var(--surface);border:none;border-right:1px solid var(--border);display:flex;align-items:center;justify-content:center;transition:all .15s">
+<button onclick={() => sidebarOpen = !sidebarOpen} style="width:20px;flex-shrink:0;cursor:pointer;background:var(--surface);border:none;display:flex;align-items:center;justify-content:center;transition:all .15s">
     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" style="color:var(--faint)">
       {#if sidebarOpen}
         <path d="M15 18l-6-6 6-6" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"/>
