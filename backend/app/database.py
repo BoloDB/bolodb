@@ -202,10 +202,12 @@ class DatabaseManager:
             if len(table_names) <= ENRICH_MAX:
                 enrich = set(table_names)
             else:
-                by_size = sorted(
-                    table_names,
-                    key=lambda t: -(bulk_counts.get(t) or 0),
-                )
+
+                def _sort_key(t):
+                    count = bulk_counts.get(t)
+                    return (count is None, -(count or 0), t)
+
+                by_size = sorted(table_names, key=_sort_key)
                 enrich = set(by_size[:ENRICH_MAX])
 
             for tbl in table_names:
