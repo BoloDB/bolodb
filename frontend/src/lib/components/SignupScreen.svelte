@@ -12,20 +12,12 @@
   let error = $state("");
   let success = $state(false);
 
-  const passwordRules = [
-    { label: "At least 8 characters", test: (p: string) => p.length >= 8 },
-    { label: "One uppercase letter (A-Z)", test: (p: string) => /[A-Z]/.test(p) },
-    { label: "One lowercase letter (a-z)", test: (p: string) => /[a-z]/.test(p) },
-    { label: "One number (0-9)", test: (p: string) => /[0-9]/.test(p) },
-  ];
-
-  const passwordChecks = $derived(passwordRules.map((r) => ({ label: r.label, met: r.test(password) })));
-  const passwordValid = $derived(passwordChecks.every((c) => c.met));
-  const canSubmit = $derived(email.trim().length > 0 && passwordValid && !loading);
-
   async function signup(e: Event) {
     e.preventDefault();
-    if (!canSubmit) return;
+    if (!email || !password) {
+      error = "Please enter email and password";
+      return;
+    }
     loading = true;
     error = "";
     try {
@@ -103,21 +95,9 @@
             placeholder="••••••••"
             style="width:100%;box-sizing:border-box"
             required
+            minlength="8"
           />
         </div>
-
-        <ul aria-live="polite" style="list-style:none;margin:10px 0 0;padding:0;display:flex;flex-direction:column;gap:5px">
-          {#each passwordChecks as check}
-            <li style="display:flex;align-items:center;gap:8px;font-size:12.5px;font-weight:600;color:{check.met ? 'var(--brand-ink)' : 'var(--faint)'};transition:color .15s var(--ease)">
-              <span style="width:15px;height:15px;border-radius:50%;flex-shrink:0;display:grid;place-items:center;background:{check.met ? 'var(--brand)' : 'transparent'};border:1.5px solid {check.met ? 'var(--brand)' : 'var(--border-2)'};transition:all .15s var(--ease)">
-                {#if check.met}
-                  <svg width="8" height="8" viewBox="0 0 24 24" fill="none"><path d="M5 12.5l4.2 4.2L19 7" stroke="white" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                {/if}
-              </span>
-              {check.label}
-            </li>
-          {/each}
-        </ul>
 
         {#if error}
           <div
@@ -130,7 +110,7 @@
         <Button
           kind="primary"
           class="btn-block"
-          disabled={!canSubmit}
+          disabled={loading}
           style="margin-top:8px"
         >
           {#snippet icon()}
