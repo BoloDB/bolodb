@@ -39,26 +39,30 @@
 </script>
 
 <div style="margin-top:2px">
-  <button onclick={() => open = !open} class="btn btn-quiet btn-sm" style="padding:6px 10px;color:var(--muted);font-weight:600">
-    <!-- code icon -->
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M8 8l-4 4 4 4M16 8l4 4-4 4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-    {open ? 'Hide query' : 'View the query'}
-    <!-- caret icon -->
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" style="transform:{open ? 'rotate(180deg)' : 'none'};transition:transform .2s"><path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"/></svg>
-  </button>
-  {#if open}
-    <div style="position:relative;margin:8px 0 0;animation:rise .25s var(--ease) both">
-      <pre class="mono" style="margin:0;padding:14px 16px;background:var(--surface-3);border:1px solid var(--border);border-radius:var(--radius-sm);font-size:12.5px;line-height:1.6;color:var(--ink-2);overflow-x:auto;white-space:pre">{sql}</pre>
+  <div style="display:flex;align-items:center;gap:6px">
+    <button onclick={() => open = !open} class="btn btn-quiet btn-sm" style="padding:6px 10px;color:var(--muted);font-weight:600;flex-shrink:0">
+      <!-- code icon -->
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M8 8l-4 4 4 4M16 8l4 4-4 4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      {open ? 'Hide query' : 'View the query'}
+      <!-- caret icon -->
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" style="transform:{open ? 'rotate(180deg)' : 'none'};transition:transform .2s"><path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </button>
+    {#if open}
       <button
         onclick={copySQL}
         title="Copy SQL query"
         aria-live="polite"
-        style="position:absolute;top:8px;right:8px;display:inline-flex;align-items:center;gap:4px;padding:3px 7px;border-radius:4px;border:none;background:color-mix(in srgb, var(--surface) 80%, transparent);color:{copied ? 'var(--brand)' : 'var(--faint)'};font-size:11px;font-weight:650;cursor:pointer;transition:color .15s"
+        style="display:inline-flex;align-items:center;gap:4px;padding:4px 8px;border-radius:4px;border:none;background:transparent;color:{copied ? 'var(--brand)' : 'var(--faint)'};font-size:11.5px;font-weight:650;cursor:pointer;transition:color .15s"
         onmouseenter={(e) => { if (!copied) e.currentTarget.style.color = 'var(--muted)'; }}
         onmouseleave={(e) => { if (!copied) e.currentTarget.style.color = 'var(--faint)'; }}
       >
         {copied ? "✓ Copied!" : "Copy"}
       </button>
+    {/if}
+  </div>
+  {#if open}
+    <div style="margin:8px 0 0;animation:rise .25s var(--ease) both">
+      <pre class="mono" style="margin:0;padding:14px 16px;background:var(--surface-3);border:1px solid var(--border);border-radius:var(--radius-sm);font-size:12.5px;line-height:1.6;color:var(--ink-2);overflow-x:auto;white-space:pre">{sql}</pre>
     </div>
   {/if}
 </div>
