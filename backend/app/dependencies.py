@@ -2,20 +2,21 @@ from fastapi import HTTPException, Cookie, Request
 import jwt
 
 from backend.app.secrets import get_jwt_secret
+from backend.app.i18n.translator import _
 
 
 async def get_current_user(access_token: str = Cookie(None)):
     if access_token is None:
-        raise HTTPException(status_code=401, detail="Access Denied")
+        raise HTTPException(status_code=401, detail=_("Access Denied"))
     try:
         token_data = jwt.decode(access_token, get_jwt_secret(), algorithms=["HS256"])
         return token_data
     except jwt.ExpiredSignatureError:
         raise HTTPException(
-            status_code=401, detail="Session Expired, please login again"
+            status_code=401, detail=_("Session Expired, please login again")
         )
     except jwt.InvalidTokenError:
-        raise HTTPException(status_code=401, detail="Invalid Token")
+        raise HTTPException(status_code=401, detail=_("Invalid Token"))
 
 
 def get_db(request: Request):

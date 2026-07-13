@@ -22,6 +22,7 @@ import sqlglot
 from sqlglot import exp
 
 from backend.app.utils import _tokens
+from backend.app.i18n.translator import _
 
 log = logging.getLogger(__name__)
 
@@ -358,13 +359,17 @@ def compact_schema(schema, tables, samples):
 def compute_confidence(retrieved, exec_result):
     """Signal-based confidence: (level, plain-English reason, based_on_verified)."""
     if exec_result.get("error"):
-        return "low", "the generated query did not run - please rephrase", False
+        return "low", _("the generated query did not run - please rephrase"), False
     top_sim = max((e.get("similarity", 0) for e in retrieved), default=0)
     rows = exec_result.get("rows", []) or []
     if top_sim >= 0.78:
-        return "high", "closely matches an answer you verified before", True
+        return "high", _("closely matches an answer you verified before"), True
     if top_sim >= 0.50:
-        return "medium", "similar to an answer you verified before", True
+        return "medium", _("similar to an answer you verified before"), True
     if len(rows) == 0:
-        return "low", "no matching rows - the question may not match your data", False
-    return "medium", "new question - please confirm it is right", False
+        return (
+            "low",
+            _("no matching rows - the question may not match your data"),
+            False,
+        )
+    return "medium", _("new question - please confirm it is right"), False

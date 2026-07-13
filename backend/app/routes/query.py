@@ -12,6 +12,7 @@ from backend.app.dependencies import (
     get_session_log,
 )
 from backend.app.models.api import QueryReq, FeedbackReq, VerifyReq, RawSQLReq
+from backend.app.i18n.translator import _
 import backend.app.controllers.query as ctrl
 import backend.app.mongodatabase as mdb
 
@@ -26,7 +27,7 @@ async def _format_sse(stream):
             yield f"data: {json.dumps(event, default=str)}\n\n"
     except Exception:
         log.error("Unhandled error while streaming query response", exc_info=True)
-        yield f"data: {json.dumps({'kind': 'error', 'message': 'An internal error has occurred.'})}\n\n"
+        yield f"data: {json.dumps({'kind': 'error', 'message': _('An internal error has occurred.')})}\n\n"
 
 
 def _safe_save_query(

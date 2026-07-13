@@ -14,6 +14,7 @@ source are left alone rather than flagged.
 """
 
 from sqlglot import exp, parse_one
+from backend.app.i18n.translator import _
 
 # sqlalchemy dialect name -> sqlglot dialect name (only where they differ).
 # Mirrors backend/app/database.py so validation parses with the same dialect
@@ -43,15 +44,18 @@ def validate_sql(sql, schema, dialect=""):
     """
     sql = (sql or "").strip()
     if not sql:
-        return {"ok": False, "errors": ["Empty SQL statement."]}
+        return {"ok": False, "errors": [_("Empty SQL statement.")]}
 
     glot_dialect = _GLOT_DIALECT.get(dialect, dialect) or None
     try:
         tree = parse_one(sql, dialect=glot_dialect)
     except Exception as e:  # sqlglot raises ParseError and friends
-        return {"ok": False, "errors": [f"Could not parse SQL: {e}"]}
+        return {
+            "ok": False,
+            "errors": [_("Could not parse SQL: {error}").format(error=e)],
+        }
     if tree is None:
-        return {"ok": False, "errors": ["Could not parse SQL: empty parse result."]}
+        return {"ok": False, "errors": [_("Could not parse SQL: empty parse result.")]}
 
     norm = _normalize_schema(schema)
     errors = []
@@ -82,7 +86,11 @@ def validate_sql(sql, schema, dialect=""):
             if t.alias:
                 opaque_sources.add(t.alias.lower())
         else:
-            errors.append(f"Unknown table: '{t.name}' is not in the database schema.")
+            errors.append(
+                _("Unknown table: '{table}' is not in the database schema.").format(
+                    table=t.name
+                )
+            )
 
             # Unknown tables make unqualified column resolution ambiguous; treat them as opaque.
             opaque_sources.add(tname)
@@ -99,7 +107,9 @@ def validate_sql(sql, schema, dialect=""):
                 tbl = alias_to_table[qualifier]
                 if cname not in norm.get(tbl, {}):
                     errors.append(
-                        f"Unknown column: '{col.name}' does not exist in table '{tbl}'."
+                        _(
+                            "Unknown column: '{column}' does not exist in table '{table}'."
+                        ).format(column=col.name, table=tbl)
                     )
             # Qualifier pointing at a CTE/subquery alias, or one we can't
             # resolve, is left unchecked to avoid false positives.
@@ -113,8 +123,9 @@ def validate_sql(sql, schema, dialect=""):
         if opaque_sources or not real_tables_in_use:
             continue
         errors.append(
-            f"Unknown column: '{col.name}' does not exist in any of the "
-            f"referenced tables ({', '.join(sorted(real_tables_in_use))})."
+            _(
+                "Unknown column: '{column}' does not exist in any of the referenced tables ({tables})."
+            ).format(column=col.name, tables=", ".join(sorted(real_tables_in_use)))
         )
 
     # De-duplicate while preserving order.

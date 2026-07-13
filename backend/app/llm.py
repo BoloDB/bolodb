@@ -34,6 +34,7 @@ from abc import ABC, abstractmethod
 import httpx
 
 from backend.app.config import decrypt_api_key
+from backend.app.i18n.translator import _
 
 log = logging.getLogger(__name__)
 
@@ -368,8 +369,10 @@ class GeminiProvider(LLMProvider):
         """
         if not self.api_key:
             raise LLMError(
-                "No Gemini API key is configured. Add one in Settings "
-                "(get a free key at https://aistudio.google.com/app/api-keys).",
+                _(
+                    "No Gemini API key is configured. Add one in Settings "
+                    "(get a free key at https://aistudio.google.com/app/api-keys)."
+                ),
                 detail="empty api_key",
             )
         body = self._build_body(system, user, json_mode, schema, thinking_budget)
@@ -390,8 +393,10 @@ class GeminiProvider(LLMProvider):
                     )
             except httpx.HTTPError as e:
                 last_error = LLMError(
-                    "Could not reach the Gemini API — check your internet "
-                    "connection and try again.",
+                    _(
+                        "Could not reach the Gemini API — check your internet "
+                        "connection and try again."
+                    ),
                     detail=f"network error: {e}",
                 )
                 log.warning("Gemini network error (attempt %d): %s", attempt + 1, e)
@@ -399,7 +404,9 @@ class GeminiProvider(LLMProvider):
 
             if r.status_code in _RETRYABLE_STATUS:
                 last_error = LLMError(
-                    "The AI service is busy right now — please try again in a moment.",
+                    _(
+                        "The AI service is busy right now — please try again in a moment."
+                    ),
                     detail=f"HTTP {r.status_code}: {_redact_error_text(r.text)}",
                 )
                 log.warning(
@@ -411,38 +418,45 @@ class GeminiProvider(LLMProvider):
             # for "API key not valid", so 400 mentions the key too.
             if r.status_code == 400:
                 raise LLMError(
-                    "The Gemini API rejected the request as invalid — most "
-                    "often the API key is malformed or not valid. Check the "
-                    "key in Settings.",
+                    _(
+                        "The Gemini API rejected the request as invalid — most "
+                        "often the API key is malformed or not valid. Check the "
+                        "key in Settings."
+                    ),
                     detail=f"HTTP 400: {_redact_error_text(r.text)}",
                 )
             if r.status_code == 401:
                 raise LLMError(
-                    "The Gemini API key was not accepted — it may be invalid "
-                    "or expired. Check it in Settings.",
+                    _(
+                        "The Gemini API key was not accepted — it may be invalid "
+                        "or expired. Check it in Settings."
+                    ),
                     detail=f"HTTP 401: {_redact_error_text(r.text)}",
                 )
             if r.status_code == 403:
                 raise LLMError(
-                    "The Gemini API denied access — the API key may lack "
-                    "permission for this model, or the project/region may be "
-                    "restricted. Check the key in Google AI Studio.",
+                    _(
+                        "The Gemini API denied access — the API key may lack "
+                        "permission for this model, or the project/region may be "
+                        "restricted. Check the key in Google AI Studio."
+                    ),
                     detail=f"HTTP 403: {_redact_error_text(r.text)}",
                 )
             if r.status_code == 404:
                 raise LLMError(
-                    f"The model '{self.model}' was not found — it may have been "
-                    "renamed or retired. Update the model in Settings.",
+                    _(
+                        "The model '{model}' was not found — it may have been renamed or retired. Update the model in Settings."
+                    ).format(model=self.model),
                     detail=f"HTTP 404: {_redact_error_text(r.text)}",
                 )
             if r.status_code >= 300:
                 raise LLMError(
-                    "The AI service returned an unexpected error.",
+                    _("The AI service returned an unexpected error."),
                     detail=f"HTTP {r.status_code}: {_redact_error_text(r.text)}",
                 )
             return self._extract_text(r.json())
 
-        raise last_error or LLMError("The AI service could not be reached.")
+        raise last_error or LLMError(_("The AI service could not be reached."))
 
     @staticmethod
     def _extract_text(data):
@@ -450,20 +464,20 @@ class GeminiProvider(LLMProvider):
         feedback = data.get("promptFeedback") or {}
         if feedback.get("blockReason"):
             raise LLMError(
-                "The AI declined to answer this question. Try rephrasing it.",
+                _("The AI declined to answer this question. Try rephrasing it."),
                 detail=f"prompt blocked: {feedback.get('blockReason')}",
             )
         candidates = data.get("candidates") or []
         if not candidates:
             raise LLMError(
-                "The AI returned an empty answer — please try again.",
+                _("The AI returned an empty answer — please try again."),
                 detail=f"no candidates in response: {_redact_error_text(json.dumps(data))}",
             )
         parts = (candidates[0].get("content") or {}).get("parts") or []
         text = "".join(p.get("text", "") for p in parts)
         if not text.strip():
             raise LLMError(
-                "The AI returned an empty answer — please try again.",
+                _("The AI returned an empty answer — please try again."),
                 detail=f"finishReason: {candidates[0].get('finishReason')}",
             )
         return text
@@ -471,7 +485,11 @@ class GeminiProvider(LLMProvider):
     async def health_check(self):
         """Cheap liveness probe: list one model. Never raises."""
         if not self.api_key:
-            return {"ok": False, "error": "No Gemini API key configured", "models": []}
+            return {
+                "ok": False,
+                "error": _("No Gemini API key configured"),
+                "models": [],
+            }
         try:
             async with httpx.AsyncClient(timeout=10) as client:
                 r = await client.get(

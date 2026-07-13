@@ -2,6 +2,7 @@ from fastapi import HTTPException
 from backend.app import config as cfgmod
 from backend.app.database import sanitize_url
 from backend.sample_data import ensure_sample_db
+from backend.app.i18n.translator import _
 import backend.app.mongodatabase as mdb
 import logging
 
@@ -122,5 +123,5 @@ async def disconnect(user_id, db, cfg):
 
 async def get_schema(user_id, db, refresh):
     if not db.connected(user_id):
-        raise HTTPException(409, "No database connected")
+        raise HTTPException(409, _("No database connected"))
     return db.get_schema(user_id, refresh=refresh)

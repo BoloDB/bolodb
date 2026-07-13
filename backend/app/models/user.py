@@ -1,6 +1,7 @@
 from enum import Enum
 from typing import Optional
 from pydantic import BaseModel, Field, EmailStr, ConfigDict, field_validator
+from backend.app.i18n.translator import _
 
 
 class Role(Enum):
@@ -15,13 +16,13 @@ def validate_password_strength(password: str) -> str:
     Returns the password if valid, raises ValueError otherwise.
     """
     if len(password) < 8:
-        raise ValueError("Password must be at least 8 characters long")
+        raise ValueError(_("Password must be at least 8 characters long"))
     if not any(c.isupper() for c in password):
-        raise ValueError("Password must contain at least one uppercase letter")
+        raise ValueError(_("Password must contain at least one uppercase letter"))
     if not any(c.islower() for c in password):
-        raise ValueError("Password must contain at least one lowercase letter")
+        raise ValueError(_("Password must contain at least one lowercase letter"))
     if not any(c.isdigit() for c in password):
-        raise ValueError("Password must contain at least one digit")
+        raise ValueError(_("Password must contain at least one digit"))
     return password
 
 

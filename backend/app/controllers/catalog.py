@@ -7,6 +7,7 @@ from fastapi import HTTPException
 
 from backend.app.llm import suggest_catalog as llm_suggest_catalog
 from backend.app.semantic import merge_catalog_suggestions, suggest_from_schema
+from backend.app.i18n.translator import _
 
 log = logging.getLogger(__name__)
 
@@ -14,14 +15,14 @@ log = logging.getLogger(__name__)
 def get_catalog(user_id, db, kb):
     """Return the stored catalog for the user's connected database."""
     if not db.connected(user_id):
-        raise HTTPException(409, "No database connected")
+        raise HTTPException(409, _("No database connected"))
     return {"catalog": kb.get_catalog(db.get_db_id(user_id))}
 
 
 def save_catalog(user_id, db, kb, payload):
     """Persist ``payload`` as the connected database's catalog."""
     if not db.connected(user_id):
-        raise HTTPException(409, "No database connected")
+        raise HTTPException(409, _("No database connected"))
     kb.set_catalog(db.get_db_id(user_id), payload.model_dump())
     return {"ok": True}
 
@@ -31,7 +32,7 @@ async def suggest(user_id, db, providers):
     the schema) enriched by the LLM (descriptions, metrics, synonyms, labels).
     The LLM step degrades gracefully — a failure still returns the backbone."""
     if not db.connected(user_id):
-        raise HTTPException(409, "No database connected")
+        raise HTTPException(409, _("No database connected"))
     base = suggest_from_schema(db.get_schema(user_id))
     try:
         enriched = await llm_suggest_catalog(

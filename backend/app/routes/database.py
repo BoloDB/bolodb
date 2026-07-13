@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from fastapi.concurrency import run_in_threadpool
 from backend.app.dependencies import get_current_user, get_db, get_kb, get_cfg
 from backend.app.models.api import ConnectReq
+from backend.app.i18n.translator import _
 import backend.app.controllers.database as ctrl
 import backend.app.mongodatabase as mdb
 
@@ -54,11 +55,11 @@ async def reconnect(
 ):
     db_id = request_body.get("db_id", "")
     if not db_id:
-        raise HTTPException(400, "db_id is required")
+        raise HTTPException(400, _("db_id is required"))
     conn = await run_in_threadpool(
         mdb.get_recent_connection_by_db_id, user_token["user_id"], db_id
     )
     if not conn or not conn.get("db_url"):
-        raise HTTPException(404, "Saved connection not found")
+        raise HTTPException(404, _("Saved connection not found"))
     req = ConnectReq(db_url=conn["db_url"])
     return await ctrl.connect(db, kb, cfg, req, user_id=user_token["user_id"])

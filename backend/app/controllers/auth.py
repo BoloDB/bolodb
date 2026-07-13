@@ -21,6 +21,7 @@ from bson import ObjectId
 import jwt
 from datetime import datetime, timedelta, UTC
 from backend.app.secrets import get_jwt_secret
+from backend.app.i18n.translator import _
 
 log = logging.getLogger(__name__)
 
@@ -34,15 +35,15 @@ def get_me(user_id):
 def login(email: EmailStr, password: str):
     user_details = get_user_by_email(email)
     if user_details is None:
-        raise HTTPException(status_code=401, detail="Invalid credentials")
+        raise HTTPException(status_code=401, detail=_("Invalid credentials"))
     # Google-only accounts have no password hash; reject cleanly instead of
     # letting bcrypt raise on an empty salt (which would surface as a 500).
     if not user_details.get("hashed_pass"):
-        raise HTTPException(status_code=401, detail="Invalid credentials")
+        raise HTTPException(status_code=401, detail=_("Invalid credentials"))
     user_bytes = password.encode()
     if bcrypt.checkpw(user_bytes, user_details["hashed_pass"].encode("utf-8")):
         return create_jwt(str(user_details["_id"]), user_details["role"])
-    raise HTTPException(status_code=401, detail="Invalid credentials")
+    raise HTTPException(status_code=401, detail=_("Invalid credentials"))
 
 
 def create_access_jwt(user_id, role):
@@ -69,7 +70,7 @@ def create_jwt(user_id, role):
 
 def signup(user: UserSignup):
     if get_user_by_email(user.email) is not None:
-        raise HTTPException(status_code=400, detail="Email already Registered")
+        raise HTTPException(status_code=400, detail=_("Email already Registered"))
     encoded_pass = user.password.encode("utf-8")
     salt = bcrypt.gensalt()
     hashed_pw = bcrypt.hashpw(encoded_pass, salt)
@@ -98,18 +99,18 @@ def google_login(id_token_str, client_id):
         # Log the real cause but don't echo raw verification internals to the
         # client — a generic 401 is all the caller needs.
         log.warning("Google ID token verification failed: %s", e)
-        raise HTTPException(status_code=401, detail="Invalid Google token")
+        raise HTTPException(status_code=401, detail=_("Invalid Google token"))
 
     google_id = user_info["sub"]
     email = user_info.get("email", "")
     if not email:
-        raise HTTPException(status_code=400, detail="Google account has no email")
+        raise HTTPException(status_code=400, detail=_("Google account has no email"))
 
     # Only trust the email once Google says it is verified. Without this,
     # a token carrying an unverified email could be used to link into — and
     # take over — an existing password account that happens to share it.
     if user_info.get("email_verified", False) not in (True, "true", "True"):
-        raise HTTPException(status_code=401, detail="Google email is not verified")
+        raise HTTPException(status_code=401, detail=_("Google email is not verified"))
 
     existing = get_user_by_google_id(google_id)
     if existing:
@@ -133,7 +134,7 @@ def change_password(user_id, old_password, new_password):
     validate_password_strength(new_password)
     user_details = get_user_by_id(user_id)
     if user_details is None:
-        raise HTTPException(status_code=404, detail="User not found")
+        raise HTTPException(status_code=404, detail=_("User not found"))
     old_pass_enc = old_password.encode("utf-8")
     new_pass_enc = new_password.encode("utf-8")
     if bcrypt.checkpw(old_pass_enc, user_details["hashed_pass"].encode("utf-8")):
@@ -145,4 +146,6 @@ def change_password(user_id, old_password, new_password):
             {"$set": {"hashed_pass": user_details["hashed_pass"]}},
         )
         return True
-    raise HTTPException(status_code=401, detail="Incorrect Password, Please try again")
+    raise HTTPException(
+        status_code=401, detail=_("Incorrect Password, Please try again")
+    )

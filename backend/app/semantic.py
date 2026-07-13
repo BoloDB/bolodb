@@ -12,6 +12,7 @@ entities, filters and joins. This module:
 """
 
 import re
+from backend.app.i18n.translator import _
 
 _CATALOG_KEYS = (
     "column_descriptions",
@@ -61,7 +62,9 @@ def suggest_from_schema(schema):
                 {
                     "tables": f"{tbl},{parent}",
                     "join_condition": f"{tbl}.{col} = {ref}",
-                    "description": f"each {tbl} row links to one {parent}",
+                    "description": _("each {table} row links to one {parent}").format(
+                        table=tbl, parent=parent
+                    ),
                 }
             )
         for col, values in (info.get("distinct_values", {}) or {}).items():

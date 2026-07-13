@@ -8,6 +8,7 @@ import sqlglot.expressions as exp
 from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.exc import SQLAlchemyError
 from fastapi.exceptions import HTTPException
+from backend.app.i18n.translator import _
 
 logger = logging.getLogger(__name__)
 
@@ -63,7 +64,7 @@ class DatabaseManager:
         try:
             return self._connections[user_id]
         except KeyError:
-            raise HTTPException(409, "No Database Connected")
+            raise HTTPException(409, _("No Database Connected"))
 
     def disconnect(self, user_id):
         """Reset all connection state so the server accepts a new connect call."""
@@ -369,7 +370,7 @@ class DatabaseManager:
         conservative keyword regex so unparseable SQL is never executed blindly.
         """
         if not cleaned:
-            return "Empty statement."
+            return _("Empty statement.")
         c = self._get(user_id)
         glot_dialect = _GLOT_DIALECT.get(c["dialect"], c["dialect"])
         try:
@@ -378,29 +379,29 @@ class DatabaseManager:
             # Fallback: couldn't build an AST — apply the conservative regex guard.
             first = cleaned.split()[0].upper() if cleaned else ""
             if first not in ("SELECT", "WITH", "EXPLAIN"):
-                return "Only SELECT queries are allowed (read-only mode)."
+                return _("Only SELECT queries are allowed (read-only mode).")
             if ";" in cleaned or WRITE_KEYWORDS.search(cleaned):
-                return "Only read-only SELECT queries are allowed."
+                return _("Only read-only SELECT queries are allowed.")
             return None
 
         stmts = [s for s in stmts if s is not None]
         if len(stmts) > 1:
-            return "Only one statement is allowed (no stacked queries)."
+            return _("Only one statement is allowed (no stacked queries).")
         if not stmts:
-            return "Empty statement."
+            return _("Empty statement.")
         stmt = stmts[0]
 
         # Root must be a read-only statement type.
         root = type(stmt).__name__
         is_explain = root == "Command" and str(stmt.this).upper() == "EXPLAIN"
         if root not in ("Select", "Union", "Explain") and not is_explain:
-            return "Only SELECT queries are allowed (read-only mode)."
+            return _("Only SELECT queries are allowed (read-only mode).")
 
         # No modifying node may appear anywhere in the tree (catches CTE writes).
         for node in stmt.find_all(*_MODIFYING_NODES):
             if type(node).__name__ == "Command" and str(node.this).upper() == "EXPLAIN":
                 continue
-            return "Only read-only SELECT queries are allowed."
+            return _("Only read-only SELECT queries are allowed.")
 
         # Block SELECT ... INTO (creates/overwrites a table).
         if next(stmt.find_all(exp.Into), None) is not None:

@@ -6,6 +6,7 @@ import time
 from difflib import SequenceMatcher
 from pathlib import Path
 
+from backend.app.i18n.translator import _
 from backend.app.utils import _tokens
 
 
@@ -216,21 +217,21 @@ class KnowledgeBase:
         n = self.count_verified(db_id)
         if n >= 7:
             return {
-                "level": "Trusted",
+                "level": _("Trusted"),
                 "verified": n,
                 "pct": 100,
-                "note": "Answers shown directly; reasoning on tap.",
+                "note": _("Answers shown directly; reasoning on tap."),
             }
         if n >= 3:
             return {
-                "level": "Assisted",
+                "level": _("Assisted"),
                 "verified": n,
                 "pct": 55,
-                "note": "Confident answers shown; novel ones get a second look.",
+                "note": _("Confident answers shown; novel ones get a second look."),
             }
         return {
-            "level": "Supervised",
+            "level": _("Supervised"),
             "verified": n,
             "pct": max(8, n * 7),
-            "note": "Every answer waits for your confirmation while it learns.",
+            "note": _("Every answer waits for your confirmation while it learns."),
         }

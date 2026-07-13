@@ -3,6 +3,7 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from backend.app.dependencies import get_current_user
 from starlette.concurrency import run_in_threadpool
+from backend.app.i18n.translator import _
 import backend.app.controllers.conversations as ctrl
 
 router = APIRouter(prefix="/api/conversations", tags=["conversations"])
@@ -47,7 +48,7 @@ async def get_conversation(
     user_id = user_token["user_id"]
     conv = await run_in_threadpool(ctrl.get_conversation, user_id, conversation_id)
     if not conv:
-        raise HTTPException(status_code=404, detail="Conversation not found")
+        raise HTTPException(status_code=404, detail=_("Conversation not found"))
     return JSONResponse(conv)
 
 
@@ -63,9 +64,9 @@ async def rename_conversation(
     )
     if not success:
         raise HTTPException(
-            status_code=404, detail="Conversation not found or unauthorized"
+            status_code=404, detail=_("Conversation not found or unauthorized")
         )
-    return JSONResponse({"message": "Renamed successfully"})
+    return JSONResponse({"message": _("Renamed successfully")})
 
 
 @router.delete("/{conversation_id}")
@@ -79,13 +80,13 @@ async def delete_conversation(
     )
     if not success:
         raise HTTPException(
-            status_code=404, detail="Conversation not found or unauthorized"
+            status_code=404, detail=_("Conversation not found or unauthorized")
         )
-    return JSONResponse({"message": "Deleted successfully"})
+    return JSONResponse({"message": _("Deleted successfully")})
 
 
 @router.delete("")
 async def clear_conversations(user_token=Depends(get_current_user)):
     user_id = user_token["user_id"]
     await run_in_threadpool(ctrl.clear_conversations, user_id)
-    return JSONResponse({"message": "Cleared successfully"})
+    return JSONResponse({"message": _("Cleared successfully")})

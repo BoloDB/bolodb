@@ -3,6 +3,7 @@ from fastapi.responses import JSONResponse
 from backend.app.dependencies import get_current_user
 import backend.app.mongodatabase as db
 from starlette.concurrency import run_in_threadpool
+from backend.app.i18n.translator import _
 
 router = APIRouter(prefix="/api/history", tags=["history"])
 
@@ -29,12 +30,14 @@ async def delete_entry(entry_id: str, user_token=Depends(get_current_user)):
     user_id = user_token["user_id"]
     success = await run_in_threadpool(db.delete_history_entry, user_id, entry_id)
     if not success:
-        raise HTTPException(status_code=404, detail="Entry not found or unauthorized")
-    return JSONResponse({"message": "Deleted successfully"})
+        raise HTTPException(
+            status_code=404, detail=_("Entry not found or unauthorized")
+        )
+    return JSONResponse({"message": _("Deleted successfully")})
 
 
 @router.delete("")
 async def clear_history(user_token=Depends(get_current_user)):
     user_id = user_token["user_id"]
     await run_in_threadpool(db.clear_history, user_id)
-    return JSONResponse({"message": "Cleared successfully"})
+    return JSONResponse({"message": _("Cleared successfully")})

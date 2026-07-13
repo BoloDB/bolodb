@@ -30,6 +30,7 @@ from backend.app.schema_link import (
 from backend.app.semantic import filter_catalog
 from backend.app.sqlvalidate import validate_sql
 import backend.app.mongodatabase as mdb
+from backend.app.i18n.translator import _
 
 log = logging.getLogger(__name__)
 
@@ -67,10 +68,10 @@ def _failure_payload(message, tables=None):
 
 async def run_query(user_id, db, kb, cfg, providers, session_log, req_data):
     if not db.connected(user_id):
-        raise HTTPException(409, "No database connected")
+        raise HTTPException(409, _("No database connected"))
     q = req_data.question.strip()
     if not q:
-        raise HTTPException(400, "Empty question")
+        raise HTTPException(400, _("Empty question"))
     context = req_data.context
 
     # Step 1 — user knowledge: confirmed term meanings + similar verified answers.
@@ -162,7 +163,7 @@ async def run_query(user_id, db, kb, cfg, providers, session_log, req_data):
         return out
     except Exception:
         log.warning("SQL generation failed during run_query", exc_info=True)
-        out = _failure_payload("Could not form a query - try rephrasing", linked)
+        out = _failure_payload(_("Could not form a query - try rephrasing"), linked)
         out["query_id"] = session_log.log_query(db_id, q, out)
         return out
 
@@ -171,7 +172,7 @@ async def run_query(user_id, db, kb, cfg, providers, session_log, req_data):
         exec_result = loop_result["result"] or {}
     else:
         last_errors = (attempts[-1].get("errors") if attempts else None) or [
-            "Could not form a working query - try rephrasing"
+            _("Could not form a working query - try rephrasing")
         ]
         exec_result = {"error": "; ".join(last_errors)}
 
@@ -203,10 +204,10 @@ async def run_query(user_id, db, kb, cfg, providers, session_log, req_data):
 async def explain(user_id, db, providers, req_data):
     """Translate a SQL query into plain English (trust feature)."""
     if not db.connected(user_id):
-        raise HTTPException(409, "No database connected")
+        raise HTTPException(409, _("No database connected"))
     sql = (req_data.sql or "").strip()
     if not sql:
-        raise HTTPException(400, "Empty SQL")
+        raise HTTPException(400, _("Empty SQL"))
     try:
         return await explain_sql(providers.get(), sql, db.get_dialect(user_id))
     except LLMError as e:
@@ -215,7 +216,7 @@ async def explain(user_id, db, providers, req_data):
 
 async def feedback(user_id, db, kb, session_log, req_data):
     if not db.connected(user_id):
-        raise HTTPException(409, "No database connected")
+        raise HTTPException(409, _("No database connected"))
     session_log.log_feedback(req_data.query_id, req_data.verdict, req_data.reason)
     if req_data.verdict == "correct":
         kb.add_verified(
@@ -231,7 +232,7 @@ async def feedback(user_id, db, kb, session_log, req_data):
 
 async def verify(user_id, db, kb, req_data):
     if not db.connected(user_id):
-        raise HTTPException(409, "No database connected")
+        raise HTTPException(409, _("No database connected"))
     kb.add_verified(
         db.get_db_id(user_id), req_data.question, req_data.sql, req_data.restatement
     )
@@ -240,7 +241,7 @@ async def verify(user_id, db, kb, req_data):
 
 async def execute(user_id, db, req_data):
     if not db.connected(user_id):
-        raise HTTPException(409, "No database connected")
+        raise HTTPException(409, _("No database connected"))
     res = await run_in_threadpool(db.execute, user_id, req_data.sql)
     if "error" in res:
         raise HTTPException(400, res["error"])
@@ -254,30 +255,38 @@ def _generate_hints(question, linked_tables, glossary, retrieved):
     hints = []
     if linked_tables:
         table_list = ", ".join(linked_tables[:4])
-        hints.append(f"Scanning tables: {table_list}")
+        hints.append(_("Scanning tables: {tables}").format(tables=table_list))
     if glossary:
         g = glossary[0]
-        hints.append(f"Translating business term: '{g['term']}'")
+        hints.append(_("Translating business term: '{term}'").format(term=g["term"]))
         if len(glossary) > 1:
-            hints.append(f"Cross-referencing {len(glossary)} glossary definitions")
+            hints.append(
+                _("Cross-referencing {count} glossary definitions").format(
+                    count=len(glossary)
+                )
+            )
     if retrieved:
         n = len(retrieved)
-        hints.append(f"Reviewing {n} verified query pattern{'s' if n > 1 else ''}")
+        hints.append(
+            _("Reviewing {n} verified query pattern{s}").format(
+                n=n, s="s" if n > 1 else ""
+            )
+        )
     ql = question.lower()
     if any(w in ql for w in ["total", "sum", "revenue", "sales"]):
-        hints.append("Setting up aggregation with SUM")
+        hints.append(_("Setting up aggregation with SUM"))
     elif any(w in ql for w in ["average", "avg", "mean"]):
-        hints.append("Setting up aggregation with AVG")
+        hints.append(_("Setting up aggregation with AVG"))
     elif any(w in ql for w in ["count", "how many", "number of"]):
-        hints.append("Setting up COUNT aggregation")
+        hints.append(_("Setting up COUNT aggregation"))
     elif any(w in ql for w in ["top", "best", "highest", "most"]):
-        hints.append("Planning ordering with LIMIT")
+        hints.append(_("Planning ordering with LIMIT"))
     elif any(w in ql for w in ["list", "show", "find", "get"]):
-        hints.append("Preparing SELECT with filters")
+        hints.append(_("Preparing SELECT with filters"))
     else:
-        hints.append("Analyzing query structure")
-    hints.append("Verifying column names against schema")
-    hints.append("Building final SQL statement")
+        hints.append(_("Analyzing query structure"))
+    hints.append(_("Verifying column names against schema"))
+    hints.append(_("Building final SQL statement"))
     return hints
 
 
@@ -296,7 +305,7 @@ def _extract_suggestion(error, schema):
             cols = [c["name"] for c in info.get("columns", [])]
             similar = [c for c in cols if c.lower().startswith(bad_col[:3])]
             if similar:
-                return f"Available in {tbl}: {', '.join(similar)}"
+                return _(f"Available in {tbl}: {', '.join(similar)}")
     return None
 
 
@@ -306,7 +315,7 @@ def _build_checks(verdict, schema=None):
             {
                 "target": "query",
                 "status": "ok",
-                "message": "All tables and columns exist",
+                "message": _("All tables and columns exist"),
             }
         ]
     checks = []
@@ -327,11 +336,11 @@ def _build_checks(verdict, schema=None):
 
 async def run_query_stream(user_id, db, kb, cfg, providers, session_log, req_data):
     if not db.connected(user_id):
-        yield {"kind": "error", "message": "No database connected"}
+        yield {"kind": "error", "message": _("No database connected")}
         return
     q = req_data.question.strip()
     if not q:
-        yield {"kind": "error", "message": "Empty question"}
+        yield {"kind": "error", "message": _("Empty question")}
         return
     context = req_data.context
     query_start = time.monotonic()
@@ -393,8 +402,8 @@ async def run_query_stream(user_id, db, kb, cfg, providers, session_log, req_dat
             hint_idx = 0
             while True:
                 if time.monotonic() - query_start > _MAX_SECONDS:
-                    raise TimeoutError("SQL generation exceeded maximum time limit")
-                done, _ = await asyncio.wait([llm_task], timeout=2.5)
+                    raise TimeoutError(_("SQL generation exceeded maximum time limit"))
+                done, _pending = await asyncio.wait([llm_task], timeout=2.5)
                 if done:
                     gen_result = llm_task.result()
                     break
@@ -408,7 +417,7 @@ async def run_query_stream(user_id, db, kb, cfg, providers, session_log, req_dat
             raise
         except Exception as e:
             log.warning("SQL generation failed during streaming: %s", e, exc_info=True)
-            yield {"kind": "error", "message": "Query generation failed"}
+            yield {"kind": "error", "message": _("Query generation failed")}
             return
         finally:
             if not llm_task.done():
@@ -419,7 +428,7 @@ async def run_query_stream(user_id, db, kb, cfg, providers, session_log, req_dat
         last_restatement = restatement
 
         if not sql:
-            yield {"kind": "error", "message": "Model returned empty SQL"}
+            yield {"kind": "error", "message": _("Model returned empty SQL")}
             return
 
         yield {"kind": "sql", "attempt": attempt, "sql": sql}
@@ -445,7 +454,7 @@ async def run_query_stream(user_id, db, kb, cfg, providers, session_log, req_dat
                     "total": max_iterations,
                     "error": error_msg,
                     "suggestion": _extract_suggestion(error_msg, full_schema)
-                    or "Retrying with corrections",
+                    or _("Retrying with corrections"),
                     "old_sql": sql,
                 }
                 fb_lines = [
@@ -469,7 +478,9 @@ async def run_query_stream(user_id, db, kb, cfg, providers, session_log, req_dat
             exec_result = await run_in_threadpool(db.execute, user_id, sql)
         except Exception:
             log.warning("Query execution failed during streaming", exc_info=True)
-            exec_result = {"error": "The query could not be run against the database."}
+            exec_result = {
+                "error": _("The query could not be run against the database.")
+            }
         exec_elapsed = round(time.monotonic() - exec_start, 3)
 
         if not exec_result.get("error"):
@@ -482,7 +493,7 @@ async def run_query_stream(user_id, db, kb, cfg, providers, session_log, req_dat
                 "attempt": attempt,
                 "total": max_iterations,
                 "error": err,
-                "suggestion": "Retrying with corrections",
+                "suggestion": _("Retrying with corrections"),
                 "old_sql": sql,
             }
             feedback = "\n".join(
@@ -502,7 +513,9 @@ async def run_query_stream(user_id, db, kb, cfg, providers, session_log, req_dat
     if exec_result is None:
         yield {
             "kind": "error",
-            "message": f"Could not generate valid SQL after {max_iterations} attempts",
+            "message": _("Could not generate valid SQL after {count} attempts").format(
+                count=max_iterations
+            ),
         }
         return
 
@@ -550,11 +563,11 @@ async def run_query_stream(user_id, db, kb, cfg, providers, session_log, req_dat
 
     if out.get("sql") and not out.get("execution_error"):
         conf_str = (
-            "High"
+            _("High")
             if confidence == "high"
-            else "Medium"
+            else _("Medium")
             if confidence == "medium"
-            else "Low"
+            else _("Low")
         )
         try:
             await run_in_threadpool(
