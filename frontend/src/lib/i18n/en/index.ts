@@ -344,6 +344,9 @@ const en = {
     stepReadDb: "Read your DB",
     stepDefineTerms: "Define terms",
     stepCheckAnswers: "Check answers",
+    doesResultLookCorrect: "Does the result table look correct?",
+    savedReference: "Saved \u2014 this becomes a reference answer",
+    skippedNoted: "Skipped \u2014 noted, it won\u2019t be used",
   },
   schema: {
     title: "Schema",

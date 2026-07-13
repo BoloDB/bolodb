@@ -310,6 +310,9 @@ const de: Translation = {
     stepReadDb: "",
     stepDefineTerms: "",
     stepCheckAnswers: "",
+    doesResultLookCorrect: "",
+    savedReference: "",
+    skippedNoted: "",
   },
   schema: {
     title: "",
