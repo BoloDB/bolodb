@@ -206,7 +206,6 @@ export function schemaObjToDisplay(obj: Record<string, any>): SchemaTable[] {
 
 export function humanErrorKey(msg: string): string | null {
   const m = (msg || "").toLowerCase();
-  const m = (msg || "").toLowerCase();
   if (
     m.includes("connection refused") ||
     m.includes("could not connect to server") ||

@@ -6,7 +6,7 @@
   import DataCatalog from "$lib/components/DataCatalog.svelte";
   import { onMount } from "svelte";
   import LL, { locale } from "$lib/i18n/i18n-svelte";
-  import { loadLocale } from "$lib/i18n/i18n-util";
+  import { loadLocale } from "$lib/i18n/i18n-util.sync";
   import { setLocaleCookie } from "$lib/i18n/localeUtils";
 
   let {
