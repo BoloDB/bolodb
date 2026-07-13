@@ -31,6 +31,7 @@ def _get_jwks_client():
     global _JWKS_CLIENT
     if _JWKS_CLIENT is None:
         from jwt import PyJWKClient
+
         _JWKS_CLIENT = PyJWKClient(
             "https://www.googleapis.com/oauth2/v3/certs", cache_keys=True
         )

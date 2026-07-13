@@ -194,7 +194,9 @@ def _recent_connection_cipher():
         if master_cipher:
             if persisted.startswith("v1:"):
                 try:
-                    loaded_secret = master_cipher.decrypt(persisted[3:].encode()).decode()
+                    loaded_secret = master_cipher.decrypt(
+                        persisted[3:].encode()
+                    ).decode()
                 except (InvalidToken, ValueError, TypeError):
                     raise RuntimeError(
                         "Failed to decrypt connections key file with RECENT_CONNECTIONS_MASTER_KEY. "
