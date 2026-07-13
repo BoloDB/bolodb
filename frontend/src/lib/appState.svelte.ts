@@ -158,14 +158,8 @@ class AppState {
     ) {
       const msg =
         newLevel === "assisted"
-          ? {
-              title: "Accuracy milestone reached",
-              body: "Confident answers now show immediately — new questions still get a second look.",
-            }
-          : {
-              title: "Fully calibrated",
-              body: "All answers appear directly now. Reasoning is always one tap away.",
-            };
+          ? { titleKey: "milestoneReached", bodyKey: "milestoneAssistedBody" }
+          : { titleKey: "fullyCalibrated", bodyKey: "milestoneTrustedBody" };
       this.toast = msg;
       setTimeout(() => (this.toast = null), 4200);
     }

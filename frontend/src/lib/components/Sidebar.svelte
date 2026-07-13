@@ -92,7 +92,7 @@
       <span style="margin-left:auto;font-size:11px;font-weight:700;color:var(--faint)">{$LL.chat.verifiedCount({n: verifiedCount})}</span>
     </div>
     <TrustMeter count={verifiedCount} />
-    <p style="font-size:12.5px;color:var(--muted);line-height:1.5;margin:11px 0 0">{trust.behaviour}</p>
+    <p style="font-size:12.5px;color:var(--muted);line-height:1.5;margin:11px 0 0">{$LL.chat[trust.behaviourKey]()}</p>
     {#if trust.next}
       <div style="margin-top:10px;padding:9px 11px;background:var(--surface);border-radius:var(--radius-sm);font-size:12px;color:var(--brand-ink);font-weight:600;line-height:1.5">
         {$LL.chat.calibrateNext({

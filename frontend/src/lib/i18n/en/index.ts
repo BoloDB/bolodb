@@ -251,6 +251,21 @@ const en = {
       "Try rephrasing your question, naming a specific table or metric, or ask again with more context.",
     ifResultLooksRight:
       'If the result looks right, click "Yes, correct" below \u2014 that trains BoloDB for next time.',
+    trusted: "Trusted",
+    assisted: "Assisted",
+    supervised: "Supervised",
+    trustedBehaviour: "Answers are shown directly. Reasoning is one tap away.",
+    assistedBehaviour:
+      "Confident answers are shown; novel ones get a second look.",
+    supervisedBehaviour:
+      "Every answer waits for your confirmation while it learns.",
+    providerGeminiName: "Google Gemini",
+    providerGeminiSub: "Gemini API",
+    providerGeminiPrivacy:
+      "Schema + question sent to Google \u2014 never your row data",
+    providerGeminiCost: "Free tier available, then pay per use",
+    providerGeminiAccuracy: "Highest",
+    providerDefault: "Default",
   },
   settings: {
     title: "Settings",

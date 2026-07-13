@@ -1,7 +1,7 @@
 <script lang="ts">
   import { GEMINI_KEY_URL } from "$lib/data";
   import { apiCall } from "$lib/api";
-  import { humanError } from "$lib/data";
+  import { humanErrorKey } from "$lib/data";
   import type { DbInfo } from "$lib/types";
   import LL from "$lib/i18n/i18n-svelte";
   import posthog from "posthog-js";
@@ -134,8 +134,8 @@
       }
       onConnect(kind === "sample", res);
     } catch (e: any) {
-      error =
-        humanError(e.message) ||
+      const ek = humanErrorKey(e.message);
+      error = (ek ? $LL.errors[ek]() : null) ||
         $LL.connect.connectionFailed();
       posthog.captureException(e);
       connecting = null;
@@ -155,8 +155,8 @@
       });
       onConnect(false, res);
     } catch (e: any) {
-      error =
-        humanError(e.message) ||
+      const ek = humanErrorKey(e.message);
+      error = (ek ? $LL.errors[ek]() : null) ||
         $LL.connect.reconnectionFailed();
       posthog.captureException(e);
       reconnecting = null;

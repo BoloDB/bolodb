@@ -133,11 +133,11 @@ export const providers: Provider[] = [
 export const GEMINI_KEY_URL = "https://aistudio.google.com/app/api-keys";
 
 export const wrongReasons: WrongReason[] = [
-  { id: "numbers", label: "Wrong numbers" },
-  { id: "filter", label: "Wrong filter / dates" },
-  { id: "intent", label: "Not what I meant" },
-  { id: "missing", label: "Missing data" },
-  { id: "other", label: "Something else" },
+  { id: "numbers", label: "Wrong numbers", key: "wrongNumbers" },
+  { id: "filter", label: "Wrong filter / dates", key: "wrongFilter" },
+  { id: "intent", label: "Not what I meant", key: "wrongIntent" },
+  { id: "missing", label: "Missing data", key: "wrongMissing" },
+  { id: "other", label: "Something else", key: "wrongOther" },
 ];
 
 export const suggestions: string[] = [
@@ -154,26 +154,32 @@ export function trustFor(n: number): TrustLevel {
     return {
       key: "trusted",
       label: "Trusted",
+      labelKey: "trusted",
       range: [7, Infinity],
       idx: 2,
       behaviour: "Answers are shown directly. Reasoning is one tap away.",
+      behaviourKey: "trustedBehaviour",
       next: null,
     };
   if (n >= 3)
     return {
       key: "assisted",
       label: "Assisted",
+      labelKey: "assisted",
       range: [3, 6],
       idx: 1,
       behaviour: "Confident answers are shown; novel ones get a second look.",
+      behaviourKey: "assistedBehaviour",
       next: 7,
     };
   return {
     key: "supervised",
     label: "Supervised",
+    labelKey: "supervised",
     range: [0, 2],
     idx: 0,
     behaviour: "Every answer waits for your confirmation while it learns.",
+    behaviourKey: "supervisedBehaviour",
     next: 3,
   };
 }
@@ -198,35 +204,33 @@ export function schemaObjToDisplay(obj: Record<string, any>): SchemaTable[] {
   }));
 }
 
-/** Turn raw SQLAlchemy / driver errors into friendly sentences */
-export function humanError(msg: string): string {
+export function humanErrorKey(msg: string): string | null {
+  const m = (msg || "").toLowerCase();
   const m = (msg || "").toLowerCase();
   if (
     m.includes("connection refused") ||
     m.includes("could not connect to server") ||
     m.includes("can't connect")
   )
-    return "The database server isn't running or can't be reached — check the host and port.";
+    return "dbConnectionRefused";
   if (
     m.includes("password authentication failed") ||
     m.includes("access denied") ||
     m.includes("login failed")
   )
-    return "Wrong username or password — double-check your credentials.";
+    return "wrongCredentials";
   if (m.includes("no such file") || m.includes("unable to open database file"))
-    return "File not found — check the path and make sure the file exists.";
+    return "fileNotFound";
   if (
     m.includes("database") &&
     (m.includes("does not exist") || m.includes("unknown database"))
   )
-    return "That database name wasn't found — check the spelling.";
+    return "dbDoesNotExist";
   if (m.includes("timeout") || m.includes("timed out"))
-    return "Connection timed out — the server may be unreachable or behind a firewall.";
-  if (m.includes("ssl") || m.includes("certificate"))
-    return "SSL error — if connecting via URL mode, try adding ?sslmode=disable at the end.";
-  if (m.includes("no module named"))
-    return "The driver for that database type isn't installed on this server.";
-  return msg;
+    return "connectionTimedOut";
+  if (m.includes("ssl") || m.includes("certificate")) return "sslError";
+  if (m.includes("no module named")) return "driverNotInstalled";
+  return null;
 }
 
 export function capitalize(s: string): string {

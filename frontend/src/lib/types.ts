@@ -17,9 +17,11 @@ export interface Provider {
 export interface TrustLevel {
   key: "supervised" | "assisted" | "trusted";
   label: string;
+  labelKey: string;
   range: [number, number];
   idx: number;
   behaviour: string;
+  behaviourKey: string;
   next: number | null;
 }
 
@@ -135,11 +137,14 @@ export type StreamEvent =
 export interface Toast {
   title: string;
   body: string;
+  titleKey?: string;
+  bodyKey?: string;
 }
 
 export interface WrongReason {
   id: string;
   label: string;
+  key: string;
 }
 
 export interface BankItem {

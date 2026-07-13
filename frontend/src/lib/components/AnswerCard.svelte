@@ -260,7 +260,7 @@
             <div style="font-size:13.5px;font-weight:700;margin-bottom:10px;color:var(--ink)">{$LL.chat.thanksWhatsOff()} <span style="font-weight:500;color:var(--faint)">{$LL.chat.mostUsefulSignal()}</span></div>
             <div style="display:flex;flex-wrap:wrap;gap:8px">
               {#each wrongReasons as r}
-                <button class="chip" onclick={() => no(r.label)}>{r.label}</button>
+                <button class="chip" onclick={() => no(r.label)}>{$LL.chat[r.key]()}</button>
               {/each}
               <button class="chip" style="border-style:dashed;color:var(--faint)" onclick={() => showReasons = false}>{$LL.common.cancel()}</button>
             </div>
