@@ -246,6 +246,7 @@ const fr: Translation = {
     disconnectButton: "",
     couldNotSave: "",
     couldNotRemoveKey: "",
+    language: "",
   },
   dashboard: {
     title: "",

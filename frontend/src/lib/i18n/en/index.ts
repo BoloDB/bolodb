@@ -277,6 +277,7 @@ const en = {
     disconnectButton: "Disconnect & change database",
     couldNotSave: "Could not save settings.",
     couldNotRemoveKey: "Could not remove key.",
+    language: "Language",
   },
   dashboard: {
     title: "Dashboard",

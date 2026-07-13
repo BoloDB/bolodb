@@ -5,6 +5,9 @@
   import Spinner from "$lib/components/ui/Spinner.svelte";
   import DataCatalog from "$lib/components/DataCatalog.svelte";
   import { onMount } from "svelte";
+  import LL, { locale } from "$lib/i18n/i18n-svelte";
+  import { loadLocale } from "$lib/i18n/i18n-util";
+  import { setLocaleCookie } from "$lib/i18n/localeUtils";
 
   let {
     modelName,
@@ -25,17 +28,26 @@
   const MODELS = [
     {
       id: "gemini-3.1-flash-lite",
-      label: "Fastest & cheapest — fine for small, simple databases",
+      label: $LL.settings.modelFast(),
     },
     {
       id: "gemini-flash-latest",
-      label: "Balanced — recommended for most uses (default)",
+      label: $LL.settings.modelBalanced(),
     },
     {
       id: "gemma-4-26b-a4b-it",
-      label: "Most accurate — for large schemas and hard questions",
+      label: $LL.settings.modelAccurate(),
     },
   ];
+
+  const LOCALES = ["en", "de", "ja", "es", "fr"];
+  let currentLocale = $derived($locale);
+
+  function switchLocale(l: string) {
+    setLocaleCookie(l);
+    loadLocale(l);
+    locale.set(l);
+  }
 
   let model = $state((() => modelName || "gemini-flash-latest")());
   let apiKey = $state("");
@@ -69,7 +81,7 @@
       setModelName(model);
       onClose();
     } catch (e: any) {
-      error = e.message || "Could not save settings.";
+      error = e.message || $LL.settings.couldNotSave();
       saving = false;
     }
   }
@@ -84,7 +96,7 @@
       apiKey = "";
       saving = false;
     } catch (e: any) {
-      error = e.message || "Could not remove key.";
+      error = e.message || $LL.settings.couldNotRemoveKey();
       saving = false;
     }
   }
@@ -124,11 +136,11 @@
             stroke-linecap="round"
           /></svg
         >
-        <span style="font-weight:800;font-size:17px">Settings</span>
+        <span style="font-weight:800;font-size:17px">{$LL.settings.title()}</span>
       </div>
       <button
         onclick={onClose}
-        aria-label="Close settings"
+        aria-label={$LL.settings.close()}
         class="btn btn-quiet btn-sm"
         style="padding:8px"
       >
@@ -157,9 +169,9 @@
           >
         </span>
         <div style="min-width:0">
-          <div style="font-weight:700;font-size:13.5px">Google Gemini</div>
+          <div style="font-weight:700;font-size:13.5px">{$LL.settings.googleGemini()}</div>
           <div style="font-size:11px;color:var(--faint);font-weight:600">
-            Powers every AI feature in BoloDB
+            {$LL.settings.powersAi()}
           </div>
         </div>
       </div>
@@ -167,7 +179,7 @@
       <div
         style="font-size:13px;font-weight:700;color:var(--ink-2);margin-bottom:8px"
       >
-        Model
+        {$LL.settings.model()}
       </div>
       <select
         class="field"
@@ -181,13 +193,13 @@
       <div
         style="font-size:12px;color:var(--faint);margin:7px 0 20px;font-weight:550"
       >
-        Not sure? Stay with "Balanced" — it works well for most databases.
+        {$LL.settings.modelDefaultHint()}
       </div>
 
       <div
         style="font-size:13px;font-weight:700;color:var(--ink-2);margin-bottom:8px"
       >
-        Gemini API key
+        {$LL.settings.apiKey()}
       </div>
 
       {#if keyIsSet && !editingKey}
@@ -211,7 +223,7 @@
           >
           <span
             style="flex:1;font-size:13.5px;font-weight:650;color:var(--brand-ink)"
-            >API key configured</span
+            >{$LL.settings.keyConfigured()}</span
           >
           <button
             onclick={() => {
@@ -224,8 +236,8 @@
                 "var(--brand-tint-2)")}
             onmouseleave={(e) =>
               ((e.currentTarget as HTMLElement).style.background = "none")}
-          >
-            Change
+            >
+            {$LL.common.change()}
           </button>
           <button
             onclick={removeKey}
@@ -237,7 +249,7 @@
             onmouseleave={(e) =>
               ((e.currentTarget as HTMLElement).style.background = "none")}
           >
-            Remove
+            {$LL.common.remove()}
           </button>
         </div>
       {:else}
@@ -249,17 +261,17 @@
           placeholder="AIza•••"
           style="font-size:13.5px"
         />
-        <div
-          style="font-size:12px;color:var(--faint);margin-top:7px;font-weight:550"
-        >
-          Get a free key at <a
-            href={GEMINI_KEY_URL}
-            target="_blank"
-            rel="noopener"
-            style="color:var(--brand-ink);font-weight:700;text-decoration:none"
-            >aistudio.google.com/app/api-keys →</a
+          <div
+            style="font-size:12px;color:var(--faint);margin-top:7px;font-weight:550"
           >
-        </div>
+            {$LL.settings.getKeyAt()} <a
+              href={GEMINI_KEY_URL}
+              target="_blank"
+              rel="noopener"
+              style="color:var(--brand-ink);font-weight:700;text-decoration:none"
+              >aistudio.google.com/app/api-keys →</a
+            >
+          </div>
         {#if editingKey}
           <button
             onclick={() => {
@@ -268,7 +280,7 @@
             }}
             style="font-size:12.5px;color:var(--faint);background:none;border:none;cursor:pointer;font-weight:600;padding:4px 0;margin-top:6px"
           >
-            ← Cancel, keep existing key
+            {$LL.settings.cancelKeepKey()}
           </button>
         {/if}
       {/if}
@@ -296,8 +308,7 @@
             stroke-width="1.8"
           /></svg
         >
-        Stored locally only. Schema + question are sent to Google Gemini to generate
-        SQL — never your table data.
+        {$LL.settings.keyStoredLocally()}
       </div>
 
       <div
@@ -306,21 +317,35 @@
         <div
           style="font-size:13px;font-weight:700;color:var(--ink-2);margin-bottom:4px"
         >
-          Data catalog
+          {$LL.settings.dataCatalog()}
         </div>
         <div
           style="font-size:12px;color:var(--faint);font-weight:550;margin-bottom:10px"
         >
-          Teach BoloDB your business terms, metrics, and value meanings so
-          answers get more accurate.
+          {$LL.settings.catalogDescription()}
         </div>
         <button
           onclick={() => (showCatalog = true)}
           class="btn btn-quiet btn-sm"
           style="font-size:13px;font-weight:650;padding:8px 14px;border:1px solid var(--border);border-radius:var(--radius-sm)"
         >
-          Manage data catalog →
+          {$LL.settings.manageCatalog()}
         </button>
+      </div>
+
+      <!-- language -->
+      <div style="margin-top:20px;padding-top:20px;border-top:1px solid var(--border)">
+        <div style="font-size:13px;font-weight:700;color:var(--ink-2);margin-bottom:8px">{$LL.settings.language()}</div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap">
+          {#each LOCALES as l}
+            <button
+              onclick={() => switchLocale(l)}
+              style="padding:6px 14px;border-radius:99px;border:1.5px solid {currentLocale === l ? 'var(--brand)' : 'var(--border)'};background:{currentLocale === l ? 'var(--brand-tint)' : 'transparent'};color:{currentLocale === l ? 'var(--brand-ink)' : 'var(--muted)'};font-size:13px;font-weight:700;cursor:pointer;text-transform:uppercase;transition:all .15s"
+              onmouseenter={(e) => { if (currentLocale !== l) (e.currentTarget as HTMLElement).style.borderColor = 'var(--faint)' }}
+              onmouseleave={(e) => { if (currentLocale !== l) (e.currentTarget as HTMLElement).style.borderColor = 'var(--border)' }}
+            >{l}</button>
+          {/each}
+        </div>
       </div>
     </div>
     {#if error}
@@ -340,17 +365,17 @@
           <div
             style="font-size:12.5px;color:var(--faint);margin-bottom:8px;font-weight:550"
           >
-            Want to connect a different database?
+            {$LL.settings.changeDbPrompt()}
           </div>
           <button
             onclick={onDisconnect}
             style="font-size:13px;color:var(--c-low-ink);background:none;border:1px solid #EBC6BD;border-radius:var(--radius-sm);padding:7px 14px;cursor:pointer;font-weight:650"
-            >Disconnect &amp; change database</button
+            >{$LL.settings.disconnectButton()}</button
           >
         </div>
       {/if}
       <div style="display:flex;justify-content:flex-end;gap:10px">
-        <Button kind="ghost" onclick={onClose}>Cancel</Button>
+        <Button kind="ghost" onclick={onClose}>{$LL.common.cancel()}</Button>
         <Button kind="primary" disabled={saving} onclick={save}>
           {#snippet icon()}{#if saving}<Spinner />{:else}<svg
                 width="16"
@@ -365,7 +390,7 @@
                   stroke-linejoin="round"
                 /></svg
               >{/if}{/snippet}
-          {saving ? "Saving…" : "Save changes"}
+          {saving ? $LL.common.saving() : $LL.common.save()}
         </Button>
       </div>
     </div>
