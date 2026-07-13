@@ -362,6 +362,26 @@ const en = {
     suggestWithAi: "Suggest with AI",
     saveCatalog: "Save catalog",
     cancel: "Cancel",
+    close: "Close data catalog",
+    removeRow: "Remove row",
+    loading: "Loading catalog\u2026",
+    couldNotLoad: "Could not load the catalog.",
+    suggestionsLoaded:
+      "AI suggestions loaded \u2014 review and edit, then save.",
+    couldNotSuggest: "Could not generate suggestions.",
+    couldNotSave: "Could not save the catalog.",
+    catalogPageDescription:
+      "Teach BoloDB your business language. It\u2019s sent with every question to answer more accurately.",
+    synonymsDesc: "Business words your team says, mapped to a table or column.",
+    valueMeaningsDesc:
+      'A friendly label for a stored value, e.g. "VIP" means segment = vip.',
+    metricsDesc:
+      "Reusable calculations, e.g. revenue = SUM(total_amount) where completed.",
+    joinPathsDesc: "How tables connect, so answers join them the right way.",
+    columnNotesDesc: "What a column means when the name alone is unclear.",
+    thinking: "Thinking\u2026",
+    saving: "Saving\u2026",
+    entry: "{n} entr{?y#ies}",
   },
   errors: {
     dbConnectionRefused:

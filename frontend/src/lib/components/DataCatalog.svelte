@@ -3,6 +3,7 @@
   import { getCatalog, saveCatalog, suggestCatalog } from "$lib/api";
   import Button from "$lib/components/ui/Button.svelte";
   import Spinner from "$lib/components/ui/Spinner.svelte";
+  import LL from "$lib/i18n/i18n-svelte";
 
   let { onClose }: { onClose: () => void } = $props();
 
@@ -13,7 +14,7 @@
     type?: "select";
     options?: string[];
   };
-  type Section = { key: string; title: string; hint: string; fields: Field[] };
+  type Section = { key: string; title: string; titleKey: string; hint: string; hintKey: string; fields: Field[] };
 
   // The five catalog categories (issue #90). Keys match the backend
   // CatalogPayload / KnowledgeBase.get_catalog shape exactly.
@@ -21,7 +22,9 @@
     {
       key: "synonyms",
       title: "Synonyms",
+      titleKey: "synonyms",
       hint: "Business words your team says, mapped to a table or column.",
+      hintKey: "synonymsDesc",
       fields: [
         { k: "term", label: "Business word", ph: "clients" },
         {
@@ -36,7 +39,9 @@
     {
       key: "value_maps",
       title: "Value meanings",
+      titleKey: "valueMeanings",
       hint: 'A friendly label for a stored value, e.g. "VIP" means segment = vip.',
+      hintKey: "valueMeaningsDesc",
       fields: [
         { k: "table", label: "Table", ph: "customers" },
         { k: "column", label: "Column", ph: "segment" },
@@ -47,7 +52,9 @@
     {
       key: "metrics",
       title: "Metrics",
+      titleKey: "metrics",
       hint: "Reusable calculations, e.g. revenue = SUM(total_amount) where completed.",
+      hintKey: "metricsDesc",
       fields: [
         { k: "name", label: "Name", ph: "revenue" },
         {
@@ -65,7 +72,9 @@
     {
       key: "joins",
       title: "Join paths",
+      titleKey: "joinPaths",
       hint: "How tables connect, so answers join them the right way.",
+      hintKey: "joinPathsDesc",
       fields: [
         { k: "tables", label: "Tables", ph: "orders,customers" },
         {
@@ -83,7 +92,9 @@
     {
       key: "column_descriptions",
       title: "Column notes",
+      titleKey: "columnNotes",
       hint: "What a column means when the name alone is unclear.",
+      hintKey: "columnNotesDesc",
       fields: [
         { k: "table", label: "Table", ph: "orders" },
         { k: "column", label: "Column", ph: "total_amount" },
@@ -121,7 +132,7 @@
       const r = await getCatalog();
       catalog = normalize(r.catalog);
     } catch (e: any) {
-      error = e.message || "Could not load the catalog.";
+      error = e.message || $LL.schema.couldNotLoad();
     } finally {
       loading = false;
     }
@@ -144,9 +155,9 @@
     try {
       const r = await suggestCatalog();
       catalog = normalize(r.catalog);
-      notice = "AI suggestions loaded — review and edit, then save.";
+      notice = $LL.schema.suggestionsLoaded();
     } catch (e: any) {
-      error = e.message || "Could not generate suggestions.";
+      error = e.message || $LL.schema.couldNotSuggest();
     } finally {
       suggesting = false;
     }
@@ -160,7 +171,7 @@
       await saveCatalog(catalog);
       onClose();
     } catch (e: any) {
-      error = e.message || "Could not save the catalog.";
+      error = e.message || $LL.schema.couldNotSave();
       saving = false;
     }
   }
@@ -201,11 +212,11 @@
             stroke-width="1.8"
           /></svg
         >
-        <span style="font-weight:800;font-size:17px">Data catalog</span>
+        <span style="font-weight:800;font-size:17px">{$LL.schema.title()}</span>
       </div>
       <button
         onclick={onClose}
-        aria-label="Close data catalog"
+        aria-label={$LL.schema.close()}
         class="btn btn-quiet btn-sm"
         style="padding:8px"
       >
@@ -224,8 +235,7 @@
       style="padding:16px 24px;border-bottom:1px solid var(--border);background:var(--surface-2);display:flex;align-items:center;gap:12px"
     >
       <div style="font-size:12.5px;color:var(--faint);font-weight:550;flex:1">
-        Teach BoloDB your business language. It's sent with every question to
-        answer more accurately.
+        {$LL.schema.catalogPageDescription()}
       </div>
       <Button kind="ghost" disabled={suggesting || loading} onclick={suggest}>
         {#snippet icon()}{#if suggesting}<Spinner />{:else}<svg
@@ -238,7 +248,7 @@
                 fill="currentColor"
               /></svg
             >{/if}{/snippet}
-        {suggesting ? "Thinking…" : "Suggest with AI"}
+        {suggesting ? $LL.schema.thinking() : $LL.schema.suggestWithAi()}
       </Button>
     </div>
 
@@ -247,18 +257,18 @@
         <div
           style="display:flex;align-items:center;gap:8px;color:var(--faint);padding:24px 0;font-size:13.5px"
         >
-          <Spinner /> Loading catalog…
+          <Spinner /> {$LL.schema.loading()}
         </div>
       {:else}
         {#each SECTIONS as section (section.key)}
           <div style="margin-top:18px">
             <div style="font-size:13.5px;font-weight:800;color:var(--ink)">
-              {section.title}
+              {$LL.schema[section.titleKey]()}
             </div>
             <div
               style="font-size:12px;color:var(--faint);font-weight:550;margin:2px 0 8px"
             >
-              {section.hint}
+              {$LL.schema[section.hintKey]()}
             </div>
             {#each catalog[section.key] as row, i (i)}
               <div
@@ -288,7 +298,7 @@
                 {/each}
                 <button
                   onclick={() => removeRow(section.key, i)}
-                  aria-label="Remove row"
+                   aria-label={$LL.schema.removeRow()}
                   class="btn btn-quiet btn-sm"
                   style="padding:7px;flex-shrink:0"
                 >
@@ -307,7 +317,7 @@
               onclick={() => addRow(section)}
               style="font-size:12.5px;font-weight:700;color:var(--brand-ink);background:none;border:none;cursor:pointer;padding:4px 0"
             >
-              + Add {section.title.toLowerCase().replace(/s$/, "")}
+              + Add {$LL.schema[section.titleKey]()}
             </button>
           </div>
         {/each}
@@ -332,10 +342,10 @@
       style="padding:16px 24px;border-top:1px solid var(--border);background:var(--surface-2);display:flex;align-items:center;justify-content:space-between"
     >
       <span style="font-size:12px;color:var(--faint);font-weight:600"
-        >{totalEntries} {totalEntries === 1 ? "entry" : "entries"}</span
+        >{$LL.schema.entry({n: totalEntries})}</span
       >
       <div style="display:flex;gap:10px">
-        <Button kind="ghost" onclick={onClose}>Cancel</Button>
+        <Button kind="ghost" onclick={onClose}>{$LL.schema.cancel()}</Button>
         <Button kind="primary" disabled={saving || loading} onclick={save}>
           {#snippet icon()}{#if saving}<Spinner />{:else}<svg
                 width="16"
@@ -350,7 +360,7 @@
                   stroke-linejoin="round"
                 /></svg
               >{/if}{/snippet}
-          {saving ? "Saving…" : "Save catalog"}
+          {saving ? $LL.schema.saving() : $LL.schema.saveCatalog()}
         </Button>
       </div>
     </div>
