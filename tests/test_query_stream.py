@@ -27,13 +27,13 @@ def _sql_json(sql, restatement="r"):
     return json.dumps({"sql": sql, "restatement": restatement, "assumptions": []})
 
 
-def _collect(provider, db=None, monkeypatch_saves=None):
+def _collect(provider, db=None, monkeypatch_saves=None, kb=None):
     async def _run():
         events = []
         async for ev in run_query_stream(
             "u1",
             db or FakeDB(),
-            FakeKB(),
+            kb or FakeKB(),
             CFG,
             FakeProviders(provider),
             FakeLog(),
@@ -156,3 +156,29 @@ def test_stream_repairs_execution_failure(monkeypatch):
     assert data["sql"] == "SELECT total_amount FROM orders"
     assert "execution_error" not in data
     assert data["rows"] == [{"n": 1}]
+
+
+def test_stream_injects_catalog_into_prompt(monkeypatch):
+    """The streaming path must feed the semantic catalog (issue #90) into the
+    generation prompt, just like the non-streaming run_query does."""
+    monkeypatch.setattr(query_ctrl.mdb, "save_query", lambda **kw: None, raising=True)
+    catalog = {
+        "synonyms": [
+            {"term": "clients", "entity_type": "table", "entity_name": "orders"}
+        ],
+        "metrics": [
+            {
+                "name": "revenue",
+                "description": "",
+                "sql_expression": "SUM(total_amount)",
+            }
+        ],
+        "value_maps": [],
+        "joins": [],
+        "column_descriptions": [],
+    }
+    provider = FakeProvider([_sql_json("SELECT id FROM orders")])
+    _collect(provider, kb=FakeKB(catalog=catalog))
+    system = provider.calls[0]["system"]
+    assert "Business catalog" in system
+    assert "revenue" in system

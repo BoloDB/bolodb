@@ -1,10 +1,14 @@
 """Semantic-catalog endpoints (issue #90): read, save, and AI-suggest the
 per-database catalog that maps business language to schema entities."""
 
+import logging
+
 from fastapi import HTTPException
 
 from backend.app.llm import suggest_catalog as llm_suggest_catalog
 from backend.app.semantic import merge_catalog_suggestions, suggest_from_schema
+
+log = logging.getLogger(__name__)
 
 
 def get_catalog(user_id, db, kb):
@@ -34,5 +38,11 @@ async def suggest(user_id, db, providers):
             providers.get(), db.schema_as_text(user_id)
         )
     except Exception:
+        # Graceful degradation: still return the schema-only backbone, but log
+        # the cause so misconfiguration / rate limits are diagnosable.
+        log.warning(
+            "catalog suggest: LLM enrichment failed, returning schema-only suggestions",
+            exc_info=True,
+        )
         enriched = {}
     return {"catalog": merge_catalog_suggestions(base, enriched)}
