@@ -35,21 +35,20 @@ def _utcnow():
 
 load_dotenv()
 
-DATABASE_URL = os.getenv("DATABASE_URL")
-if not DATABASE_URL:
-    raise ValueError(
-        "DATABASE_URL environment variable is required. "
-        "Example: postgresql+asyncpg://user:pass@host:5432/dbname"
-    )
-
+_ENGINE_URL = os.getenv("DATABASE_URL")
 _engine = None
 
 
 def get_engine():
     global _engine
     if _engine is None:
+        if not _ENGINE_URL:
+            raise ValueError(
+                "DATABASE_URL environment variable is required. "
+                "Example: postgresql+asyncpg://user:pass@host:5432/dbname"
+            )
         _engine = create_async_engine(
-            DATABASE_URL,
+            _ENGINE_URL,
             poolclass=pool.NullPool,
             connect_args={"statement_cache_size": 0},
         )
