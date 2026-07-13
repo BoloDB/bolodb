@@ -60,6 +60,7 @@
   let turns: Turn[] = $state([]);
   let input = $state("");
   let settingsOpen = $state(false);
+  let openCatalogTrigger = $state(0);
   let loading = $state(false);
   let feedRef: HTMLDivElement | undefined = $state(undefined);
   let currentArtifacts: ThinkingArtifact[] = $state([]);
@@ -545,7 +546,7 @@
     >
       <div style="max-width:720px;margin:0 auto">
         {#if turns.length === 0}
-          <Empty {trust} onPick={ask} {starters} />
+          <Empty {trust} onPick={ask} {starters} onOpenCatalog={() => { openCatalogTrigger++; settingsOpen = true; }} />
         {:else}
           {#each turns as t, i (t.id)}
             <AnswerCard
@@ -648,8 +649,9 @@
     <Settings
       {modelName}
       {setModelName}
-      onClose={() => (settingsOpen = false)}
+      onClose={() => { settingsOpen = false; openCatalogTrigger = 0; }}
       {onDisconnect}
+      {openCatalogTrigger}
     />
   {/if}
 </div>

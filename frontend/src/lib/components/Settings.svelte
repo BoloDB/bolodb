@@ -11,11 +11,13 @@
     setModelName,
     onClose,
     onDisconnect,
+    openCatalogTrigger = 0,
   }: {
     modelName: string;
     setModelName: (m: string) => void;
     onClose: () => void;
     onDisconnect?: () => void;
+    openCatalogTrigger?: number;
   } = $props();
 
   // Which Gemini model answers questions. Ordered cheapest → most capable;
@@ -42,6 +44,10 @@
   let keyIsSet = $state(false);
   let editingKey = $state(false);
   let showCatalog = $state(false);
+
+  $effect(() => {
+    if (openCatalogTrigger > 0) showCatalog = true;
+  });
 
   onMount(async () => {
     try {

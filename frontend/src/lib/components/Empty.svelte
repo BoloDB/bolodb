@@ -1,7 +1,7 @@
 <script lang="ts">
   import type { TrustLevel } from '$lib/types';
-  let { trust, onPick, starters }:
-    { trust: TrustLevel; onPick: (q: string) => void; starters: string[] } = $props();
+  let { trust, onPick, starters, onOpenCatalog }:
+    { trust: TrustLevel; onPick: (q: string) => void; starters: string[]; onOpenCatalog?: () => void } = $props();
   const hasStarters = $derived(starters && starters.length > 0);
 </script>
 
@@ -42,6 +42,23 @@
       <p style="font-size:12px;color:var(--faint);margin-top:12px;margin-bottom:0;line-height:1.5">As you verify answers, questions specific to your data will appear here.</p>
     </div>
   {/if}
+
+  <button
+    onclick={onOpenCatalog}
+    style="margin-top:20px;padding:14px 16px;background:var(--surface-2);border:1px solid var(--border);border-radius:var(--radius-sm);text-align:left;max-width:480px;margin-left:auto;margin-right:auto;cursor:pointer;width:100%;transition:background .15s,border-color .15s"
+    onmouseenter={(e) => { (e.currentTarget as HTMLElement).style.background = 'var(--surface-3)'; (e.currentTarget as HTMLElement).style.borderColor = 'var(--brand-tint-2)' }}
+    onmouseleave={(e) => { (e.currentTarget as HTMLElement).style.background = 'var(--surface-2)'; (e.currentTarget as HTMLElement).style.borderColor = 'var(--border)' }}
+  >
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:10px">
+      <div>
+        <div style="font-weight:700;font-size:13px;margin-bottom:4px;color:var(--ink-2);text-align:left">Want better answers?</div>
+        <div style="font-size:12.5px;color:var(--faint);line-height:1.5;text-align:left">
+          Create a data catalog with your business terms — add them manually or use <strong>"Suggest with AI"</strong> to auto-fill them.
+        </div>
+      </div>
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" style="flex-shrink:0;color:var(--faint)"><path d="M9 6l6 6-6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </div>
+  </button>
 
   <div style="display:flex;align-items:center;justify-content:center;gap:7px;margin-top:22px;font-size:12.5px;color:var(--faint);font-weight:550">
     <svg width="13" height="13" viewBox="0 0 24 24" fill="none"><path d="M4 17l6-6-6-6M12 19h8" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
