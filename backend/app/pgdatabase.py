@@ -28,7 +28,8 @@ from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 from backend.app.models.user import UserInDB
 from backend.app.config import CONFIG_DIR
 
-_utcnow = lambda: datetime.now(timezone.utc)
+def _utcnow():
+    return datetime.now(timezone.utc)
 
 load_dotenv()
 
