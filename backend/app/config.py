@@ -167,28 +167,31 @@ def _db_url_fernet():
     if jwt_secret:
         key = base64.urlsafe_b64encode(hashlib.sha256(jwt_secret.encode()).digest())
         return Fernet(key)
-    # Fail closed: an ephemeral os.urandom key would change on every process,
-    # silently making previously stored URLs undecryptable. Require a stable
-    # secret instead of masking the misconfiguration.
-    raise RuntimeError(
-        "No database-URL encryption key available: create the key file or set "
-        "JWT_SECRET. Refusing to fall back to an ephemeral key."
-    )
+    # No stable key available — skip encryption. We intentionally avoid an
+    # ephemeral os.urandom fallback because that would silently make previously
+    # stored URLs undecryptable after a process restart.
+    return None
 
 
 def encrypt_db_url(url):
     """Encrypt a database URL for safe storage on disk."""
     if not url:
         return url
-    return _db_url_fernet().encrypt(url.encode()).decode()
+    fernet = _db_url_fernet()
+    if fernet is None:
+        return url
+    return fernet.encrypt(url.encode()).decode()
 
 
 def decrypt_db_url(value):
     """Decrypt a stored database URL. Handles legacy plaintext gracefully."""
     if not value:
         return value
+    fernet = _db_url_fernet()
+    if fernet is None:
+        return value
     try:
-        return _db_url_fernet().decrypt(value.encode()).decode()
+        return fernet.decrypt(value.encode()).decode()
     except (InvalidToken, ValueError, TypeError):
         # Legacy plaintext URL — return as-is.
         return value

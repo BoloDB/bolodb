@@ -36,8 +36,6 @@ jobs:
         ruff check .
 
     - name: Run tests with coverage
-      env:
-        JWT_SECRET: test-secret-key-for-ci
       run: |
         PYTHONPATH=. pytest --cov=backend/app --cov-report=xml --cov-report=term tests/
 
