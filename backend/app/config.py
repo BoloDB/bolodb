@@ -157,17 +157,22 @@ def save_config(cfg):
 
 
 def _db_url_fernet():
-    """Return a Fernet cipher for encrypting/decrypting stored database URLs.
-
-    Uses a separate key file (~/.bolodb/db_url.key) to avoid reusing the
-    JWT secret or the recent-connections key.
-    """
+    """Return a Fernet cipher for encrypting/decrypting stored database URLs."""
     CONFIG_DIR.mkdir(parents=True, exist_ok=True)
     if _DB_URL_KEY_FILE.exists():
         secret = _DB_URL_KEY_FILE.read_text().strip()
-    else:
-        secret = base64.urlsafe_b64encode(os.urandom(32)).decode()
-        _DB_URL_KEY_FILE.write_text(secret)
+        key = base64.urlsafe_b64encode(hashlib.sha256(secret.encode()).digest())
+        return Fernet(key)
+    jwt_secret = os.getenv("JWT_SECRET")
+    if jwt_secret:
+        key = base64.urlsafe_b64encode(hashlib.sha256(jwt_secret.encode()).digest())
+        return Fernet(key)
+    secret = base64.urlsafe_b64encode(os.urandom(32)).decode()
+    _DB_URL_KEY_FILE.write_text(secret)
+    try:
+        os.chmod(_DB_URL_KEY_FILE, 0o600)
+    except OSError:
+        pass
     key = base64.urlsafe_b64encode(hashlib.sha256(secret.encode()).digest())
     return Fernet(key)
 
