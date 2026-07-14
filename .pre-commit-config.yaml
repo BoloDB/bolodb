@@ -9,13 +9,13 @@ repos:
 
   # Gitleaks for secret detection
   - repo: https://github.com/gitleaks/gitleaks
-    rev: v8.27.2
+    rev: v8.30.0
     hooks:
       - id: gitleaks
 
   # Ruff for Python linting and formatting
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.15.20
+    rev: v0.15.21
     hooks:
       # Run the linter
       - id: ruff
