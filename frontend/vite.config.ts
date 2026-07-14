@@ -14,7 +14,11 @@ export default defineConfig({
       adapter: adapter({
         pages: "build",
         assets: "build",
-        fallback: "index.html",
+        // Use a distinct filename for the SPA fallback so it doesn't
+        // clobber the prerendered "/" (marketing) page's index.html —
+        // that collision was silently overwriting the SEO'd homepage
+        // with the empty SPA shell on every build.
+        fallback: "200.html",
         precompress: false,
         strict: true,
       }),

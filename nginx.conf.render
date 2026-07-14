@@ -20,6 +20,9 @@ server {
     }
 
     location / {
-        try_files $uri $uri/ /index.html;
+        # /index.html is the prerendered marketing homepage; client-only
+        # routes (dashboard, chat, etc.) fall back to the SPA shell in
+        # 200.html instead, so they don't get served homepage markup.
+        try_files $uri $uri/ /200.html;
     }
 }

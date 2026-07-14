@@ -1,0 +1,2296 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      name="description"
+      content="Live, interactive motion & design reference for the BoloDB landing page redesign. Open in a browser to feel the target quality; read the source for the interaction implementations."
+    />
+    <title>BoloDB — Landing Motion & Design Spec</title>
+  </head>
+  <body>
+    <!--
+  ============================================================================
+  BoloDB — Landing Page Motion & Design Spec (self-contained reference)
+  ----------------------------------------------------------------------------
+  This is a companion to:
+    - docs/landing-page-prd.md              (the "why / who / what" PRD)
+    - docs/landing-page-redesign-plan.md    (the "how" — build & motion plan)
+
+  Open this file directly in any browser to SEE and FEEL the target quality:
+  the living aurora background, magnetic buttons, spotlight cards, easing
+  tokens, masked reveals, and the looping query -> SQL -> answer demo.
+
+  Everything is vanilla HTML/CSS/JS with zero dependencies so it runs offline
+  and is fully readable by humans and AI agents. The build plan specifies the
+  GSAP + Lenis equivalents to use in the real SvelteKit implementation.
+  All motion respects prefers-reduced-motion and pauses when off-screen.
+  ============================================================================
+-->
+
+    <canvas class="aurora" id="aurora" aria-hidden="true"></canvas>
+    <div class="noise" aria-hidden="true"></div>
+
+    <!-- ============ TOP BAR ============ -->
+    <header class="topbar">
+      <div class="brand">
+        <svg
+          width="26"
+          height="26"
+          viewBox="0 0 32 32"
+          fill="none"
+          aria-hidden="true"
+        >
+          <rect
+            x="2.2"
+            y="2.2"
+            width="27.6"
+            height="27.6"
+            rx="9"
+            fill="var(--brand)"
+          ></rect>
+          <path
+            d="M9 20.5c2.3 1.7 4.6 2.5 7 2.5 2.4 0 4.7-.8 7-2.5"
+            stroke="var(--on-brand)"
+            stroke-width="2.1"
+            stroke-linecap="round"
+          ></path>
+          <circle cx="12" cy="13" r="1.9" fill="var(--on-brand)"></circle>
+          <circle cx="20" cy="13" r="1.9" fill="var(--on-brand)"></circle>
+        </svg>
+        <span class="brand-word">Bolo<span class="brand-accent">DB</span></span>
+        <span class="brand-sep">/</span>
+        <span class="brand-sub">Landing Motion &amp; Design Spec</span>
+      </div>
+      <div class="topbar-right">
+        <span class="live-dot" aria-hidden="true"></span>
+        <span class="topbar-note">Live — hover, move, scroll</span>
+        <button
+          type="button"
+          class="theme-toggle"
+          id="themeToggle"
+          aria-label="Toggle light / dark theme"
+        >
+          <span class="tt-icon" aria-hidden="true"></span>
+          <span class="tt-label">Theme</span>
+        </button>
+      </div>
+    </header>
+
+    <main>
+      <!-- ============ HERO / THESIS ============ -->
+      <section class="hero">
+        <p class="eyebrow reveal">
+          Companion reference to
+          <span class="mono">docs/landing-page-redesign-plan.md</span>
+        </p>
+        <h1 class="reveal">
+          Motion that earns <span class="grad">trust</span>,<br />not attention.
+        </h1>
+        <p class="lede reveal">
+          A build reference for the BoloDB landing redesign. Every interaction
+          below is live and running in the browser — the same behaviors the plan
+          specifies in GSAP. Hover the buttons, move your cursor across the
+          cards, scroll to reveal.
+        </p>
+        <div class="hero-cta reveal">
+          <button type="button" class="btn btn-primary" data-magnetic>
+            Start for free
+          </button>
+          <a class="btn btn-ghost" href="#lab">Explore the lab ↓</a>
+        </div>
+        <p class="rm-note reveal" id="rmNote">
+          Motion honors <span class="mono">prefers-reduced-motion</span>. Turn
+          it on in your OS and this page goes still.
+        </p>
+      </section>
+
+      <!-- ============ PRINCIPLES ============ -->
+      <section class="band" id="principles">
+        <div class="band-head">
+          <span class="kicker">01 — House rules</span>
+          <h2>Six rules the whole page obeys</h2>
+        </div>
+        <div class="principles-grid">
+          <div class="p-card reveal">
+            <span class="p-num">A</span>
+            <h3>Transform &amp; opacity only</h3>
+            <p>
+              Never animate layout or paint properties on scroll. GPU-composited
+              moves stay at 60fps.
+            </p>
+          </div>
+          <div class="p-card reveal">
+            <span class="p-num">B</span>
+            <h3>One easing family</h3>
+            <p>
+              Entrances use <span class="mono">--ease</span>. Playful pops use
+              <span class="mono">--spring</span>. Nothing else.
+            </p>
+          </div>
+          <div class="p-card reveal">
+            <span class="p-num">C</span>
+            <h3>Stagger, don't dump</h3>
+            <p>
+              Reveal groups with 40–80ms offsets. Cap any sequence near 600ms so
+              nothing feels slow.
+            </p>
+          </div>
+          <div class="p-card reveal">
+            <span class="p-num">D</span>
+            <h3>Enter once</h3>
+            <p>
+              Content reveals fire a single time. Only ambient and looping
+              elements repeat.
+            </p>
+          </div>
+          <div class="p-card reveal">
+            <span class="p-num">E</span>
+            <h3>In-view only</h3>
+            <p>
+              Anything that loops pauses when off-screen. A battery requirement,
+              not a nicety.
+            </p>
+          </div>
+          <div class="p-card reveal">
+            <span class="p-num">F</span>
+            <h3>Correct with zero JS</h3>
+            <p>
+              Final states are the CSS default. Reduced-motion and no-JS both
+              land on a finished page.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============ EASING + DURATION TOKENS ============ -->
+      <section class="band" id="tokens-motion">
+        <div class="band-head">
+          <span class="kicker">02 — Motion tokens</span>
+          <h2>Timing, made concrete</h2>
+          <p class="band-lede">
+            These are the two curves already defined in
+            <span class="mono">layout.css</span>. Hover a track to run it.
+          </p>
+        </div>
+        <div class="ease-grid">
+          <div class="ease-row reveal" data-ease-demo>
+            <div class="ease-meta">
+              <h4>--ease · entrances &amp; UI</h4>
+              <code class="mono">cubic-bezier(0.22, 0.61, 0.36, 1)</code>
+            </div>
+            <div class="ease-track">
+              <span class="ease-ball" data-ball="ease"></span>
+            </div>
+          </div>
+          <div class="ease-row reveal" data-ease-demo>
+            <div class="ease-meta">
+              <h4>--spring · pops &amp; snaps</h4>
+              <code class="mono">cubic-bezier(0.34, 1.56, 0.64, 1)</code>
+            </div>
+            <div class="ease-track">
+              <span class="ease-ball spring" data-ball="spring"></span>
+            </div>
+          </div>
+        </div>
+        <div class="dur-scale reveal">
+          <div class="dur">
+            <span class="dur-v mono">120–180ms</span
+            ><span class="dur-k">micro-interaction</span>
+          </div>
+          <div class="dur">
+            <span class="dur-v mono">300–500ms</span
+            ><span class="dur-k">small reveal</span>
+          </div>
+          <div class="dur">
+            <span class="dur-v mono">500–800ms</span
+            ><span class="dur-k">hero / section</span>
+          </div>
+          <div class="dur">
+            <span class="dur-v mono">20–40s</span
+            ><span class="dur-k">ambient loop</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============ MICRO-INTERACTION LAB ============ -->
+      <section class="band" id="lab">
+        <div class="band-head">
+          <span class="kicker">03 — Micro-interaction lab</span>
+          <h2>The tactile vocabulary</h2>
+          <p class="band-lede">
+            Each ships as a reusable Svelte
+            <span class="mono">use:</span> action. All degrade to nothing on
+            touch and under reduced-motion.
+          </p>
+        </div>
+        <div class="lab-grid">
+          <div class="lab-card reveal" data-spotlight>
+            <div class="lab-demo">
+              <button type="button" class="btn btn-primary" data-magnetic>
+                Start for free
+              </button>
+            </div>
+            <div class="lab-copy">
+              <h3>Magnetic button</h3>
+              <p>
+                The label drifts toward the cursor within ~80px, then springs
+                home. <span class="mono">gsap.quickTo</span>, max ~12px.
+              </p>
+            </div>
+          </div>
+
+          <div class="lab-card reveal" data-spotlight>
+            <div class="lab-demo">
+              <div class="mini-tilt" data-tilt>
+                <span class="mini-tilt-glow"></span>
+                <span class="conf conf-high"
+                  ><span class="dot"></span>High confidence</span
+                >
+              </div>
+            </div>
+            <div class="lab-copy">
+              <h3>3D tilt + spotlight</h3>
+              <p>
+                Cards read the pointer: ≤6° rotate, a radial highlight, a lit
+                gradient border. This whole card is doing it right now.
+              </p>
+            </div>
+          </div>
+
+          <div class="lab-card reveal" data-spotlight>
+            <div class="lab-demo">
+              <div class="count" data-countup data-to="128940">0</div>
+            </div>
+            <div class="lab-copy">
+              <h3>Number count-up</h3>
+              <p>
+                Verified answers tick up when they scroll into view.
+                <span class="mono">tabular-nums</span> so digits never jitter.
+              </p>
+            </div>
+          </div>
+
+          <div class="lab-card reveal" data-spotlight>
+            <div class="lab-demo">
+              <div class="mask-demo" data-maskreveal>
+                <span class="mask-line">Talk to your database</span>
+                <span class="mask-line">like a human.</span>
+              </div>
+            </div>
+            <div class="lab-copy">
+              <h3>Masked text reveal</h3>
+              <p>
+                Headlines rise line-by-line behind an overflow mask (SplitText).
+                The LCP line never fades from zero.
+              </p>
+            </div>
+          </div>
+
+          <div class="lab-card reveal" data-spotlight>
+            <div class="lab-demo lab-demo-links">
+              <a class="wipe-link" href="#lab">See the SQL</a>
+              <a class="wipe-link" href="#lab">Read the docs</a>
+            </div>
+            <div class="lab-copy">
+              <h3>Underline wipe</h3>
+              <p>
+                Links grow an underline from the left on hover.
+                <span class="mono">scaleX 0→1</span>, brand color, cheap and
+                everywhere.
+              </p>
+            </div>
+          </div>
+
+          <div class="lab-card reveal" data-spotlight>
+            <div class="lab-demo">
+              <svg
+                class="draw-demo"
+                viewBox="0 0 120 60"
+                fill="none"
+                aria-hidden="true"
+              >
+                <path
+                  class="draw-path"
+                  d="M6 46 C 30 46, 30 14, 54 14 S 90 46, 114 20"
+                  stroke="var(--brand)"
+                  stroke-width="3"
+                  stroke-linecap="round"
+                ></path>
+              </svg>
+            </div>
+            <div class="lab-copy">
+              <h3>Scroll-draw path</h3>
+              <p>
+                The pipeline spine and flywheel draw themselves via
+                <span class="mono">strokeDashoffset</span>, scrubbed to scroll.
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============ LIVE DEMO STORYBOARD ============ -->
+      <section class="band" id="storyboard">
+        <div class="band-head">
+          <span class="kicker">04 — The centerpiece</span>
+          <h2>“Ask your data” — the live demo</h2>
+          <p class="band-lede">
+            The single most important asset on the page. A looping GSAP
+            timeline, not <span class="mono">setTimeout</span> — and it pauses
+            the moment it leaves your screen.
+          </p>
+        </div>
+
+        <div class="device reveal" id="device">
+          <div class="device-bar">
+            <span class="tl red"></span><span class="tl amber"></span
+            ><span class="tl green"></span>
+            <span class="device-title mono">bolodb-chat-demo</span>
+            <button
+              type="button"
+              class="skip-btn"
+              id="skipBtn"
+              aria-pressed="false"
+            >
+              Skip animation
+            </button>
+          </div>
+          <div class="device-body">
+            <div class="bubble user">
+              <span id="typed"></span><span class="caret" id="caret">|</span>
+            </div>
+
+            <div class="answer" id="answer" hidden>
+              <div class="ai-avatar" aria-hidden="true">
+                <svg
+                  width="18"
+                  height="18"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                >
+                  <path
+                    d="M12 2a2 2 0 0 1 2 2c-.11.66-.54 1.18-1.07 1.57"
+                  ></path>
+                  <path d="M15 14h6"></path>
+                  <path d="M15 10h6"></path>
+                  <circle cx="8" cy="12" r="6"></circle>
+                </svg>
+              </div>
+              <div class="answer-body">
+                <div class="thinking" id="thinking">
+                  <span class="mini-spin"></span> Thinking…
+                </div>
+
+                <div class="sql-block" id="sqlBlock" hidden>
+                  <div class="sql-head mono">Generated SQL</div>
+                  <pre class="sql-code mono"><code id="sqlCode"></code></pre>
+                </div>
+
+                <div class="result" id="result" hidden>
+                  <div class="result-top">
+                    <span class="conf conf-high pop"
+                      ><span class="dot"></span>High confidence</span
+                    >
+                    <span class="result-meta mono">3 rows · 41ms</span>
+                  </div>
+                  <table class="result-table">
+                    <thead>
+                      <tr>
+                        <th>Customer</th>
+                        <th class="num">Revenue</th>
+                      </tr>
+                    </thead>
+                    <tbody id="rows"></tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <p class="static-eq reveal">
+          <strong>Accessibility:</strong> the animation is
+          <span class="mono">aria-hidden</span>. The equivalent, always in the
+          DOM:
+          <em
+            >“Ask ‘top 3 customers this month by revenue’ and BoloDB writes the
+            SQL, runs it read-only, and returns the answer with a confidence
+            level.”</em
+          >
+        </p>
+      </section>
+
+      <!-- ============ SECTION BLUEPRINT ============ -->
+      <section class="band" id="blueprint">
+        <div class="band-head">
+          <span class="kicker">05 — Page blueprint</span>
+          <h2>One scroll, one story</h2>
+          <p class="band-lede">
+            Each section answers the visitor's next question. Order carries
+            meaning — it moves from “what is this?” to “how do I start?”.
+          </p>
+        </div>
+        <ol class="blueprint">
+          <li class="bp reveal">
+            <span class="bp-i mono">01</span>
+            <div>
+              <h4>Hero</h4>
+              <p>
+                Talk to your database like a human. Magnetic CTA, masked
+                headline.
+              </p>
+            </div>
+            <span class="bp-q">What is this?</span>
+          </li>
+          <li class="bp reveal">
+            <span class="bp-i mono">02</span>
+            <div>
+              <h4>Live demo</h4>
+              <p>Question → SQL → answer, with confidence. The centerpiece.</p>
+            </div>
+            <span class="bp-q">Show me.</span>
+          </li>
+          <li class="bp reveal">
+            <span class="bp-i mono">03</span>
+            <div>
+              <h4>The pipeline</h4>
+              <p>Connect → Ask → Verify → Trust. Scroll-scrubbed on desktop.</p>
+            </div>
+            <span class="bp-q">How does it work?</span>
+          </li>
+          <li class="bp reveal">
+            <span class="bp-i mono">04</span>
+            <div>
+              <h4>Trust engine</h4>
+              <p>See every query. Data stays yours. Confidence you can read.</p>
+            </div>
+            <span class="bp-q">Why trust it?</span>
+          </li>
+          <li class="bp reveal">
+            <span class="bp-i mono">05</span>
+            <div>
+              <h4>The flywheel</h4>
+              <p>
+                Every verified answer teaches your database. Supervised →
+                Trusted.
+              </p>
+            </div>
+            <span class="bp-q">Does it get smarter?</span>
+          </li>
+          <li class="bp reveal">
+            <span class="bp-i mono">06</span>
+            <div>
+              <h4>Integrations</h4>
+              <p>Postgres, MySQL, SQL Server, SQLite — any SQL database.</p>
+            </div>
+            <span class="bp-q">What connects?</span>
+          </li>
+          <li class="bp reveal">
+            <span class="bp-i mono">07</span>
+            <div>
+              <h4>Outcomes</h4>
+              <p>Who it's for, before/after, quiet social proof.</p>
+            </div>
+            <span class="bp-q">Convince me.</span>
+          </li>
+          <li class="bp reveal">
+            <span class="bp-i mono">08</span>
+            <div>
+              <h4>Final CTA</h4>
+              <p>
+                Ask your first question in a minute. Free with a Gemini key.
+              </p>
+            </div>
+            <span class="bp-q">How do I start?</span>
+          </li>
+        </ol>
+      </section>
+
+      <!-- ============ COLOR + TYPE TOKENS ============ -->
+      <section class="band" id="tokens">
+        <div class="band-head">
+          <span class="kicker">06 — Surface tokens</span>
+          <h2>Built on the existing system</h2>
+          <p class="band-lede">
+            No new brand. These are BoloDB's own tokens — hardcoded Tailwind
+            colors on the current page get replaced with these so all three
+            themes stay correct.
+          </p>
+        </div>
+        <div class="tok-cols">
+          <div class="tok-col reveal">
+            <h4>Dark — the default ground</h4>
+            <div class="swatches">
+              <div class="sw">
+                <span
+                  class="chip-color"
+                  style="background: #0a0a0a; border-color: #2c2e33"
+                ></span
+                ><span class="sw-k">--bg</span
+                ><span class="sw-v mono">#0a0a0a</span>
+              </div>
+              <div class="sw">
+                <span
+                  class="chip-color"
+                  style="background: #141518; border-color: #2c2e33"
+                ></span
+                ><span class="sw-k">--surface</span
+                ><span class="sw-v mono">#141518</span>
+              </div>
+              <div class="sw">
+                <span class="chip-color" style="background: #f0f0f0"></span
+                ><span class="sw-k">--ink</span
+                ><span class="sw-v mono">#f0f0f0</span>
+              </div>
+              <div class="sw">
+                <span class="chip-color" style="background: #8b8d91"></span
+                ><span class="sw-k">--muted</span
+                ><span class="sw-v mono">#8b8d91</span>
+              </div>
+              <div class="sw">
+                <span class="chip-color" style="background: #4da6ff"></span
+                ><span class="sw-k">--brand</span
+                ><span class="sw-v mono">#4da6ff</span>
+              </div>
+            </div>
+          </div>
+          <div class="tok-col reveal">
+            <h4>Crisp — light, brand green</h4>
+            <div class="swatches">
+              <div class="sw">
+                <span
+                  class="chip-color"
+                  style="background: #eef1f0; border-color: #d5dcd8"
+                ></span
+                ><span class="sw-k">--bg</span
+                ><span class="sw-v mono">#eef1f0</span>
+              </div>
+              <div class="sw">
+                <span
+                  class="chip-color"
+                  style="background: #ffffff; border-color: #d5dcd8"
+                ></span
+                ><span class="sw-k">--surface</span
+                ><span class="sw-v mono">#ffffff</span>
+              </div>
+              <div class="sw">
+                <span class="chip-color" style="background: #16201b"></span
+                ><span class="sw-k">--ink</span
+                ><span class="sw-v mono">#16201b</span>
+              </div>
+              <div class="sw">
+                <span class="chip-color" style="background: #5c6b63"></span
+                ><span class="sw-k">--muted</span
+                ><span class="sw-v mono">#5c6b63</span>
+              </div>
+              <div class="sw">
+                <span class="chip-color" style="background: #1b9e6b"></span
+                ><span class="sw-k">--brand</span
+                ><span class="sw-v mono">#1b9e6b</span>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="type-scale reveal">
+          <h4>Type — Hanken Grotesk (UI) · JetBrains Mono (data)</h4>
+          <div class="ts-row">
+            <span
+              class="ts-sample"
+              style="
+                font-size: clamp(2.4rem, 6vw, 4.4rem);
+                font-weight: 800;
+                letter-spacing: -0.02em;
+                line-height: 1.02;
+              "
+              >Display</span
+            ><span class="ts-spec mono"
+              >clamp(2.5, 6vw, 4.75rem) / 800 / -0.02em</span
+            >
+          </div>
+          <div class="ts-row">
+            <span class="ts-sample" style="font-size: 1.5rem; font-weight: 700"
+              >Heading</span
+            ><span class="ts-spec mono">1.5rem / 700</span>
+          </div>
+          <div class="ts-row">
+            <span
+              class="ts-sample"
+              style="font-size: 1.0625rem; color: var(--muted)"
+              >Body copy sets near 65 characters for a comfortable
+              measure.</span
+            ><span class="ts-spec mono">1.0625rem / 400 / muted</span>
+          </div>
+          <div class="ts-row">
+            <span
+              class="ts-sample mono"
+              style="
+                font-size: 0.85rem;
+                letter-spacing: 0.12em;
+                text-transform: uppercase;
+                color: var(--brand);
+              "
+              >Kicker Label</span
+            ><span class="ts-spec mono">0.75rem / mono / +0.12em / upper</span>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="foot">
+      <div class="foot-inner">
+        <div>
+          <span class="brand-word"
+            >Bolo<span class="brand-accent">DB</span></span
+          >
+          <span class="foot-note"
+            >Motion &amp; Design Spec — a reference, not the shipped page.</span
+          >
+        </div>
+        <p class="foot-sub">
+          Full brief:
+          <span class="mono">docs/landing-page-redesign-plan.md</span> · No
+          telemetry. No cloud sync.
+        </p>
+      </div>
+    </footer>
+
+    <style>
+      :root {
+        /* ---- dark is the BoloDB default ground ---- */
+        --bg: #0a0a0a;
+        --bg-2: #101114;
+        --surface: #141518;
+        --surface-2: #1c1d21;
+        --surface-3: #24262b;
+        --ink: #f0f0f0;
+        --ink-2: #c4c5c7;
+        --muted: #8b8d91;
+        --faint: #56585c;
+        --border: #26282d;
+        --border-2: #34373d;
+        --brand: #4da6ff;
+        --brand-2: #3385ff;
+        --brand-soft: rgba(77, 166, 255, 0.14);
+        --brand-line: rgba(77, 166, 255, 0.45);
+        --on-brand: #05131f;
+        --grad-a: #4da6ff;
+        --grad-b: #62e0b0;
+        --c-high: #1b9e6b;
+        --c-high-ink: #65d6a2;
+        --c-high-tint: rgba(27, 158, 107, 0.16);
+        --shadow: 0 1px 2px rgba(0, 0, 0, 0.5),
+          0 22px 46px -18px rgba(0, 0, 0, 0.8);
+        --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4),
+          0 8px 22px -12px rgba(0, 0, 0, 0.6);
+        --ring: rgba(77, 166, 255, 0.28);
+        --ease: cubic-bezier(0.22, 0.61, 0.36, 1);
+        --spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+        --font-ui: "Hanken Grotesk", -apple-system, BlinkMacSystemFont,
+          "Segoe UI", system-ui, sans-serif;
+        --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas,
+          monospace;
+        --maxw: 1120px;
+      }
+
+      :root[data-theme="light"] {
+        --bg: #eef1f0;
+        --bg-2: #e9eeec;
+        --surface: #ffffff;
+        --surface-2: #f7f9f8;
+        --surface-3: #eef2f0;
+        --ink: #16201b;
+        --ink-2: #2c3a33;
+        --muted: #5c6b63;
+        --faint: #8b978f;
+        --border: #e3e8e5;
+        --border-2: #d5dcd8;
+        --brand: #1b9e6b;
+        --brand-2: #17875b;
+        --brand-soft: rgba(27, 158, 107, 0.12);
+        --brand-line: rgba(27, 158, 107, 0.4);
+        --on-brand: #ffffff;
+        --grad-a: #1b9e6b;
+        --grad-b: #2bb3d6;
+        --c-high: #1b9e6b;
+        --c-high-ink: #0f6e48;
+        --c-high-tint: #e7f5ee;
+        --shadow: 0 1px 2px rgba(20, 40, 30, 0.05),
+          0 22px 46px -18px rgba(20, 40, 30, 0.2);
+        --shadow-sm: 0 1px 2px rgba(20, 40, 30, 0.06),
+          0 8px 22px -12px rgba(20, 40, 30, 0.14);
+        --ring: rgba(27, 158, 107, 0.18);
+      }
+
+      @media (prefers-color-scheme: light) {
+        :root:not([data-theme="dark"]) {
+          --bg: #eef1f0;
+          --bg-2: #e9eeec;
+          --surface: #ffffff;
+          --surface-2: #f7f9f8;
+          --surface-3: #eef2f0;
+          --ink: #16201b;
+          --ink-2: #2c3a33;
+          --muted: #5c6b63;
+          --faint: #8b978f;
+          --border: #e3e8e5;
+          --border-2: #d5dcd8;
+          --brand: #1b9e6b;
+          --brand-2: #17875b;
+          --brand-soft: rgba(27, 158, 107, 0.12);
+          --brand-line: rgba(27, 158, 107, 0.4);
+          --on-brand: #ffffff;
+          --grad-a: #1b9e6b;
+          --grad-b: #2bb3d6;
+          --c-high: #1b9e6b;
+          --c-high-ink: #0f6e48;
+          --c-high-tint: #e7f5ee;
+          --shadow: 0 1px 2px rgba(20, 40, 30, 0.05),
+            0 22px 46px -18px rgba(20, 40, 30, 0.2);
+          --shadow-sm: 0 1px 2px rgba(20, 40, 30, 0.06),
+            0 8px 22px -12px rgba(20, 40, 30, 0.14);
+          --ring: rgba(27, 158, 107, 0.18);
+        }
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+      html {
+        scroll-behavior: smooth;
+      }
+      body {
+        margin: 0;
+        font-family: var(--font-ui);
+        background: var(--bg);
+        color: var(--ink);
+        -webkit-font-smoothing: antialiased;
+        text-rendering: optimizeLegibility;
+        line-height: 1.55;
+        overflow-x: hidden;
+      }
+      .mono {
+        font-family: var(--font-mono);
+        font-variant-numeric: tabular-nums;
+      }
+
+      /* ---- ambient backdrop: the living aurora (Reflect / Antigravity) ---- */
+      .aurora {
+        position: fixed;
+        inset: 0;
+        z-index: -2;
+        width: 100%;
+        height: 100%;
+        pointer-events: none;
+        display: block;
+        filter: blur(26px) saturate(1.15);
+        /* CSS fallback if canvas/JS never paints */
+        background: radial-gradient(
+            60% 50% at 82% -6%,
+            var(--brand-soft) 0%,
+            transparent 60%
+          ),
+          radial-gradient(
+            45% 40% at 8% 8%,
+            rgba(98, 224, 176, 0.1) 0%,
+            transparent 55%
+          ),
+          linear-gradient(160deg, var(--bg-2), var(--bg));
+      }
+      .noise {
+        position: fixed;
+        inset: 0;
+        z-index: -1;
+        pointer-events: none;
+        opacity: 0.035;
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+      }
+
+      /* ---- top bar ---- */
+      .topbar {
+        position: sticky;
+        top: 0;
+        z-index: 50;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        padding: 14px clamp(16px, 4vw, 40px);
+        background: color-mix(in srgb, var(--surface) 72%, transparent);
+        backdrop-filter: blur(14px);
+        -webkit-backdrop-filter: blur(14px);
+        border-bottom: 1px solid var(--border);
+      }
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        min-width: 0;
+      }
+      .brand-word {
+        font-weight: 800;
+        letter-spacing: -0.02em;
+        font-size: 1.05rem;
+      }
+      .brand-accent {
+        color: var(--brand);
+      }
+      .brand-sep {
+        color: var(--faint);
+      }
+      .brand-sub {
+        color: var(--muted);
+        font-size: 0.9rem;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .topbar-right {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+      }
+      .live-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: var(--c-high-ink);
+        box-shadow: 0 0 0 4px var(--c-high-tint);
+        animation: livePulse 1.8s var(--ease) infinite;
+      }
+      @keyframes livePulse {
+        0%,
+        100% {
+          opacity: 1;
+        }
+        50% {
+          opacity: 0.4;
+        }
+      }
+      .topbar-note {
+        color: var(--muted);
+        font-size: 0.82rem;
+      }
+      .theme-toggle {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        cursor: pointer;
+        background: var(--surface-2);
+        color: var(--ink);
+        border: 1px solid var(--border-2);
+        padding: 7px 12px;
+        border-radius: 999px;
+        font: inherit;
+        font-size: 0.82rem;
+        font-weight: 600;
+        transition:
+          border-color 0.18s var(--ease),
+          transform 0.14s var(--ease);
+      }
+      .theme-toggle:hover {
+        border-color: var(--brand-line);
+        transform: translateY(-1px);
+      }
+      .tt-icon {
+        width: 14px;
+        height: 14px;
+        border-radius: 50%;
+        background: var(--brand);
+        box-shadow: inset -4px -4px 0 0 var(--surface-2);
+      }
+
+      main {
+        max-width: var(--maxw);
+        margin: 0 auto;
+        padding: 0 clamp(16px, 4vw, 40px);
+      }
+
+      /* ---- hero ---- */
+      .hero {
+        padding: clamp(56px, 12vh, 128px) 0 clamp(40px, 8vh, 88px);
+        max-width: 780px;
+      }
+      .eyebrow {
+        color: var(--muted);
+        font-size: 0.9rem;
+        margin: 0 0 22px;
+      }
+      h1 {
+        font-size: clamp(2.5rem, 7vw, 4.6rem);
+        font-weight: 800;
+        letter-spacing: -0.025em;
+        line-height: 1.02;
+        margin: 0 0 22px;
+        text-wrap: balance;
+      }
+      .grad {
+        background: linear-gradient(100deg, var(--grad-a), var(--grad-b));
+        -webkit-background-clip: text;
+        background-clip: text;
+        color: transparent;
+      }
+      .lede {
+        font-size: clamp(1.05rem, 2.2vw, 1.3rem);
+        color: var(--muted);
+        margin: 0 0 30px;
+        max-width: 60ch;
+      }
+      .hero-cta {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 14px;
+        margin-bottom: 26px;
+      }
+      .rm-note {
+        font-size: 0.85rem;
+        color: var(--faint);
+        margin: 0;
+      }
+
+      /* ---- buttons ---- */
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        border: 1px solid transparent;
+        border-radius: 13px;
+        font: inherit;
+        font-weight: 600;
+        font-size: 1rem;
+        letter-spacing: -0.01em;
+        padding: 14px 24px;
+        cursor: pointer;
+        text-decoration: none;
+        transition:
+          transform 0.16s var(--ease),
+          box-shadow 0.2s var(--ease),
+          background 0.2s,
+          border-color 0.2s;
+        will-change: transform;
+      }
+      .btn-primary {
+        background: var(--brand);
+        color: var(--on-brand);
+        box-shadow: 0 10px 26px -10px var(--ring);
+      }
+      .btn-primary:hover {
+        background: var(--brand-2);
+        box-shadow: 0 16px 34px -12px var(--ring);
+      }
+      .btn-ghost {
+        background: var(--surface);
+        color: var(--ink);
+        border-color: var(--border-2);
+      }
+      .btn-ghost:hover {
+        border-color: var(--brand-line);
+        transform: translateY(-1px);
+      }
+      .btn:active {
+        transform: translateY(1px) scale(0.99);
+      }
+      .btn:focus-visible {
+        outline: none;
+        box-shadow: 0 0 0 4px var(--ring);
+      }
+
+      /* ---- bands ---- */
+      .band {
+        padding: clamp(48px, 9vh, 96px) 0;
+        border-top: 1px solid var(--border);
+      }
+      .band-head {
+        max-width: 640px;
+        margin-bottom: 40px;
+      }
+      .kicker,
+      .eyebrow .mono {
+        font-family: var(--font-mono);
+      }
+      .kicker {
+        display: inline-block;
+        font-size: 0.74rem;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+        color: var(--brand);
+        margin-bottom: 14px;
+      }
+      .band-head h2 {
+        font-size: clamp(1.7rem, 4vw, 2.5rem);
+        font-weight: 800;
+        letter-spacing: -0.02em;
+        margin: 0 0 12px;
+        line-height: 1.08;
+        text-wrap: balance;
+      }
+      .band-lede {
+        color: var(--muted);
+        font-size: 1.05rem;
+        margin: 0;
+      }
+
+      /* ---- principles ---- */
+      .principles-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+        gap: 16px;
+      }
+      .p-card {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 16px;
+        padding: 22px;
+        box-shadow: var(--shadow-sm);
+      }
+      .p-num {
+        display: inline-grid;
+        place-items: center;
+        width: 30px;
+        height: 30px;
+        border-radius: 9px;
+        background: var(--brand-soft);
+        color: var(--brand);
+        font-weight: 800;
+        font-family: var(--font-mono);
+        margin-bottom: 14px;
+      }
+      .p-card h3 {
+        font-size: 1.06rem;
+        margin: 0 0 7px;
+        letter-spacing: -0.01em;
+      }
+      .p-card p {
+        color: var(--muted);
+        font-size: 0.93rem;
+        margin: 0;
+      }
+
+      /* ---- easing tokens ---- */
+      .ease-grid {
+        display: grid;
+        gap: 14px;
+        margin-bottom: 26px;
+      }
+      .ease-row {
+        display: grid;
+        grid-template-columns: minmax(230px, 320px) 1fr;
+        gap: 22px;
+        align-items: center;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 16px;
+        padding: 20px 22px;
+        box-shadow: var(--shadow-sm);
+      }
+      .ease-meta h4 {
+        margin: 0 0 6px;
+        font-size: 1rem;
+      }
+      .ease-meta code {
+        color: var(--muted);
+        font-size: 0.82rem;
+      }
+      .ease-track {
+        position: relative;
+        height: 12px;
+        border-radius: 999px;
+        background: var(--surface-3);
+      }
+      .ease-ball {
+        position: absolute;
+        top: 50%;
+        left: 0;
+        width: 22px;
+        height: 22px;
+        margin-top: -11px;
+        border-radius: 50%;
+        background: var(--brand);
+        box-shadow: 0 4px 14px -3px var(--ring);
+        transform: translateX(0);
+      }
+      .ease-ball.spring {
+        background: var(--grad-b);
+      }
+      .dur-scale {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+        gap: 12px;
+      }
+      .dur {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 14px;
+        padding: 16px 18px;
+      }
+      .dur-v {
+        display: block;
+        font-size: 1.15rem;
+        font-weight: 700;
+        color: var(--ink);
+      }
+      .dur-k {
+        color: var(--muted);
+        font-size: 0.86rem;
+      }
+
+      /* ---- lab ---- */
+      .lab-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+        gap: 18px;
+      }
+      .lab-card {
+        position: relative;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 18px;
+        padding: 0;
+        overflow: hidden;
+        box-shadow: var(--shadow-sm);
+        --mx: 50%;
+        --my: 50%;
+      }
+      .lab-card::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        pointer-events: none;
+        opacity: 0;
+        transition: opacity 0.3s var(--ease);
+        background: radial-gradient(
+          340px circle at var(--mx) var(--my),
+          var(--brand-soft),
+          transparent 60%
+        );
+      }
+      .lab-card::after {
+        content: "";
+        position: absolute;
+        inset: 0;
+        border-radius: 18px;
+        pointer-events: none;
+        padding: 1px;
+        opacity: 0;
+        transition: opacity 0.3s var(--ease);
+        background: radial-gradient(
+          340px circle at var(--mx) var(--my),
+          var(--brand-line),
+          transparent 55%
+        );
+        -webkit-mask:
+          linear-gradient(#000 0 0) content-box,
+          linear-gradient(#000 0 0);
+        -webkit-mask-composite: xor;
+        mask-composite: exclude;
+      }
+      .lab-card:hover::before,
+      .lab-card:hover::after {
+        opacity: 1;
+      }
+      .lab-demo {
+        display: grid;
+        place-items: center;
+        min-height: 132px;
+        padding: 26px;
+        background: linear-gradient(180deg, var(--surface-2), var(--surface));
+        border-bottom: 1px solid var(--border);
+      }
+      .lab-demo-links {
+        flex-direction: column;
+        gap: 12px;
+        display: flex;
+        align-items: center;
+      }
+      .lab-copy {
+        padding: 18px 22px 22px;
+      }
+      .lab-copy h3 {
+        margin: 0 0 6px;
+        font-size: 1.08rem;
+        letter-spacing: -0.01em;
+      }
+      .lab-copy p {
+        margin: 0;
+        color: var(--muted);
+        font-size: 0.92rem;
+      }
+
+      .mini-tilt {
+        position: relative;
+        display: grid;
+        place-items: center;
+        width: 100%;
+        height: 88px;
+        border-radius: 14px;
+        background: var(--surface-3);
+        border: 1px solid var(--border-2);
+        transform-style: preserve-3d;
+        will-change: transform;
+        overflow: hidden;
+      }
+      .mini-tilt-glow {
+        position: absolute;
+        inset: 0;
+        background: radial-gradient(
+          120px circle at 50% 20%,
+          var(--brand-soft),
+          transparent 70%
+        );
+      }
+      .count {
+        font-size: 2.6rem;
+        font-weight: 800;
+        letter-spacing: -0.02em;
+        font-family: var(--font-mono);
+        font-variant-numeric: tabular-nums;
+        color: var(--ink);
+      }
+      .mask-demo {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        font-size: 1.35rem;
+        font-weight: 800;
+        letter-spacing: -0.02em;
+        line-height: 1.12;
+        text-align: center;
+      }
+      .mask-line {
+        display: block;
+        overflow: hidden;
+      }
+      .mask-line > * {
+        display: block;
+      }
+      .wipe-link {
+        position: relative;
+        color: var(--ink);
+        text-decoration: none;
+        font-weight: 600;
+        padding-bottom: 3px;
+      }
+      .wipe-link::after {
+        content: "";
+        position: absolute;
+        left: 0;
+        bottom: 0;
+        width: 100%;
+        height: 2px;
+        background: var(--brand);
+        transform: scaleX(0);
+        transform-origin: left;
+        transition: transform 0.3s var(--ease);
+      }
+      .wipe-link:hover::after {
+        transform: scaleX(1);
+      }
+      .draw-demo {
+        width: 140px;
+        height: 70px;
+      }
+      .draw-path {
+        stroke-dasharray: 220;
+        stroke-dashoffset: 220;
+      }
+
+      /* ---- confidence pill (reused component) ---- */
+      .conf {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 6px 13px 6px 11px;
+        border-radius: 999px;
+        font-size: 0.82rem;
+        font-weight: 700;
+        letter-spacing: -0.01em;
+      }
+      .conf-high {
+        color: var(--c-high-ink);
+        background: var(--c-high-tint);
+      }
+      .conf .dot {
+        width: 9px;
+        height: 9px;
+        border-radius: 50%;
+        background: var(--c-high);
+        box-shadow: 0 0 0 3px var(--c-high-tint);
+      }
+      .pop {
+        animation: pop 0.5s var(--spring) both;
+      }
+      @keyframes pop {
+        from {
+          opacity: 0;
+          transform: scale(0.85);
+        }
+        to {
+          opacity: 1;
+          transform: scale(1);
+        }
+      }
+
+      /* ---- device / storyboard ---- */
+      .device {
+        max-width: 720px;
+        margin: 0 auto;
+        background: var(--surface);
+        border: 1px solid var(--border-2);
+        border-radius: 18px;
+        overflow: hidden;
+        box-shadow: var(--shadow);
+      }
+      .device-bar {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 12px 16px;
+        background: var(--surface-2);
+        border-bottom: 1px solid var(--border);
+      }
+      .tl {
+        width: 11px;
+        height: 11px;
+        border-radius: 50%;
+      }
+      .tl.red {
+        background: #ff5f57;
+      }
+      .tl.amber {
+        background: #febc2e;
+      }
+      .tl.green {
+        background: #28c840;
+      }
+      .device-title {
+        margin-left: 8px;
+        color: var(--muted);
+        font-size: 0.78rem;
+      }
+      .skip-btn {
+        margin-left: auto;
+        background: transparent;
+        border: 1px solid var(--border-2);
+        color: var(--muted);
+        font: inherit;
+        font-size: 0.76rem;
+        font-weight: 600;
+        padding: 5px 11px;
+        border-radius: 999px;
+        cursor: pointer;
+        transition:
+          border-color 0.18s,
+          color 0.18s;
+      }
+      .skip-btn:hover {
+        color: var(--ink);
+        border-color: var(--faint);
+      }
+      .device-body {
+        padding: clamp(20px, 4vw, 34px);
+        min-height: 320px;
+      }
+      .bubble {
+        max-width: 82%;
+        padding: 12px 16px;
+        border-radius: 16px;
+        font-size: 1.02rem;
+      }
+      .bubble.user {
+        margin-left: auto;
+        border-top-right-radius: 5px;
+        background: var(--surface-3);
+        color: var(--ink);
+        width: fit-content;
+      }
+      .caret {
+        color: var(--brand);
+        font-weight: 400;
+        animation: blink 1s steps(2) infinite;
+      }
+      @keyframes blink {
+        50% {
+          opacity: 0;
+        }
+      }
+      .answer {
+        display: flex;
+        gap: 14px;
+        margin-top: 22px;
+      }
+      .ai-avatar {
+        flex-shrink: 0;
+        width: 38px;
+        height: 38px;
+        border-radius: 50%;
+        display: grid;
+        place-items: center;
+        background: var(--brand-soft);
+        color: var(--brand);
+      }
+      .answer-body {
+        flex: 1;
+        min-width: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+      }
+      .thinking {
+        display: inline-flex;
+        align-items: center;
+        gap: 9px;
+        color: var(--muted);
+        font-size: 0.92rem;
+        font-weight: 500;
+      }
+      .mini-spin {
+        width: 15px;
+        height: 15px;
+        border-radius: 50%;
+        border: 2px solid var(--brand);
+        border-top-color: transparent;
+        animation: spin 0.8s linear infinite;
+      }
+      @keyframes spin {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+      .sql-block {
+        border: 1px solid var(--border-2);
+        border-radius: 12px;
+        overflow: hidden;
+      }
+      .sql-head {
+        padding: 8px 13px;
+        background: var(--surface-2);
+        border-bottom: 1px solid var(--border-2);
+        color: var(--muted);
+        font-size: 0.74rem;
+        font-weight: 600;
+      }
+      .sql-code {
+        margin: 0;
+        padding: 15px;
+        font-size: 0.82rem;
+        line-height: 1.55;
+        color: var(--brand);
+        background: color-mix(in srgb, var(--surface-3) 60%, var(--bg));
+        overflow-x: auto;
+        white-space: pre;
+      }
+      .result {
+        border: 1px solid var(--border-2);
+        border-radius: 12px;
+        overflow: hidden;
+      }
+      .result-top {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        padding: 12px 14px;
+        background: var(--surface-2);
+        border-bottom: 1px solid var(--border-2);
+      }
+      .result-meta {
+        color: var(--faint);
+        font-size: 0.78rem;
+      }
+      .result-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 0.9rem;
+      }
+      .result-table th,
+      .result-table td {
+        text-align: left;
+        padding: 11px 14px;
+      }
+      .result-table th {
+        color: var(--muted);
+        font-weight: 600;
+        font-size: 0.78rem;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+      }
+      .result-table .num,
+      .result-table td.num {
+        text-align: right;
+        font-family: var(--font-mono);
+        font-variant-numeric: tabular-nums;
+      }
+      .result-table tbody tr {
+        border-top: 1px solid var(--border);
+      }
+      .result-table tbody td:first-child {
+        font-weight: 600;
+      }
+      .row-anim {
+        opacity: 0;
+        transform: translateY(8px);
+      }
+      .static-eq {
+        max-width: 720px;
+        margin: 22px auto 0;
+        color: var(--muted);
+        font-size: 0.92rem;
+        text-align: center;
+      }
+      .static-eq strong {
+        color: var(--ink);
+      }
+
+      /* ---- blueprint ---- */
+      .blueprint {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+        display: grid;
+        gap: 10px;
+      }
+      .bp {
+        display: grid;
+        grid-template-columns: 48px 1fr auto;
+        align-items: center;
+        gap: 18px;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 14px;
+        padding: 18px 20px;
+        box-shadow: var(--shadow-sm);
+        transition:
+          border-color 0.2s var(--ease),
+          transform 0.2s var(--ease);
+      }
+      .bp:hover {
+        border-color: var(--brand-line);
+        transform: translateX(3px);
+      }
+      .bp-i {
+        color: var(--brand);
+        font-weight: 700;
+        font-size: 0.95rem;
+      }
+      .bp h4 {
+        margin: 0 0 3px;
+        font-size: 1.05rem;
+        letter-spacing: -0.01em;
+      }
+      .bp p {
+        margin: 0;
+        color: var(--muted);
+        font-size: 0.9rem;
+      }
+      .bp-q {
+        color: var(--faint);
+        font-size: 0.84rem;
+        font-style: italic;
+        white-space: nowrap;
+      }
+
+      /* ---- tokens ---- */
+      .tok-cols {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+        gap: 18px;
+        margin-bottom: 26px;
+      }
+      .tok-col {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 16px;
+        padding: 22px;
+        box-shadow: var(--shadow-sm);
+      }
+      .tok-col h4 {
+        margin: 0 0 16px;
+        font-size: 0.95rem;
+      }
+      .swatches {
+        display: grid;
+        gap: 10px;
+      }
+      .sw {
+        display: grid;
+        grid-template-columns: 26px 1fr auto;
+        align-items: center;
+        gap: 12px;
+      }
+      .chip-color {
+        width: 26px;
+        height: 26px;
+        border-radius: 7px;
+        border: 1px solid var(--border-2);
+      }
+      .sw-k {
+        font-size: 0.88rem;
+        color: var(--ink-2);
+      }
+      .sw-v {
+        font-size: 0.82rem;
+        color: var(--muted);
+      }
+      .type-scale {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 16px;
+        padding: 24px;
+        box-shadow: var(--shadow-sm);
+      }
+      .type-scale > h4 {
+        margin: 0 0 18px;
+        font-size: 0.95rem;
+        color: var(--muted);
+      }
+      .ts-row {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: 20px;
+        padding: 12px 0;
+        border-top: 1px solid var(--border);
+        flex-wrap: wrap;
+      }
+      .ts-row:first-of-type {
+        border-top: 0;
+      }
+      .ts-spec {
+        color: var(--faint);
+        font-size: 0.78rem;
+        white-space: nowrap;
+      }
+
+      /* ---- footer ---- */
+      .foot {
+        border-top: 1px solid var(--border);
+        margin-top: 40px;
+      }
+      .foot-inner {
+        max-width: var(--maxw);
+        margin: 0 auto;
+        padding: 34px clamp(16px, 4vw, 40px);
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+      .foot-note {
+        color: var(--muted);
+        font-size: 0.9rem;
+        margin-left: 10px;
+      }
+      .foot-sub {
+        color: var(--faint);
+        font-size: 0.82rem;
+        margin: 0;
+      }
+
+      /* ---- reveal (JS-driven, with safe default) ---- */
+      .reveal {
+        opacity: 0;
+        transform: translateY(16px);
+        transition:
+          opacity 0.6s var(--ease),
+          transform 0.6s var(--ease);
+      }
+      .reveal.in {
+        opacity: 1;
+        transform: none;
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        html {
+          scroll-behavior: auto;
+        }
+        .reveal {
+          opacity: 1 !important;
+          transform: none !important;
+          transition: none !important;
+        }
+        .live-dot,
+        .caret,
+        .mini-spin,
+        .pop {
+          animation: none !important;
+        }
+        .draw-path {
+          stroke-dashoffset: 0 !important;
+        }
+      }
+
+      @media (max-width: 640px) {
+        .ease-row {
+          grid-template-columns: 1fr;
+        }
+        .bp {
+          grid-template-columns: 40px 1fr;
+        }
+        .bp-q {
+          display: none;
+        }
+        .brand-sub {
+          display: none;
+        }
+        .topbar-note {
+          display: none;
+        }
+      }
+    </style>
+
+    <script>
+      /* ---------- shared demo data ---------- */
+      var QUESTIONS = [
+        "Show me the top 3 customers this month by revenue",
+        "Which products are low on stock right now?",
+        "How do refunds compare to last quarter?",
+      ];
+      var SQL =
+        "SELECT name, SUM(revenue) AS total\n" +
+        "FROM customers\n" +
+        "JOIN orders ON orders.customer_id = customers.id\n" +
+        "WHERE orders.created_at >= date('now','start of month')\n" +
+        "GROUP BY customers.id\n" +
+        "ORDER BY total DESC\n" +
+        "LIMIT 3;";
+      var ROWS = [
+        ["Acme Corp", "$124,500"],
+        ["Globex Inc", "$98,200"],
+        ["Initech", "$86,450"],
+      ];
+
+      function addRow(r, animate) {
+        var tr = document.createElement("tr");
+        var td1 = document.createElement("td");
+        td1.textContent = r[0];
+        var td2 = document.createElement("td");
+        td2.className = "num";
+        td2.textContent = r[1];
+        tr.appendChild(td1);
+        tr.appendChild(td2);
+        if (animate) tr.className = "row-anim";
+        document.getElementById("rows").appendChild(tr);
+        if (animate) {
+          requestAnimationFrame(function () {
+            tr.style.transition =
+              "opacity .4s var(--ease), transform .4s var(--ease)";
+            tr.style.opacity = "1";
+            tr.style.transform = "none";
+          });
+        }
+        return tr;
+      }
+
+      (function () {
+        var reduce = window.matchMedia("(prefers-reduced-motion: reduce)");
+
+        function currentDark() {
+          var attr = document.documentElement.getAttribute("data-theme");
+          if (attr) return attr === "dark";
+          return window.matchMedia("(prefers-color-scheme: dark)").matches;
+        }
+
+        /* ---------- living aurora background (Reflect / Antigravity) ---------- */
+        var aurora = (function () {
+          var canvas = document.getElementById("aurora");
+          if (!canvas || !canvas.getContext) return { refresh: function () {} };
+          var ctx = canvas.getContext("2d");
+          var W = 0,
+            H = 0,
+            dpr = Math.min(1.5, window.devicePixelRatio || 1);
+          var blobs = [],
+            raf = null,
+            running = false;
+
+          function palette() {
+            return currentDark()
+              ? [
+                  [77, 166, 255],
+                  [98, 224, 176],
+                  [139, 123, 255],
+                ] // blue · emerald · violet
+              : [
+                  [27, 158, 107],
+                  [43, 179, 214],
+                  [95, 140, 220],
+                ]; // green · teal · soft blue
+          }
+          function build() {
+            var c = palette();
+            blobs = [
+              {
+                x: 0.22,
+                y: 0.16,
+                r: 0.55,
+                c: c[0],
+                ax: 0.05,
+                ay: 0.06,
+                sp: 0.00013,
+                ph: 0,
+              },
+              {
+                x: 0.82,
+                y: 0.1,
+                r: 0.5,
+                c: c[1],
+                ax: 0.06,
+                ay: 0.05,
+                sp: 0.00017,
+                ph: 2,
+              },
+              {
+                x: 0.6,
+                y: 0.78,
+                r: 0.62,
+                c: c[2],
+                ax: 0.07,
+                ay: 0.05,
+                sp: 0.00011,
+                ph: 4,
+              },
+              {
+                x: 0.1,
+                y: 0.88,
+                r: 0.42,
+                c: c[0],
+                ax: 0.05,
+                ay: 0.06,
+                sp: 0.00015,
+                ph: 1.5,
+              },
+            ];
+          }
+          function resize() {
+            W = canvas.width = Math.floor(window.innerWidth * dpr);
+            H = canvas.height = Math.floor(window.innerHeight * dpr);
+          }
+          function draw(t) {
+            ctx.clearRect(0, 0, W, H);
+            ctx.globalCompositeOperation = "lighter";
+            var base = currentDark() ? 0.5 : 0.32;
+            for (var i = 0; i < blobs.length; i++) {
+              var b = blobs[i];
+              var cx = (b.x + Math.sin(t * b.sp + b.ph) * b.ax) * W;
+              var cy = (b.y + Math.cos(t * b.sp * 1.3 + b.ph) * b.ay) * H;
+              var rad = b.r * Math.max(W, H);
+              var g = ctx.createRadialGradient(cx, cy, 0, cx, cy, rad);
+              g.addColorStop(
+                0,
+                "rgba(" +
+                  b.c[0] +
+                  "," +
+                  b.c[1] +
+                  "," +
+                  b.c[2] +
+                  "," +
+                  base +
+                  ")",
+              );
+              g.addColorStop(
+                1,
+                "rgba(" + b.c[0] + "," + b.c[1] + "," + b.c[2] + ",0)",
+              );
+              ctx.fillStyle = g;
+              ctx.fillRect(0, 0, W, H);
+            }
+            ctx.globalCompositeOperation = "source-over";
+          }
+          function loop(now) {
+            draw(now);
+            raf = requestAnimationFrame(loop);
+          }
+          function start() {
+            if (running) return;
+            running = true;
+            raf = requestAnimationFrame(loop);
+          }
+          function stop() {
+            running = false;
+            if (raf) cancelAnimationFrame(raf);
+            raf = null;
+          }
+
+          resize();
+          build();
+          window.addEventListener("resize", resize);
+          document.addEventListener("visibilitychange", function () {
+            if (document.hidden) stop();
+            else if (!reduce.matches) start();
+          });
+
+          if (reduce.matches) {
+            draw(6000);
+          } else {
+            start();
+          } // static frame vs. living
+
+          return {
+            refresh: function () {
+              build();
+              if (reduce.matches) draw(6000);
+            },
+          };
+        })();
+
+        /* ---------- theme toggle ---------- */
+        var toggle = document.getElementById("themeToggle");
+        toggle.addEventListener("click", function () {
+          document.documentElement.setAttribute(
+            "data-theme",
+            currentDark() ? "light" : "dark",
+          );
+          aurora.refresh();
+        });
+
+        /* ---------- scroll reveal ---------- */
+        var reveals = document.querySelectorAll(".reveal");
+        if (reduce.matches || !("IntersectionObserver" in window)) {
+          reveals.forEach(function (el) {
+            el.classList.add("in");
+          });
+        } else {
+          var io = new IntersectionObserver(
+            function (entries) {
+              entries.forEach(function (e) {
+                if (e.isIntersecting) {
+                  e.target.classList.add("in");
+                  io.unobserve(e.target);
+                }
+              });
+            },
+            { threshold: 0.14, rootMargin: "0px 0px -8% 0px" },
+          );
+          reveals.forEach(function (el) {
+            io.observe(el);
+          });
+        }
+
+        if (reduce.matches) {
+          initStatic();
+          return;
+        }
+
+        /* ---------- magnetic buttons ---------- */
+        document.querySelectorAll("[data-magnetic]").forEach(function (el) {
+          var raf = null,
+            tx = 0,
+            ty = 0,
+            cx = 0,
+            cy = 0;
+          function loop() {
+            cx += (tx - cx) * 0.18;
+            cy += (ty - cy) * 0.18;
+            el.style.transform =
+              "translate(" + cx.toFixed(2) + "px," + cy.toFixed(2) + "px)";
+            if (Math.abs(tx - cx) > 0.1 || Math.abs(ty - cy) > 0.1) {
+              raf = requestAnimationFrame(loop);
+            } else {
+              raf = null;
+            }
+          }
+          function kick() {
+            if (!raf) raf = requestAnimationFrame(loop);
+          }
+          el.addEventListener("pointermove", function (ev) {
+            if (ev.pointerType === "touch") return;
+            var r = el.getBoundingClientRect();
+            tx = (ev.clientX - (r.left + r.width / 2)) * 0.28;
+            ty = (ev.clientY - (r.top + r.height / 2)) * 0.4;
+            tx = Math.max(-12, Math.min(12, tx));
+            ty = Math.max(-12, Math.min(12, ty));
+            kick();
+          });
+          el.addEventListener("pointerleave", function () {
+            tx = 0;
+            ty = 0;
+            kick();
+          });
+        });
+
+        /* ---------- spotlight cards ---------- */
+        document.querySelectorAll("[data-spotlight]").forEach(function (el) {
+          el.addEventListener("pointermove", function (ev) {
+            var r = el.getBoundingClientRect();
+            el.style.setProperty("--mx", ev.clientX - r.left + "px");
+            el.style.setProperty("--my", ev.clientY - r.top + "px");
+          });
+        });
+
+        /* ---------- 3D tilt ---------- */
+        document.querySelectorAll("[data-tilt]").forEach(function (el) {
+          el.addEventListener("pointermove", function (ev) {
+            if (ev.pointerType === "touch") return;
+            var r = el.getBoundingClientRect();
+            var px = (ev.clientX - r.left) / r.width - 0.5;
+            var py = (ev.clientY - r.top) / r.height - 0.5;
+            el.style.transform =
+              "perspective(600px) rotateY(" +
+              (px * 12).toFixed(2) +
+              "deg) rotateX(" +
+              (-py * 12).toFixed(2) +
+              "deg)";
+          });
+          el.addEventListener("pointerleave", function () {
+            el.style.transform = "perspective(600px) rotateY(0) rotateX(0)";
+          });
+        });
+
+        /* ---------- easing track balls (hover to play) ---------- */
+        document.querySelectorAll("[data-ease-demo]").forEach(function (row) {
+          var ball = row.querySelector(".ease-ball");
+          var track = row.querySelector(".ease-track");
+          var ease =
+            ball.getAttribute("data-ball") === "spring"
+              ? "cubic-bezier(0.34,1.56,0.64,1)"
+              : "cubic-bezier(0.22,0.61,0.36,1)";
+          var on = false;
+          function run() {
+            var dist = track.clientWidth - ball.offsetWidth;
+            ball.style.transition = "none";
+            ball.style.transform = "translateX(0)";
+            requestAnimationFrame(function () {
+              requestAnimationFrame(function () {
+                ball.style.transition = "transform 1s " + ease;
+                ball.style.transform = "translateX(" + dist + "px)";
+              });
+            });
+          }
+          row.addEventListener("pointerenter", function () {
+            if (!on) {
+              on = true;
+              run();
+            }
+          });
+          ball.addEventListener("transitionend", function () {
+            on = false;
+          });
+        });
+
+        /* ---------- count-up (on view) ---------- */
+        document.querySelectorAll("[data-countup]").forEach(function (el) {
+          var target = parseInt(el.getAttribute("data-to"), 10);
+          var fmt = new Intl.NumberFormat("en-US");
+          var done = false;
+          var io2 = new IntersectionObserver(
+            function (entries) {
+              entries.forEach(function (e) {
+                if (e.isIntersecting && !done) {
+                  done = true;
+                  var start = performance.now(),
+                    dur = 1400;
+                  (function step(now) {
+                    var t = Math.min(1, (now - start) / dur);
+                    var eased = 1 - Math.pow(1 - t, 3);
+                    el.textContent = fmt.format(Math.round(target * eased));
+                    if (t < 1) requestAnimationFrame(step);
+                  })(performance.now());
+                  io2.unobserve(el);
+                }
+              });
+            },
+            { threshold: 0.5 },
+          );
+          io2.observe(el);
+        });
+
+        /* ---------- masked reveal (loop on view) ---------- */
+        document.querySelectorAll("[data-maskreveal]").forEach(function (wrap) {
+          var lines = wrap.querySelectorAll(".mask-line");
+          lines.forEach(function (l) {
+            var span = document.createElement("span");
+            span.textContent = l.textContent;
+            l.textContent = "";
+            span.style.transform = "translateY(110%)";
+            span.style.transition = "transform .6s var(--ease)";
+            l.appendChild(span);
+          });
+          var io3 = new IntersectionObserver(
+            function (entries) {
+              entries.forEach(function (e) {
+                lines.forEach(function (l, i) {
+                  var s = l.firstChild;
+                  if (e.isIntersecting) {
+                    setTimeout(function () {
+                      s.style.transform = "translateY(0)";
+                    }, i * 90);
+                  } else {
+                    s.style.transform = "translateY(110%)";
+                  }
+                });
+              });
+            },
+            { threshold: 0.6 },
+          );
+          io3.observe(wrap);
+        });
+
+        /* ---------- scroll-draw path ---------- */
+        document.querySelectorAll(".draw-path").forEach(function (p) {
+          var io4 = new IntersectionObserver(
+            function (entries) {
+              entries.forEach(function (e) {
+                if (e.isIntersecting) {
+                  p.style.transition = "stroke-dashoffset 1.1s var(--ease)";
+                  p.style.strokeDashoffset = "0";
+                } else {
+                  p.style.transition = "none";
+                  p.style.strokeDashoffset = "220";
+                }
+              });
+            },
+            { threshold: 0.5 },
+          );
+          io4.observe(p);
+        });
+
+        /* ---------- the live demo timeline ---------- */
+        initDemo();
+
+        function initStatic() {
+          // reduced-motion: land the demo on its finished state
+          document.getElementById("typed").textContent = QUESTIONS[0];
+          document.getElementById("caret").style.display = "none";
+          document.getElementById("answer").hidden = false;
+          document.getElementById("thinking").style.display = "none";
+          document.getElementById("sqlBlock").hidden = false;
+          document.getElementById("sqlCode").textContent = SQL;
+          document.getElementById("result").hidden = false;
+          ROWS.forEach(function (r) {
+            addRow(r, false);
+          });
+          document.querySelectorAll("[data-countup]").forEach(function (el) {
+            el.textContent = new Intl.NumberFormat("en-US").format(
+              parseInt(el.getAttribute("data-to"), 10),
+            );
+          });
+        }
+      })();
+
+      function initDemo() {
+        var device = document.getElementById("device");
+        var typed = document.getElementById("typed");
+        var caret = document.getElementById("caret");
+        var answer = document.getElementById("answer");
+        var thinking = document.getElementById("thinking");
+        var sqlBlock = document.getElementById("sqlBlock");
+        var sqlCode = document.getElementById("sqlCode");
+        var result = document.getElementById("result");
+        var rows = document.getElementById("rows");
+        var skipBtn = document.getElementById("skipBtn");
+
+        var timers = [],
+          qi = 0,
+          inView = false,
+          skipped = false,
+          running = false;
+
+        function clearTimers() {
+          timers.forEach(clearTimeout);
+          timers = [];
+        }
+        function after(ms, fn) {
+          timers.push(setTimeout(fn, ms));
+        }
+
+        function reset() {
+          clearTimers();
+          typed.textContent = "";
+          caret.style.display = "";
+          answer.hidden = true;
+          thinking.style.display = "";
+          sqlBlock.hidden = true;
+          sqlCode.textContent = "";
+          result.hidden = true;
+          rows.innerHTML = "";
+        }
+
+        function play() {
+          if (running || skipped || !inView) return;
+          running = true;
+          reset();
+          var q = QUESTIONS[qi],
+            i = 0;
+          (function type() {
+            if (!inView || skipped) {
+              running = false;
+              return;
+            }
+            typed.textContent = q.slice(0, i);
+            i++;
+            if (i <= q.length) {
+              after(38, type);
+            } else {
+              caret.style.display = "none";
+              after(500, function () {
+                answer.hidden = false;
+              }); // thinking
+              after(1500, function () {
+                thinking.style.display = "none";
+                sqlBlock.hidden = false;
+                sqlCode.textContent = SQL; // SQL
+              });
+              after(2500, function () {
+                result.hidden = false; // results
+                ROWS.forEach(function (r, k) {
+                  after(k * 160, function () {
+                    addRow(r, true);
+                  });
+                });
+              });
+              after(6200, function () {
+                // loop
+                running = false;
+                qi = (qi + 1) % QUESTIONS.length;
+                play();
+              });
+            }
+          })();
+        }
+
+        skipBtn.addEventListener("click", function () {
+          skipped = !skipped;
+          skipBtn.setAttribute("aria-pressed", String(skipped));
+          skipBtn.textContent = skipped ? "Play animation" : "Skip animation";
+          if (skipped) {
+            clearTimers();
+            running = false;
+            typed.textContent = QUESTIONS[qi];
+            caret.style.display = "none";
+            answer.hidden = false;
+            thinking.style.display = "none";
+            sqlBlock.hidden = false;
+            sqlCode.textContent = SQL;
+            result.hidden = false;
+            rows.innerHTML = "";
+            ROWS.forEach(function (r) {
+              addRow(r, false);
+            });
+          } else {
+            play();
+          }
+        });
+
+        // in-view only: pause off-screen (battery requirement)
+        var io = new IntersectionObserver(
+          function (entries) {
+            entries.forEach(function (e) {
+              inView = e.isIntersecting;
+              if (inView && !running && !skipped) play();
+              if (!inView) {
+                clearTimers();
+                running = false;
+              }
+            });
+          },
+          { threshold: 0.35 },
+        );
+        io.observe(device);
+      }
+    </script>
+  </body>
+</html>
