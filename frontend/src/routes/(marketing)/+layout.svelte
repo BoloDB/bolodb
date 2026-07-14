@@ -96,8 +96,8 @@
 
 <svelte:head>
   <meta name="robots" content="index, follow" />
-  <meta property="og:title" content="BoloDB — Talk to Your Database Like a Human" />
-  <meta property="og:description" content="No SQL required. Ask questions in plain English, get instant SQL-backed answers with confidence scores. Works with PostgreSQL, MySQL, SQL Server, and SQLite." />
+  <meta property="og:title" content="BoloDB — Talk to Your Database Like a Human | AI Data Analyst" />
+  <meta property="og:description" content="BoloDB is the AI data analyst you can trust. Ask questions in plain English and get verified, SQL-backed answers from PostgreSQL, MySQL, SQL Server, or SQLite — read-only, no code required." />
   <meta property="og:url" content="https://bolodb.com/" />
   <meta property="og:type" content="website" />
   <meta property="og:site_name" content="BoloDB" />
@@ -106,8 +106,8 @@
   <meta property="og:image:width" content="1200" />
   <meta property="og:image:height" content="630" />
   <meta name="twitter:card" content="summary_large_image" />
-  <meta name="twitter:title" content="BoloDB — Talk to Your Database Like a Human" />
-  <meta name="twitter:description" content="No SQL required. Ask questions in plain English, get instant SQL-backed answers with confidence scores. Works with PostgreSQL, MySQL, SQL Server, and SQLite." />
+  <meta name="twitter:title" content="BoloDB — Talk to Your Database Like a Human | AI Data Analyst" />
+  <meta name="twitter:description" content="BoloDB is the AI data analyst you can trust. Ask questions in plain English and get verified, SQL-backed answers from PostgreSQL, MySQL, SQL Server, or SQLite — read-only, no code required." />
   <meta name="twitter:image" content="https://bolodb.com/og-image.svg" />
   <link rel="canonical" href="https://bolodb.com/" />
   <link rel="alternate" href="https://bolodb.com/" hreflang="x-default" />

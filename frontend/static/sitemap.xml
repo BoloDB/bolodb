@@ -3,12 +3,6 @@
         xmlns:xhtml="http://www.w3.org/1999/xhtml">
   <url>
     <loc>https://bolodb.com/</loc>
-    <xhtml:link rel="alternate" hreflang="x-default" href="https://bolodb.com/" />
-    <xhtml:link rel="alternate" hreflang="en" href="https://bolodb.com/" />
-    <xhtml:link rel="alternate" hreflang="de" href="https://bolodb.com/" />
-    <xhtml:link rel="alternate" hreflang="es" href="https://bolodb.com/" />
-    <xhtml:link rel="alternate" hreflang="fr" href="https://bolodb.com/" />
-    <xhtml:link rel="alternate" hreflang="ja" href="https://bolodb.com/" />
     <lastmod>2026-07-14</lastmod>
     <changefreq>weekly</changefreq>
     <priority>1.0</priority>

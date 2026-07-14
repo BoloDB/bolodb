@@ -19,7 +19,7 @@
     if (h1Line2) h1Line2.style.clipPath = "none";
     if (subEl) subEl.style.opacity = "1";
     if (ctaRow) ctaRow.style.opacity = "1";
-    if (trustEl) trustEl.style.opacity = "1";
+    if (trustEl) trustEl.style.opacity = "0.7";
   }
 
   $effect(() => {
@@ -31,12 +31,16 @@
 
     let cleanup = () => {};
     let cancelled = false;
+    let revealed = false;
 
     // Safety net: if the GSAP chunk fails to load or the timeline never
     // finishes (slow network, blocked script, etc.), force the hero back
     // to visible so copy/CTAs are never stuck at their hidden "from" state.
     const safetyTimer = window.setTimeout(() => {
-      if (!cancelled) revealInstant();
+      if (!cancelled) {
+        revealed = true;
+        revealInstant();
+      }
     }, 2000);
 
     (async () => {
@@ -44,7 +48,7 @@
         const { loadGsap } = await import("$lib/motion/gsap");
         const { gsap } = await loadGsap();
 
-        if (cancelled) return;
+        if (cancelled || revealed) return;
 
         const tl = gsap.timeline({
           defaults: { ease: "power3.out", duration: 0.6 },
