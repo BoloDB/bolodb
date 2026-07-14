@@ -33,8 +33,12 @@ export function destroyLenis() {
 
 export function scrollTo(target: string | HTMLElement, options?: any) {
   if (!_lenis) {
-    const id = typeof target === "string" ? target.replace(/^#/, "") : "";
-    document.getElementById(id)?.scrollIntoView({ behavior: "smooth" });
+    if (typeof target === "string") {
+      const id = target.replace(/^#/, "");
+      document.getElementById(id)?.scrollIntoView({ behavior: "smooth" });
+    } else {
+      target.scrollIntoView({ behavior: "smooth" });
+    }
     return;
   }
   const selector =

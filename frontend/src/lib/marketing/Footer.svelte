@@ -16,7 +16,7 @@
     </div>
 
     <div class="footer-reassurance">
-      No telemetry. No cloud sync.
+      Your database data never leaves your machine. Anonymous product analytics only, honors Do Not Track.
     </div>
 
     <div class="footer-copy">

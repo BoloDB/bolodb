@@ -72,7 +72,7 @@
     }
 
     function loop(now: number) {
-      draw(now);
+      if (isVisible) draw(now);
       animId = requestAnimationFrame(loop);
     }
 
@@ -102,11 +102,13 @@
     );
     obs.observe(canvas);
 
-    window.addEventListener("resize", resize);
-    document.addEventListener("visibilitychange", () => {
+    function onVisibilityChange() {
       if (document.hidden) stop();
       else if (!motionPrefs.reduced) start();
-    });
+    }
+
+    window.addEventListener("resize", resize);
+    document.addEventListener("visibilitychange", onVisibilityChange);
 
     const themeObs = new MutationObserver(() => {
       build();
@@ -119,6 +121,7 @@
     return () => {
       stop();
       window.removeEventListener("resize", resize);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
       obs.disconnect();
       themeObs.disconnect();
     };

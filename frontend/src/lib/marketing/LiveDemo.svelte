@@ -25,6 +25,27 @@
     ["Initech", "$86,450"],
   ];
 
+  function addRow(rowsEl: HTMLElement, r: [string, string], animate: boolean) {
+    const tr = document.createElement("tr");
+    const td1 = document.createElement("td");
+    td1.textContent = r[0];
+    const td2 = document.createElement("td");
+    td2.className = "num";
+    td2.textContent = r[1];
+    tr.appendChild(td1);
+    tr.appendChild(td2);
+    if (animate) tr.className = "row-anim";
+    rowsEl.appendChild(tr);
+    if (animate) {
+      requestAnimationFrame(() => {
+        tr.style.transition = "opacity .4s var(--ease), transform .4s var(--ease)";
+        tr.style.opacity = "1";
+        tr.style.transform = "none";
+      });
+    }
+    return tr;
+  }
+
   let deviceEl: HTMLElement;
   let typedEl: HTMLElement;
   let caretEl: HTMLElement;
@@ -60,6 +81,7 @@
     let inView = false;
     let running = false;
     let questionIndex = qi;
+    let hasTrackedView = false;
 
     function clearTimers() {
       timers.forEach(clearTimeout);
@@ -78,27 +100,6 @@
       sqlHidden = true;
       resultHidden = true;
       rowsEl.innerHTML = "";
-    }
-
-    function addRow(r: [string, string], animate: boolean) {
-      const tr = document.createElement("tr");
-      const td1 = document.createElement("td");
-      td1.textContent = r[0];
-      const td2 = document.createElement("td");
-      td2.className = "num";
-      td2.textContent = r[1];
-      tr.appendChild(td1);
-      tr.appendChild(td2);
-      if (animate) tr.className = "row-anim";
-      rowsEl.appendChild(tr);
-      if (animate) {
-        requestAnimationFrame(() => {
-          tr.style.transition = "opacity .4s var(--ease), transform .4s var(--ease)";
-          tr.style.opacity = "1";
-          tr.style.transform = "none";
-        });
-      }
-      return tr;
     }
 
     function play() {
@@ -124,14 +125,17 @@
           after(2500, () => {
             resultHidden = false;
             ROWS.forEach((r, k) => {
-              after(k * 160, () => addRow(r, true));
+              after(k * 160, () => addRow(rowsEl, r, true));
             });
+            if (!hasTrackedView) {
+              hasTrackedView = true;
+              trackDemoViewed();
+            }
           });
           after(6200, () => {
             running = false;
             questionIndex = (questionIndex + 1) % QUESTIONS.length;
             qi = questionIndex;
-            trackDemoViewed();
             play();
           });
         }
@@ -145,7 +149,7 @@
         for (const e of entries) {
           inView = e.isIntersecting;
           if (inView && !running && !skip) play();
-          if (!inView) { clearTimers(); running = false; }
+          if (!inView) { clearTimers(); running = false; hasTrackedView = false; }
         }
       },
       { threshold: 0.35 }
@@ -169,17 +173,7 @@
     resultHidden = false;
     trackDemoViewed();
     rowsEl.innerHTML = "";
-    ROWS.forEach((r) => {
-      const tr = document.createElement("tr");
-      const td1 = document.createElement("td");
-      td1.textContent = r[0];
-      const td2 = document.createElement("td");
-      td2.className = "num";
-      td2.textContent = r[1];
-      tr.appendChild(td1);
-      tr.appendChild(td2);
-      rowsEl.appendChild(tr);
-    });
+    ROWS.forEach((r) => addRow(rowsEl, r, false));
   }
 
   function handlePlay() {

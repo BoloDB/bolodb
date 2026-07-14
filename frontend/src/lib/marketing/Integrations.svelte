@@ -51,18 +51,30 @@
   </div>
 
   <div class="conn-strings">
-    <div class="conn-tabs">
+    <div class="conn-tabs" role="tablist" aria-label="Connection string format">
       {#each connStrings[activeDb] as tab, i}
         <button
+          type="button"
+          id="conn-tab-{i}"
           class="conn-tab"
           class:active-tab={i === activeTabIdx}
+          role="tab"
+          aria-selected={i === activeTabIdx}
+          aria-controls="conn-panel-{i}"
           onclick={() => (activeTabIdx = i)}
         >
           {tab.label}
         </button>
       {/each}
     </div>
-    <pre class="conn-code" data-lenis-prevent>{connStrings[activeDb][activeTabIdx].code}</pre>
+    <div
+      id="conn-panel-{activeTabIdx}"
+      role="tabpanel"
+      tabindex="0"
+      aria-labelledby="conn-tab-{activeTabIdx}"
+    >
+      <pre class="conn-code" data-lenis-prevent>{connStrings[activeDb][activeTabIdx].code}</pre>
+    </div>
     <p class="conn-tip">
       Tip: use a read-only database account — BoloDB never writes to your data.
     </p>

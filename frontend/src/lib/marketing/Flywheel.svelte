@@ -1,35 +1,13 @@
 <script lang="ts">
-  import { browser } from "$app/environment";
-  import { motionPrefs } from "$lib/motion/motionPrefs";
-  import { reveal } from "$lib/actions/reveal";
   import { countUp } from "$lib/actions/countUp";
+  import { reveal } from "$lib/actions/reveal";
 
   let countEl: HTMLElement;
   let flywheelEl: HTMLElement;
-  let titleEl: HTMLElement;
-
-  $effect(() => {
-    if (!browser || !flywheelEl) return;
-    if (motionPrefs.reduced) return;
-    let st: any;
-    (async () => {
-      const { loadGsap } = await import("$lib/motion/gsap");
-      const { gsap, ScrollTrigger } = await loadGsap();
-      st = ScrollTrigger.create({
-        trigger: flywheelEl,
-        start: "top 80%",
-        onEnter: () => {
-          gsap.fromTo(titleEl, { y: 24, opacity: 0 }, { y: 0, opacity: 1, duration: 0.6, ease: "power3.out" });
-        },
-        once: true,
-      });
-    })();
-    return () => { st?.kill(); };
-  });
 </script>
 
 <section id="flywheel" bind:this={flywheelEl} class="flywheel-section" use:reveal>
-  <h2 class="section-label" bind:this={titleEl}>The Flywheel</h2>
+  <h2 class="section-label">The Flywheel</h2>
   <h3 class="section-title">It learns your database</h3>
 
   <div class="flywheel-content">

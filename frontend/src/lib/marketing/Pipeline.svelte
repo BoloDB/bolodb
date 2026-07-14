@@ -30,12 +30,13 @@
     if (motionPrefs.reduced) return;
 
     let sts: any[] = [];
+    let mm: any;
 
     (async () => {
       const { loadGsap } = await import("$lib/motion/gsap");
       const { gsap, ScrollTrigger } = await loadGsap();
 
-      const mm = gsap.matchMedia();
+      mm = gsap.matchMedia();
 
       mm.add("(min-width: 768px)", () => {
         const cards = pipelineEl.querySelectorAll<HTMLElement>(".pipeline-step");
@@ -54,22 +55,20 @@
           onUpdate: (self: any) => {
             const p = self.progress;
             const drawLen = spineLen * p;
-            gsap.to(spine, { strokeDashoffset: spineLen - drawLen, duration: 0 });
+            gsap.set(spine, { strokeDashoffset: spineLen - drawLen });
             cards.forEach((card, i) => {
               const stepProgress = Math.min(1, Math.max(0, (p - i * 0.28) * 3));
-              gsap.to(card, {
+              gsap.set(card, {
                 opacity: 0.3 + stepProgress * 0.7,
                 y: 20 - stepProgress * 20,
                 scale: 0.95 + stepProgress * 0.05,
                 boxShadow: stepProgress > 0.5 ? "var(--shadow-lg)" : "none",
-                duration: 0,
               });
               const number = card.querySelector(".step-number") as HTMLElement;
               if (number) {
-                gsap.to(number, {
+                gsap.set(number, {
                   background: stepProgress > 0.5 ? "var(--brand)" : "var(--brand-tint)",
                   color: stepProgress > 0.5 ? "#fff" : "var(--brand)",
-                  duration: 0,
                 });
               }
             });
@@ -85,6 +84,7 @@
 
     return () => {
       sts.forEach((t: any) => t.kill());
+      mm?.revert();
     };
   });
 </script>

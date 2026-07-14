@@ -3,11 +3,12 @@ import { browser } from "$app/environment";
 export function tilt(node: HTMLElement, options: { max?: number } = {}) {
   if (!browser) return;
   const mq = window.matchMedia("(prefers-reduced-motion: reduce)");
-  if (mq.matches || "ontouchstart" in window) return;
+  if (mq.matches) return;
 
   const max = options.max ?? 6;
 
   function onMove(e: PointerEvent) {
+    if (e.pointerType === "touch") return;
     const rect = node.getBoundingClientRect();
     const x = (e.clientX - rect.left) / rect.width;
     const y = (e.clientY - rect.top) / rect.height;

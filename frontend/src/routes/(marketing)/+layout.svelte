@@ -23,35 +23,39 @@
     if (!browser) return;
     if (motionPrefs.reduced) return;
 
-    let rafId: number;
-    let cleanup = () => {};
+    let cancelled = false;
+    let gsapRef: any;
+    let tickerFn: ((time: number) => void) | null = null;
 
     (async () => {
       const lenis = await initLenis();
-      if (!lenis) return;
+      if (!lenis || cancelled) return;
 
       const { loadGsap } = await import("$lib/motion/gsap");
       const { gsap, ScrollTrigger } = await loadGsap();
-
-      gsap.ticker.lagSmoothing(0);
-      gsap.ticker.add((time: number) => {
-        lenis.raf(time * 1000);
-      });
-      lenis.on("scroll", ScrollTrigger.update);
-
-      rafId = requestAnimationFrame(function tick(time: number) {
-        lenis.raf(time);
-        rafId = requestAnimationFrame(tick);
-      });
-
-      cleanup = () => {
-        cancelAnimationFrame(rafId);
-        gsap.ticker.lagSmoothing(1);
+      if (cancelled) {
         destroyLenis();
-      };
+        return;
+      }
+
+      gsapRef = gsap;
+      gsap.ticker.lagSmoothing(0);
+      // gsap.ticker already drives the render loop, so it alone is used to
+      // advance Lenis — a separate requestAnimationFrame loop would call
+      // lenis.raf() twice per frame with a different time base.
+      tickerFn = (time: number) => lenis.raf(time * 1000);
+      gsap.ticker.add(tickerFn);
+      lenis.on("scroll", ScrollTrigger.update);
     })();
 
-    return () => cleanup();
+    return () => {
+      cancelled = true;
+      if (gsapRef && tickerFn) {
+        gsapRef.ticker.remove(tickerFn);
+        gsapRef.ticker.lagSmoothing(1);
+      }
+      destroyLenis();
+    };
   });
 
   $effect(() => {

@@ -67,6 +67,7 @@
         <span class="live-dot" aria-hidden="true"></span>
         <span class="topbar-note">Live — hover, move, scroll</span>
         <button
+          type="button"
           class="theme-toggle"
           id="themeToggle"
           aria-label="Toggle light / dark theme"
@@ -94,7 +95,7 @@
           cards, scroll to reveal.
         </p>
         <div class="hero-cta reveal">
-          <button class="btn btn-primary" data-magnetic>Start for free</button>
+          <button type="button" class="btn btn-primary" data-magnetic>Start for free</button>
           <a class="btn btn-ghost" href="#lab">Explore the lab ↓</a>
         </div>
         <p class="rm-note reveal" id="rmNote">
@@ -225,7 +226,7 @@
         <div class="lab-grid">
           <div class="lab-card reveal" data-spotlight>
             <div class="lab-demo">
-              <button class="btn btn-primary" data-magnetic>
+              <button type="button" class="btn btn-primary" data-magnetic>
                 Start for free
               </button>
             </div>
@@ -345,7 +346,7 @@
             <span class="tl red"></span><span class="tl amber"></span
             ><span class="tl green"></span>
             <span class="device-title mono">bolodb-chat-demo</span>
-            <button class="skip-btn" id="skipBtn" aria-pressed="false">
+            <button type="button" class="skip-btn" id="skipBtn" aria-pressed="false">
               Skip animation
             </button>
           </div>
@@ -1736,6 +1737,48 @@
     </style>
 
     <script>
+      /* ---------- shared demo data ---------- */
+      var QUESTIONS = [
+        "Show me the top 3 customers this month by revenue",
+        "Which products are low on stock right now?",
+        "How do refunds compare to last quarter?",
+      ];
+      var SQL =
+        "SELECT name, SUM(revenue) AS total\n" +
+        "FROM customers\n" +
+        "JOIN orders ON orders.customer_id = customers.id\n" +
+        "WHERE orders.created_at >= date('now','start of month')\n" +
+        "GROUP BY customers.id\n" +
+        "ORDER BY total DESC\n" +
+        "LIMIT 3;";
+      var ROWS = [
+        ["Acme Corp", "$124,500"],
+        ["Globex Inc", "$98,200"],
+        ["Initech", "$86,450"],
+      ];
+
+      function addRow(r, animate) {
+        var tr = document.createElement("tr");
+        var td1 = document.createElement("td");
+        td1.textContent = r[0];
+        var td2 = document.createElement("td");
+        td2.className = "num";
+        td2.textContent = r[1];
+        tr.appendChild(td1);
+        tr.appendChild(td2);
+        if (animate) tr.className = "row-anim";
+        document.getElementById("rows").appendChild(tr);
+        if (animate) {
+          requestAnimationFrame(function () {
+            tr.style.transition =
+              "opacity .4s var(--ease), transform .4s var(--ease)";
+            tr.style.opacity = "1";
+            tr.style.transform = "none";
+          });
+        }
+        return tr;
+      }
+
       (function () {
         var reduce = window.matchMedia("(prefers-reduced-motion: reduce)");
 
@@ -2120,48 +2163,6 @@
           });
         }
       })();
-
-      /* ---------- shared demo data ---------- */
-      var QUESTIONS = [
-        "Show me the top 3 customers this month by revenue",
-        "Which products are low on stock right now?",
-        "How do refunds compare to last quarter?",
-      ];
-      var SQL =
-        "SELECT name, SUM(revenue) AS total\n" +
-        "FROM customers\n" +
-        "JOIN orders ON orders.customer_id = customers.id\n" +
-        "WHERE orders.created_at >= date('now','start of month')\n" +
-        "GROUP BY customers.id\n" +
-        "ORDER BY total DESC\n" +
-        "LIMIT 3;";
-      var ROWS = [
-        ["Acme Corp", "$124,500"],
-        ["Globex Inc", "$98,200"],
-        ["Initech", "$86,450"],
-      ];
-
-      function addRow(r, animate) {
-        var tr = document.createElement("tr");
-        var td1 = document.createElement("td");
-        td1.textContent = r[0];
-        var td2 = document.createElement("td");
-        td2.className = "num";
-        td2.textContent = r[1];
-        tr.appendChild(td1);
-        tr.appendChild(td2);
-        if (animate) tr.className = "row-anim";
-        document.getElementById("rows").appendChild(tr);
-        if (animate) {
-          requestAnimationFrame(function () {
-            tr.style.transition =
-              "opacity .4s var(--ease), transform .4s var(--ease)";
-            tr.style.opacity = "1";
-            tr.style.transform = "none";
-          });
-        }
-        return tr;
-      }
 
       function initDemo() {
         var device = document.getElementById("device");

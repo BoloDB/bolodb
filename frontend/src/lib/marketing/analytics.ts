@@ -11,6 +11,10 @@ type SectionId =
 
 let _posthog: any = null;
 
+function trackingAllowed() {
+  return navigator.doNotTrack !== "1" && (window as any).doNotTrack !== "1";
+}
+
 async function getPosthog() {
   if (_posthog) return _posthog;
   try {
@@ -22,7 +26,7 @@ async function getPosthog() {
 }
 
 export async function capture(event: string, props?: Record<string, unknown>) {
-  if (!browser) return;
+  if (!browser || !trackingAllowed()) return;
   const ph = await getPosthog();
   if (ph) ph.capture(event, props);
 }
