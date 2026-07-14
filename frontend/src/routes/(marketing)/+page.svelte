@@ -35,13 +35,7 @@
   });
 </script>
 
-<svelte:head>
-  <title>BoloDB — Talk to Your Database Like a Human | AI Data Analyst</title>
-  <meta
-    name="description"
-    content="BoloDB is the AI data analyst you can trust. Ask questions in plain English and get verified, SQL-backed answers from PostgreSQL, MySQL, SQL Server, or SQLite — read-only, no code required."
-  />
-</svelte:head>
+
 
 <Backdrop />
 <div id="hero" data-section="hero"><Hero /></div>
