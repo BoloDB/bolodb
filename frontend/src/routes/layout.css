@@ -2,6 +2,21 @@
 @plugin '@tailwindcss/forms';
 @plugin '@tailwindcss/typography';
 
+@font-face {
+  font-family: 'Hanken Grotesk';
+  font-style: normal;
+  font-weight: 400 800;
+  font-display: swap;
+  src: url('/fonts/HankenGrotesk.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'JetBrains Mono';
+  font-style: normal;
+  font-weight: 400 600;
+  font-display: swap;
+  src: url('/fonts/JetBrainsMono.woff2') format('woff2');
+}
+
 /* ============================================================
    BoloDB — Design System
    Two themes: "crisp" (clean modern SaaS) + "soft" (warm/human)
@@ -26,6 +41,7 @@
   /* easing */
   --ease: cubic-bezier(0.22, 0.61, 0.36, 1);
   --spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --nav-bg: rgba(10, 10, 10, 0.6);
 }
 
 /* ---------- THEME: crisp (default) ---------- */
@@ -61,6 +77,7 @@
     0 24px 48px -16px rgba(20, 40, 30, 0.22);
   --shadow-brand: 0 8px 22px -8px rgba(27, 158, 107, 0.5);
   --ring: rgba(27, 158, 107, 0.16);
+  --nav-bg: rgba(255, 255, 255, 0.7);
 }
 
 /* ---------- THEME: soft (warm/human) ---------- */
@@ -96,6 +113,7 @@
     0 30px 60px -18px rgba(90, 68, 34, 0.26);
   --shadow-brand: 0 10px 28px -8px rgba(43, 162, 119, 0.5);
   --ring: rgba(43, 162, 119, 0.18);
+  --nav-bg: rgba(255, 255, 255, 0.7);
 }
 
 /* ---------- THEME: dark (premium/linear-like) ---------- */
@@ -273,6 +291,11 @@ select {
     color 0.18s;
   white-space: nowrap;
   line-height: 1;
+}
+.btn:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 4px var(--ring);
+  border-color: var(--brand);
 }
 .btn:active {
   transform: translateY(1px) scale(0.99);
