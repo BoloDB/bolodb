@@ -28,9 +28,11 @@ async def get_health():
 async def update_config(user_id, cfg, providers, req_data):
     """Update AI settings. Gemini is the only provider, so the accepted fields
     are the model choice and the Gemini API key (set or clear)."""
+    global_change = False
     cfg["provider"] = "gemini"
     if req_data.model is not None and req_data.model in cfgmod.ALLOWED_MODELS:
         cfg["model"] = req_data.model
+        global_change = True
     if req_data.api_key:
         # Encrypted at the boundary and scoped to this user only: the config
         # dict (and therefore the config file) never holds the key in clear
@@ -41,7 +43,11 @@ async def update_config(user_id, cfg, providers, req_data):
     elif req_data.clear_api_key:
         cfgmod.clear_api_key(cfg, user_id)
 
+    if global_change:
+        providers.reconfigure(cfg)
+    else:
+        providers.invalidate(user_id)
+
     cfgmod.save_config(cfg)
-    providers.invalidate(user_id)
     h = await providers.get(user_id).health_check()
     return {"config": cfgmod.public_config(cfg, user_id), "health": h}
