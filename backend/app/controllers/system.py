@@ -21,12 +21,8 @@ async def get_state(user_id, db, cfg, kb):
     return s
 
 
-async def get_health(user_id, cfg, providers):
-    ph = await providers.get(user_id).health_check()
-    return {
-        "status": "ok",
-        "provider": {"name": cfg["provider"], **ph},
-    }
+async def get_health():
+    return {"status": "ok"}
 
 
 async def update_config(user_id, cfg, providers, req_data):

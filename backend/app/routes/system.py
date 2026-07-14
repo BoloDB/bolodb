@@ -26,12 +26,8 @@ async def state(
 
 
 @router.get("/api/health")
-async def health(
-    user_token=Depends(get_current_user),
-    cfg=Depends(get_cfg),
-    providers=Depends(get_providers),
-):
-    return await ctrl.get_health(user_token["user_id"], cfg, providers)
+async def health():
+    return await ctrl.get_health()
 
 
 @router.get("/api/config/public")
