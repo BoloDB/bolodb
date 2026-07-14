@@ -33,7 +33,7 @@ from abc import ABC, abstractmethod
 
 import httpx
 
-from backend.app.config import decrypt_api_key
+from backend.app.config import get_api_key
 
 log = logging.getLogger(__name__)
 
@@ -485,8 +485,8 @@ class GeminiProvider(LLMProvider):
             return {"ok": False, "error": str(e), "models": []}
 
 
-def create_provider(cfg):
-    """Build the configured AI provider from a config dict.
+def create_provider(cfg, user_id):
+    """Build the configured AI provider for one user from a config dict.
 
     Gemini is currently the only supported provider. To add another vendor
     later: implement an :class:`LLMProvider` subclass above and add a branch
@@ -495,9 +495,9 @@ def create_provider(cfg):
     p = cfg.get("provider", "gemini")
     if p == "gemini":
         # The config carries the key encrypted at rest; it is decrypted only
-        # here, at the point of use.
+        # here, at the point of use, and scoped to this specific user.
         return GeminiProvider(
-            api_key=decrypt_api_key(cfg.get("api_keys", {}).get("gemini", "")),
+            api_key=get_api_key(cfg, user_id, "gemini"),
             model=cfg.get("model", ""),
         )
     raise ValueError(
@@ -506,20 +506,25 @@ def create_provider(cfg):
 
 
 class ProviderManager:
-    """Lazily builds and caches the provider; rebuilt when config changes."""
+    """Lazily builds and caches one provider per user, so no request can ever
+    be served with another user's API key."""
 
     def __init__(self, cfg):
         self.cfg = cfg
-        self._p = None
+        self._providers = {}
 
-    def get(self):
-        if not self._p:
-            self._p = create_provider(self.cfg)
-        return self._p
+    def get(self, user_id):
+        if user_id not in self._providers:
+            self._providers[user_id] = create_provider(self.cfg, user_id)
+        return self._providers[user_id]
+
+    def invalidate(self, user_id):
+        """Drop the cached provider for one user (call after their config changes)."""
+        self._providers.pop(user_id, None)
 
     def reconfigure(self, cfg):
         self.cfg = cfg
-        self._p = None
+        self._providers.clear()
 
 
 # --------------------------------------------------------------------------

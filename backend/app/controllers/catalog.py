@@ -35,7 +35,7 @@ async def suggest(user_id, db, providers):
     base = suggest_from_schema(db.get_schema(user_id))
     try:
         enriched = await llm_suggest_catalog(
-            providers.get(), db.schema_as_text(user_id)
+            providers.get(user_id), db.schema_as_text(user_id)
         )
     except Exception:
         # Graceful degradation: still return the schema-only backbone, but log

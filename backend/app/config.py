@@ -1,20 +1,25 @@
 """Local config + path constants.
 
 BoloDB uses Google Gemini for every AI operation, so the config is small:
-which Gemini model to use and the API key for it. The key can also be supplied
-via the ``GEMINI_API_KEY`` environment variable (handy for Docker deployments)
-— an explicit key saved from Settings always wins over the environment.
+which Gemini model to use, and each logged-in user's own API key. Keys are
+scoped per user_id (:func:`get_api_key`/:func:`set_api_key`) — one user's
+saved key is never handed to another user's requests. A key can also be
+supplied via the ``GEMINI_API_KEY`` environment variable (handy for Docker
+deployments); it's an install-wide fallback used only for users who haven't
+saved a personal key, and an explicit key saved from Settings always wins
+over it for that user.
 
 Stored at ``~/.bolodb/config.json``. The API key is never held or written in
 clear text by the config layer: it is encrypted with a per-install secret
 (``~/.bolodb/.secret``, generated once, file mode 0600) the moment it enters
-the config — from Settings (:func:`encrypt_api_key` called in
-``controllers/system.py``) or from the ``GEMINI_API_KEY`` env var — and stays
-encrypted inside the in-memory config dict. It is decrypted only at the point
-of use, when the Gemini provider is built (``create_provider`` in
-``backend/app/llm.py`` calls :func:`decrypt_api_key`). Older config files —
-plaintext keys and pre-Gemini providers alike — are migrated transparently on
-load.
+the config — from Settings (:func:`set_api_key`, called from
+``controllers/system.py``) — and stays encrypted inside the in-memory config
+dict. It is decrypted only at the point of use, when the Gemini provider is
+built for a specific user (``create_provider`` in ``backend/app/llm.py``
+calls :func:`get_api_key`). Older config files — plaintext keys, pre-Gemini
+providers, and the pre-multi-user single shared key — are migrated
+transparently on load; a shared legacy key is dropped rather than handed to
+any one user (see :func:`load_config`).
 """
 
 import base64
@@ -47,9 +52,21 @@ ALLOWED_MODELS = (
 DEFAULTS = {
     "provider": "gemini",
     "model": DEFAULT_MODEL,
-    "api_keys": {"gemini": ""},
+    # Keyed by user_id, then provider name: {"<user_id>": {"gemini": "<encrypted>"}}.
+    # Each logged-in user's key is only ever used to build *their* requests
+    # (see ProviderManager in backend/app/llm.py) — never shared across users.
+    "api_keys": {},
     "last_db_url": "",
 }
+
+
+def default_config():
+    """A fresh default config dict. Always use this (not ``dict(DEFAULTS)`` /
+    ``{**DEFAULTS, ...}``) when a caller might mutate ``api_keys`` in place —
+    ``DEFAULTS["api_keys"]`` is one shared dict, so a shallow copy would let
+    ``set_api_key``/``clear_api_key`` write into it and leak across every
+    config built from ``DEFAULTS`` afterward."""
+    return {**DEFAULTS, "api_keys": {}}
 
 
 def _restrict(path):
@@ -120,16 +137,27 @@ def load_config():
     if not isinstance(d, dict):
         d = {}
 
-    cfg = {**DEFAULTS, **d}
+    cfg = {**default_config(), **d}
 
     raw_keys = d.get("api_keys", {})
     if not isinstance(raw_keys, dict):
         raw_keys = {}
-    stored_key = raw_keys.get("gemini", "")
-    if stored_key and not stored_key.startswith(_TOKEN_PREFIX):
-        # Migrate legacy plaintext keys to encrypted form immediately.
-        stored_key = encrypt_api_key(stored_key)
-    cfg["api_keys"] = {"gemini": stored_key}
+    per_user = {}
+    for uid, keys in raw_keys.items():
+        if not isinstance(keys, dict):
+            # Pre-multi-user configs stored a single key shared by every
+            # logged-in user (e.g. top-level "gemini": "..."). That's the exact
+            # bug this migration closes, so it's deliberately dropped, not
+            # carried forward to any user: each account must (re-)enter its own
+            # key via Settings. The env var fallback below is unaffected — it's
+            # an explicit install-wide default, not a leaked per-user secret.
+            continue
+        stored_key = keys.get("gemini", "")
+        if stored_key and not stored_key.startswith(_TOKEN_PREFIX):
+            # Migrate legacy plaintext keys to encrypted form immediately.
+            stored_key = encrypt_api_key(stored_key)
+        per_user[uid] = {"gemini": stored_key}
+    cfg["api_keys"] = per_user
 
     # Migration: configs written before the Gemini-only switch may name another
     # provider or a non-Gemini model. Coerce both so the app always starts in a
@@ -139,12 +167,32 @@ def load_config():
     if cfg.get("model") not in ALLOWED_MODELS:
         cfg["model"] = DEFAULT_MODEL
 
-    # Env fallback: lets deployments inject the key without touching the file.
-    # Encrypted immediately — the config dict never holds a clear-text key.
-    if not cfg["api_keys"]["gemini"] and os.environ.get("GEMINI_API_KEY"):
-        cfg["api_keys"]["gemini"] = encrypt_api_key(os.environ["GEMINI_API_KEY"])
-
     return cfg
+
+
+def get_api_key(cfg, user_id, provider="gemini"):
+    """Decrypted API key for one user. Falls back to ``GEMINI_API_KEY`` (an
+    explicit, install-wide default) only when that user has no key of their
+    own — never to another user's stored key."""
+    stored = cfg.get("api_keys", {}).get(user_id, {}).get(provider, "")
+    if not stored and provider == "gemini" and os.environ.get("GEMINI_API_KEY"):
+        return os.environ["GEMINI_API_KEY"]
+    return decrypt_api_key(stored)
+
+
+def set_api_key(cfg, user_id, plain, provider="gemini"):
+    """Store ``plain`` encrypted, scoped to ``user_id`` only."""
+    cfg.setdefault("api_keys", {}).setdefault(user_id, {})[provider] = encrypt_api_key(
+        plain
+    )
+
+
+def clear_api_key(cfg, user_id, provider="gemini"):
+    cfg.setdefault("api_keys", {}).setdefault(user_id, {})[provider] = ""
+
+
+def has_api_key(cfg, user_id, provider="gemini"):
+    return bool(get_api_key(cfg, user_id, provider))
 
 
 def save_config(cfg):
@@ -157,54 +205,47 @@ def save_config(cfg):
 
 
 def _db_url_fernet():
-    """Return a Fernet cipher for encrypting/decrypting stored database URLs."""
+    """Return a Fernet cipher for encrypting/decrypting stored database URLs.
+
+    Uses a separate key file (~/.bolodb/db_url.key) to avoid reusing the
+    JWT secret or the recent-connections key.
+    """
     CONFIG_DIR.mkdir(parents=True, exist_ok=True)
     if _DB_URL_KEY_FILE.exists():
         secret = _DB_URL_KEY_FILE.read_text().strip()
-        key = base64.urlsafe_b64encode(hashlib.sha256(secret.encode()).digest())
-        return Fernet(key)
-    jwt_secret = os.getenv("JWT_SECRET")
-    if jwt_secret:
-        key = base64.urlsafe_b64encode(hashlib.sha256(jwt_secret.encode()).digest())
-        return Fernet(key)
-    # No stable key available — skip encryption. We intentionally avoid an
-    # ephemeral os.urandom fallback because that would silently make previously
-    # stored URLs undecryptable after a process restart.
-    return None
+    else:
+        secret = base64.urlsafe_b64encode(os.urandom(32)).decode()
+        _DB_URL_KEY_FILE.write_text(secret)
+    key = base64.urlsafe_b64encode(hashlib.sha256(secret.encode()).digest())
+    return Fernet(key)
 
 
 def encrypt_db_url(url):
     """Encrypt a database URL for safe storage on disk."""
     if not url:
         return url
-    fernet = _db_url_fernet()
-    if fernet is None:
-        return url
-    return fernet.encrypt(url.encode()).decode()
+    return _db_url_fernet().encrypt(url.encode()).decode()
 
 
 def decrypt_db_url(value):
     """Decrypt a stored database URL. Handles legacy plaintext gracefully."""
     if not value:
         return value
-    fernet = _db_url_fernet()
-    if fernet is None:
-        return value
     try:
-        return fernet.decrypt(value.encode()).decode()
+        return _db_url_fernet().decrypt(value.encode()).decode()
     except (InvalidToken, ValueError, TypeError):
         # Legacy plaintext URL — return as-is.
         return value
 
 
-def public_config(cfg):
+def public_config(cfg, user_id):
     """Config as exposed to the frontend — never includes the actual API key,
-    only whether one is set."""
+    only whether *this user* has one set."""
     return {
         "provider": cfg.get("provider"),
         "model": cfg.get("model", ""),
         "api_keys_set": {
-            k: ("set" if v else "") for k, v in cfg.get("api_keys", {}).items()
+            "gemini": "set" if has_api_key(cfg, user_id, "gemini") else "",
         },
         "last_db_url": decrypt_db_url(cfg.get("last_db_url", "")),
     }

@@ -79,7 +79,7 @@ class FakeProviders:
     def __init__(self, provider):
         self._p = provider
 
-    def get(self):
+    def get(self, user_id):
         return self._p
 
 

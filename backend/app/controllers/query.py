@@ -88,7 +88,7 @@ async def run_query(user_id, db, kb, cfg, providers, session_log, req_data):
         if context
         else set()
     )
-    provider = providers.get()
+    provider = providers.get(user_id)
 
     # Two-stage linking (docs/04-schema-linking.md): on big schemas, ask the
     # model which tables might matter from a names-only catalog, then feed the
@@ -208,7 +208,7 @@ async def explain(user_id, db, providers, req_data):
     if not sql:
         raise HTTPException(400, "Empty SQL")
     try:
-        return await explain_sql(providers.get(), sql, db.get_dialect(user_id))
+        return await explain_sql(providers.get(user_id), sql, db.get_dialect(user_id))
     except LLMError as e:
         raise HTTPException(502, e.user_message)
 
@@ -358,7 +358,7 @@ async def run_query_stream(user_id, db, kb, cfg, providers, session_log, req_dat
     schema_text = compact_schema(full_schema, tables, budget["samples"])
     # Only the catalog entries for the linked tables go into the prompt.
     prompt_catalog = filter_catalog(catalog, tables)
-    provider_obj = providers.get()
+    provider_obj = providers.get(user_id)
 
     yield {
         "kind": "schema_linked",

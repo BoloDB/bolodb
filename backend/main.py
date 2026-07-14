@@ -1,6 +1,7 @@
 """BoloDB entry point."""
 
 import argparse
+import os
 import time
 
 import uvicorn
@@ -22,7 +23,8 @@ def main():
     from backend.app import config as cfgmod
 
     cfg = cfgmod.load_config()
-    if not cfg.get("api_keys", {}).get("gemini"):
+    has_any_key = any(keys.get("gemini") for keys in cfg.get("api_keys", {}).values())
+    if not has_any_key and not os.environ.get("GEMINI_API_KEY"):
         print(
             "  Note: no Gemini API key configured yet. Add one in Settings\n"
             "  (free key: https://aistudio.google.com/app/api-keys) or set the\n"

@@ -234,7 +234,8 @@ def test_health_check_ok():
 
 def test_create_provider_builds_gemini():
     p = create_provider(
-        {"provider": "gemini", "model": "", "api_keys": {"gemini": "k"}}
+        {"provider": "gemini", "model": "", "api_keys": {"user-1": {"gemini": "k"}}},
+        "user-1",
     )
     assert isinstance(p, GeminiProvider)
     assert p.model == DEFAULT_GEMINI_MODEL
@@ -242,14 +243,44 @@ def test_create_provider_builds_gemini():
 
 def test_create_provider_rejects_unknown():
     with pytest.raises(ValueError):
-        create_provider({"provider": "ollama", "api_keys": {}})
+        create_provider({"provider": "ollama", "api_keys": {}}, "user-1")
 
 
-def test_provider_manager_rebuilds_on_reconfigure():
-    mgr = ProviderManager({"provider": "gemini", "api_keys": {"gemini": "a"}})
-    first = mgr.get()
-    mgr.reconfigure({"provider": "gemini", "api_keys": {"gemini": "b"}})
-    second = mgr.get()
+def test_provider_manager_caches_per_user_and_never_cross_leaks():
+    cfg = {
+        "provider": "gemini",
+        "api_keys": {"user-1": {"gemini": "a"}, "user-2": {"gemini": "b"}},
+    }
+    mgr = ProviderManager(cfg)
+
+    first = mgr.get("user-1")
+    assert mgr.get("user-1") is first  # cached, same instance
+    assert first.api_key == "a"
+
+    second = mgr.get("user-2")
+    assert second is not first
+    assert second.api_key == "b"  # user-2 never sees user-1's key
+
+
+def test_provider_manager_invalidate_rebuilds_one_user():
+    cfg = {"provider": "gemini", "api_keys": {"user-1": {"gemini": "a"}}}
+    mgr = ProviderManager(cfg)
+    first = mgr.get("user-1")
+
+    cfg["api_keys"]["user-1"]["gemini"] = "a2"
+    mgr.invalidate("user-1")
+    second = mgr.get("user-1")
+    assert second is not first
+    assert second.api_key == "a2"
+
+
+def test_provider_manager_reconfigure_clears_all_users():
+    mgr = ProviderManager(
+        {"provider": "gemini", "api_keys": {"user-1": {"gemini": "a"}}}
+    )
+    first = mgr.get("user-1")
+    mgr.reconfigure({"provider": "gemini", "api_keys": {"user-1": {"gemini": "b"}}})
+    second = mgr.get("user-1")
     assert first is not second
     assert second.api_key == "b"
 
