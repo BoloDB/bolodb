@@ -244,4 +244,15 @@
     color: var(--faint);
     letter-spacing: 0.02em;
   }
+
+  /* Tighter mobile spacing so DB list doesn't wrap */
+  @media (max-width: 420px) {
+    .hero {
+      padding: 130px 16px 60px;
+    }
+    .db-logos {
+      gap: 8px;
+      font-size: 12px;
+    }
+  }
 </style>

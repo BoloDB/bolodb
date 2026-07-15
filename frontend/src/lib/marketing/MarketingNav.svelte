@@ -27,7 +27,6 @@
   });
 
   function handleThemeToggle() {
-    const before = appState.theme;
     appState.toggleTheme();
     trackThemeToggle(appState.theme);
   }

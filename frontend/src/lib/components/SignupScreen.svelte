@@ -149,7 +149,7 @@
             role="alert"
             aria-live="polite"
             data-testid="signup-error-message"
-            style="padding:10px 14px;background:#FFF8ED;border:1px solid #F5D78A;border-radius:var(--radius-sm);color:#7A5C0A;font-size:13px;font-weight:550"
+            style="padding:10px 14px;background:var(--c-low-tint);border:1px solid #EBC6BD;border-radius:var(--radius-sm);color:var(--c-low-ink);font-size:13px;font-weight:550"
           >
             {error}
           </div>
