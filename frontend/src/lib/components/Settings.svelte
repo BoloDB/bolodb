@@ -12,12 +12,14 @@
     onClose,
     onDisconnect,
     openCatalogTrigger = 0,
+    onApiKeySaved,
   }: {
     modelName: string;
     setModelName: (m: string) => void;
     onClose: () => void;
     onDisconnect?: () => void;
     openCatalogTrigger?: number;
+    onApiKeySaved?: (v: boolean) => void;
   } = $props();
 
   // Which Gemini model answers questions. Ordered cheapest → most capable;
@@ -67,6 +69,7 @@
       }
       await apiCall("/api/config", body);
       setModelName(model);
+      if (onApiKeySaved && body.api_key) onApiKeySaved(true);
       onClose();
     } catch (e: any) {
       error = e.message || "Could not save settings.";
@@ -82,6 +85,7 @@
       keyIsSet = false;
       editingKey = false;
       apiKey = "";
+      if (onApiKeySaved) onApiKeySaved(false);
       saving = false;
     } catch (e: any) {
       error = e.message || "Could not remove key.";

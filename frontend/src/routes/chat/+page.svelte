@@ -28,6 +28,7 @@
       modelName={appState.modelName}
       apiKeySet={appState.apiKeySet}
       setModelName={(m) => appState.modelName = m}
+      setApiKeyStatus={(v) => appState.apiKeySet = v}
       verifiedCount={appState.verifiedCount}
       onVerify={(apiCount) => appState.verify(apiCount)}
       onUpdateStarters={(s) => appState.starters = s}

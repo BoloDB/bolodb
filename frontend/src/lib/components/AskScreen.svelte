@@ -36,12 +36,14 @@
     dbInfo,
     starters,
     onDisconnect,
+    setApiKeyStatus,
     onActiveConversationChange = (_id: string | null) => {},
   }: {
     engine: string;
     modelName: string;
     apiKeySet: boolean;
     setModelName: (m: string) => void;
+    setApiKeyStatus: (v: boolean) => void;
     verifiedCount: number;
     onVerify: (count?: number) => void;
     onUpdateStarters: (s: string[]) => void;
@@ -664,6 +666,7 @@
       onClose={() => { settingsOpen = false; openCatalogTrigger = 0; }}
       {onDisconnect}
       {openCatalogTrigger}
+      onApiKeySaved={setApiKeyStatus}
     />
   {/if}
 </div>
