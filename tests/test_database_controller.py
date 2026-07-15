@@ -35,6 +35,7 @@ def test_connect_uses_user_scoped_connect_and_result_metadata(monkeypatch):
             }
 
     saved = {}
+
     async def fake_save(**kwargs):
         saved.update(kwargs)
 
