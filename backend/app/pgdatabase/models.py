@@ -49,7 +49,9 @@ class User(Base):
     hashed_pass: Mapped[str] = mapped_column(String, nullable=False, default="")
     role: Mapped[str] = mapped_column(String, nullable=False, default="user")
     google_id: Mapped[Optional[str]] = mapped_column(String, unique=True, nullable=True)
-    supabase_id: Mapped[Optional[str]] = mapped_column(String, unique=True, nullable=True)
+    supabase_id: Mapped[Optional[str]] = mapped_column(
+        String, unique=True, nullable=True
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=_utcnow
     )

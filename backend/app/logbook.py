@@ -39,10 +39,17 @@ class SessionLog:
         try:
             line = json.dumps(record, default=str) + "\n"
             self._handler.stream = open(self.file, "a", encoding="utf-8")
-            self._handler.emit(logging.LogRecord(
-                name=__name__, level=logging.INFO, pathname="", lineno=0,
-                msg=line, args=(), exc_info=None
-            ))
+            self._handler.emit(
+                logging.LogRecord(
+                    name=__name__,
+                    level=logging.INFO,
+                    pathname="",
+                    lineno=0,
+                    msg=line,
+                    args=(),
+                    exc_info=None,
+                )
+            )
             self._handler.stream.close()
         except Exception as e:
             logger.error("Failed to append to session log: %s", e)

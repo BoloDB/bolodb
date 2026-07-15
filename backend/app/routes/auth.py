@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Request, Depends, Cookie, HTTPException
+from fastapi import APIRouter, Depends, Cookie, HTTPException
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from backend.app.models.user import UserSignup, UserLogin, SupabaseLogin

@@ -1,7 +1,7 @@
 import json
 import logging
 from fastapi import APIRouter, Depends
-from fastapi.responses import StreamingResponse, JSONResponse
+from fastapi.responses import StreamingResponse
 from backend.app.dependencies import (
     get_current_user,
     get_db,

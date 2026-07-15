@@ -12,7 +12,7 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from backend.app.pgdatabase.engine import async_session
 from backend.app.pgdatabase.models import RecentConnection
 from backend.app.pgdatabase.serialization import _to_uuid, serialize_doc
-from backend.app.pgdatabase.models import _uuid7, _utcnow
+from backend.app.pgdatabase.models import _uuid7
 from backend.app.config import CONFIG_DIR
 
 

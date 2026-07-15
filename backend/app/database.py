@@ -482,9 +482,7 @@ class DatabaseManager:
                 return {"error": violation, "sql": cleaned}
         try:
             with c["engine"].connect() as conn:
-                res = conn.execute(
-                    text(cleaned).execution_options(timeout=30)
-                )
+                res = conn.execute(text(cleaned).execution_options(timeout=30))
                 cols = list(res.keys())
                 raw = res.fetchmany(self.max_rows + 1)
                 truncated = len(raw) > self.max_rows

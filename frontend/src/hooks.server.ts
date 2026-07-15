@@ -7,7 +7,9 @@ import type { Locales } from "$lib/i18n/i18n-types";
 export async function handle({ event, resolve }) {
   let lang = event.cookies.get("locale");
   if (!lang) {
-    const acceptLanguageDetector = initAcceptLanguageHeaderDetector(event.request);
+    const acceptLanguageDetector = initAcceptLanguageHeaderDetector(
+      event.request,
+    );
     lang = detectLocale(acceptLanguageDetector);
   } else {
     lang = detectLocale(() => [lang as string]);
@@ -20,6 +22,7 @@ export async function handle({ event, resolve }) {
   setLocale(locale);
 
   return resolve(event, {
-    transformPageChunk: ({ html }) => html.replace('lang="en"', `lang="${locale}"`)
+    transformPageChunk: ({ html }) =>
+      html.replace('lang="en"', `lang="${locale}"`),
   });
 }

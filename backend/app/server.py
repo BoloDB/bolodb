@@ -65,7 +65,6 @@ async def lifespan(app):
         )
         await run_in_threadpool(command.upgrade, alembic_cfg, "head")
     yield
-    from backend.app.pgdatabase import dispose_db
 
     await dispose_db()
 

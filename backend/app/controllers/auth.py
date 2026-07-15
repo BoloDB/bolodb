@@ -12,7 +12,6 @@ from backend.app.models.user import (
 from backend.app.pgdatabase import (
     create_user,
     get_user_by_email,
-    get_user_by_google_id,
     get_user_by_supabase_id,
     get_user_by_id,
     update_user,
@@ -104,7 +103,9 @@ async def supabase_google_login(access_token: str):
 
             supabase_url = get_supabase_url()
             if not supabase_url:
-                raise HTTPException(status_code=500, detail="Supabase URL not configured")
+                raise HTTPException(
+                    status_code=500, detail="Supabase URL not configured"
+                )
             jwks_url = f"{supabase_url}/auth/v1/.well-known/jwks.json"
             jwks_client = PyJWKClient(jwks_url, cache_keys=True)
             signing_key = jwks_client.get_signing_key_from_jwt(access_token)
@@ -123,7 +124,9 @@ async def supabase_google_login(access_token: str):
                 audience="authenticated",
             )
         else:
-            raise HTTPException(status_code=401, detail=f"Unsupported signing algorithm: {alg}")
+            raise HTTPException(
+                status_code=401, detail=f"Unsupported signing algorithm: {alg}"
+            )
     except jwt.ExpiredSignatureError:
         raise HTTPException(status_code=401, detail="Supabase token has expired")
     except HTTPException:
@@ -154,7 +157,9 @@ async def supabase_google_login(access_token: str):
     try:
         uid = await create_user(user_in_db)
     except UserAlreadyExistsError:
-        existing = await get_user_by_supabase_id(supabase_id) or await get_user_by_email(email)
+        existing = await get_user_by_supabase_id(
+            supabase_id
+        ) or await get_user_by_email(email)
         if existing:
             return create_jwt(str(existing["_id"]), existing["role"])
         raise HTTPException(status_code=409, detail="Account already exists")

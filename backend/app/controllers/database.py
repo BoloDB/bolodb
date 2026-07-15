@@ -1,5 +1,4 @@
 from fastapi import HTTPException
-from backend.app import config as cfgmod
 from backend.app.database import sanitize_url
 from backend.sample_data import ensure_sample_db
 import backend.app.pgdatabase as mdb

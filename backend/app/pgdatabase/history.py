@@ -1,7 +1,5 @@
 """Query history CRUD operations."""
 
-from typing import Optional
-
 from sqlalchemy import select, delete, func, text
 
 from backend.app.pgdatabase.engine import async_session

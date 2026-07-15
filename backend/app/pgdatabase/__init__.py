@@ -1,7 +1,13 @@
 """PostgreSQL application state: users, conversations, history, connections."""
 
 from backend.app.pgdatabase.engine import get_engine, dispose_db, async_session
-from backend.app.pgdatabase.models import Base, User, Conversation, QueryHistory, RecentConnection
+from backend.app.pgdatabase.models import (
+    Base,
+    User,
+    Conversation,
+    QueryHistory,
+    RecentConnection,
+)
 from backend.app.pgdatabase.users import (
     get_user_by_email,
     get_user_by_google_id,

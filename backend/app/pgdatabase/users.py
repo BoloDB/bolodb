@@ -52,7 +52,9 @@ async def get_user_by_google_id(google_id: str) -> Optional[dict]:
 
 async def get_user_by_supabase_id(supabase_id: str) -> Optional[dict]:
     async with async_session() as session:
-        result = await session.execute(select(User).where(User.supabase_id == supabase_id))
+        result = await session.execute(
+            select(User).where(User.supabase_id == supabase_id)
+        )
         user = result.scalar_one_or_none()
         if user is None:
             return None
