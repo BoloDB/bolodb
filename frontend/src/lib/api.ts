@@ -163,10 +163,9 @@ export async function renameConversation(
   return apiCall(`/api/conversations/${id}`, { title }, "PATCH");
 }
 
-export async function googleLogin(idToken: string): Promise<any> {
-  return apiCall("/api/auth/google", {
-    id_token: idToken,
-    client_id: window.__GOOGLE_CLIENT_ID__ || "",
+export async function supabaseGoogleLogin(accessToken: string): Promise<any> {
+  return apiCall("/api/auth/supabase-google", {
+    access_token: accessToken,
   });
 }
 
