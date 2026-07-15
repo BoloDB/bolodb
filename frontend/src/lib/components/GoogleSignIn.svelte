@@ -48,7 +48,9 @@
   <button
     onclick={handleSupabaseGoogle}
     disabled={loading}
-    style="display:inline-flex;align-items:center;gap:10px;padding:10px 24px;border:1px solid var(--border);border-radius:24px;background:var(--surface);color:var(--ink);font-size:14px;font-weight:500;cursor:pointer;{loading
+    data-testid="google-signin-button"
+    aria-label="Continue with Google"
+    style="display:inline-flex;align-items:center;gap:10px;padding:10px 24px;border:1px solid var(--border);border-radius:24px;background:var(--surface);color:var(--ink);font-size:14px;font-weight:500;cursor:pointer;transition:border-color 0.15s, background-color 0.15s;{loading
       ? 'opacity:0.6;pointer-events:none;'
       : ''}"
   >

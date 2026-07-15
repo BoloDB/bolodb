@@ -404,11 +404,13 @@
                 bind:value={geminiKey}
                 placeholder="AIza•••"
                 style="font-size:13.5px;flex:1"
+                data-testid="gemini-api-key-input"
               />
               <Button
                 kind="primary"
                 disabled={!geminiKey.trim() || keySaving}
                 onclick={saveGeminiKey}
+                data-testid="save-gemini-key-button"
               >
                 {#snippet icon()}{#if keySaving}<Spinner />{:else}<svg
                       width="16"
@@ -484,7 +486,7 @@
       hint="Don't have one yet? Use the sample data to see how it works first."
     >
       {#snippet children()}
-        <div style="display:grid;grid-template-columns:1.4fr 1fr;gap:16px">
+        <div class="connect-grid">
           <!-- connection form card -->
           <div class="card" style="padding:22px">
             <div
@@ -519,7 +521,7 @@
               >
                 What type of database?
               </div>
-              <div style="display:flex;flex-wrap:wrap;gap:7px">
+              <div style="display:flex;flex-wrap:wrap;gap:7px" data-testid="db-type-selector">
                 {#each DB_TYPES as dt}
                   <button
                     onclick={() => {
@@ -528,6 +530,8 @@
                       error = "";
                     }}
                     class="focusable"
+                    data-testid="db-type-{dt.id}"
+                    aria-pressed={dbType === dt.id}
                     style="padding:6px 14px;border-radius:99px;cursor:pointer;font-size:13px;font-weight:650;transition:all .15s;background:{dbType ===
                     dt.id
                       ? 'var(--brand)'
@@ -707,6 +711,7 @@
               class="btn-block"
               disabled={!canConnect() || !!connecting}
               onclick={() => go("url")}
+              data-testid="connect-database-button"
             >
               {#snippet icon()}
                 {#if connecting === "url"}<Spinner />{:else}<svg
@@ -757,6 +762,7 @@
             onclick={() => go("sample")}
             disabled={!!connecting}
             class="card focusable"
+            data-testid="connect-sample-database-button"
             style="padding:22px;text-align:left;cursor:{connecting
               ? 'wait'
               : 'pointer'};border:1.5px dashed var(--brand);background:var(--brand-tint);display:flex;flex-direction:column;justify-content:space-between;transition:transform .15s var(--ease)"
@@ -812,6 +818,9 @@
 
         {#if error}
           <div
+            role="alert"
+            aria-live="polite"
+            data-testid="connect-error-message"
             style="margin-top:12px;padding:13px 17px;background:var(--c-low-tint);border:1px solid #EBC6BD;border-radius:var(--radius);color:var(--c-low-ink);font-size:13.5px;font-weight:550;line-height:1.55"
           >
             <b>Couldn't connect —</b>
@@ -822,3 +831,17 @@
     </Section>
   </div>
 </div>
+
+<style>
+  .connect-grid {
+    display: grid;
+    grid-template-columns: 1.4fr 1fr;
+    gap: 16px;
+  }
+
+  @media (max-width: 780px) {
+    .connect-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>

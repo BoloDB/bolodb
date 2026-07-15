@@ -41,7 +41,7 @@
         revealed = true;
         revealInstant();
       }
-    }, 2000);
+    }, 1500);
 
     (async () => {
       try {
@@ -115,12 +115,14 @@
       <button
         class="btn btn-primary btn-lg"
         use:magnetic
+        data-testid="hero-start-free-button"
         onclick={() => { trackCtaClick("hero", "Start for free", "/signup"); goto("/signup"); }}
       >
         {$LL.landing.startForFree()}
       </button>
       <button
         class="btn btn-ghost btn-lg"
+        data-testid="hero-demo-button"
         onclick={() => { trackCtaClick("hero", "Watch it work", "#demo"); scrollTo("demo"); }}
       >
         {$LL.landing.viewDemo()}

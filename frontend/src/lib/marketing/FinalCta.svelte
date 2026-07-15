@@ -39,11 +39,16 @@
       <button
         class="btn btn-primary btn-lg"
         use:magnetic
+        data-testid="final-cta-start-button"
         onclick={() => { trackCtaClick("final", "Start for free", "/signup"); goto("/signup"); }}
       >
         Start for free
       </button>
-      <button class="btn btn-ghost btn-lg" onclick={() => { trackCtaClick("final", "Try with sample data", "/signup"); goto("/signup"); }}>
+      <button 
+        class="btn btn-ghost btn-lg" 
+        data-testid="final-cta-sample-button"
+        onclick={() => { trackCtaClick("final", "Try with sample data", "/signup"); goto("/signup"); }}
+      >
         Try with sample data
       </button>
     </div>

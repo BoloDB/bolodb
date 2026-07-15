@@ -10,83 +10,6 @@
 
   let { children } = $props();
 
-  let structuredData = JSON.stringify({
-    "@context": "https://schema.org",
-    "@graph": [
-      {
-        "@type": "Organization",
-        "@id": "https://bolodb.dev/#organization",
-        "name": "BoloDB",
-        "url": "https://bolodb.dev/",
-        "logo": "https://bolodb.dev/favicon.svg",
-        "description": "Talk to your database in plain English. Get instant verified answers powered by AI.",
-        "sameAs": ["https://github.com/HAAHIT/bolodb"]
-      },
-      {
-        "@type": "WebApplication",
-        "@id": "https://bolodb.dev/#webapplication",
-        "name": "BoloDB",
-        "url": "https://bolodb.dev/",
-        "applicationCategory": "Database Application",
-        "operatingSystem": "Web",
-        "browserRequirements": "Requires JavaScript",
-        "description": "Ask your database questions in plain English and get verified SQL-backed answers.",
-        "offers": {
-          "@type": "Offer",
-          "price": "0",
-          "priceCurrency": "USD"
-        },
-        "author": { "@id": "https://bolodb.dev/#organization" }
-      },
-      {
-        "@type": "FAQPage",
-        "@id": "https://bolodb.dev/#faq",
-        "mainEntity": [
-          {
-            "@type": "Question",
-            "name": "Do I need to know SQL to use BoloDB?",
-            "acceptedAnswer": {
-              "@type": "Answer",
-              "text": "No. BoloDB translates plain English questions into SQL automatically. You can always inspect the generated SQL to verify the logic."
-            }
-          },
-          {
-            "@type": "Question",
-            "name": "Does BoloDB send my data to the cloud?",
-            "acceptedAnswer": {
-              "@type": "Answer",
-              "text": "Only your database structure (schema) and question are sent to the AI — never your actual row data. Every query runs read-only."
-            }
-          },
-          {
-            "@type": "Question",
-            "name": "How accurate is BoloDB?",
-            "acceptedAnswer": {
-              "@type": "Answer",
-              "text": "BoloDB shows a confidence score (High, Medium, or Low) for every answer based on verification history and query quality signals. You can verify each answer and help it improve over time."
-            }
-          },
-          {
-            "@type": "Question",
-            "name": "What databases does BoloDB support?",
-            "acceptedAnswer": {
-              "@type": "Answer",
-              "text": "BoloDB works with PostgreSQL, MySQL, SQL Server, SQLite, and any SQL database via a connection string."
-            }
-          },
-          {
-            "@type": "Question",
-            "name": "Is BoloDB free?",
-            "acceptedAnswer": {
-              "@type": "Answer",
-              "text": "BoloDB itself is free and open source. You only need a free Google Gemini API key to power the AI features."
-            }
-          }
-        ]
-      }
-    ]
-  });
-
   $effect(() => {
     document.documentElement.lang = $locale;
   });
@@ -274,8 +197,9 @@
 </svelte:head>
 
 <div class="marketing-shell">
+  <a href="#main-content" class="skip-link">Skip to main content</a>
   <MarketingNav />
-  <main class="marketing-main">
+  <main id="main-content" class="marketing-main">
     {@render children()}
   </main>
   <Footer />
@@ -290,5 +214,22 @@
   }
   .marketing-main {
     flex: 1;
+  }
+  .skip-link {
+    position: absolute;
+    top: -50px;
+    left: 8px;
+    z-index: 9999;
+    padding: 10px 18px;
+    background: var(--brand);
+    color: #fff;
+    border-radius: 8px;
+    font-weight: 700;
+    font-size: 14px;
+    text-decoration: none;
+    transition: top 0.15s ease;
+  }
+  .skip-link:focus {
+    top: 8px;
   }
 </style>
