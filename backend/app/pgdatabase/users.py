@@ -15,7 +15,21 @@ logger = logging.getLogger(__name__)
 
 
 class UserAlreadyExistsError(Exception):
-    """Raised when a user with the same email or google_id already exists."""
+    """Raised when a user with the same email, google_id, or supabase_id already exists."""
+
+
+def _user_to_dict(user) -> dict:
+    return serialize_doc(
+        {
+            "id": user.id,
+            "email": user.email,
+            "hashed_pass": user.hashed_pass,
+            "role": user.role,
+            "google_id": user.google_id,
+            "supabase_id": user.supabase_id,
+            "created_at": user.created_at,
+        }
+    )
 
 
 async def get_user_by_email(email: str) -> Optional[dict]:
@@ -24,16 +38,7 @@ async def get_user_by_email(email: str) -> Optional[dict]:
         user = result.scalar_one_or_none()
         if user is None:
             return None
-        return serialize_doc(
-            {
-                "id": user.id,
-                "email": user.email,
-                "hashed_pass": user.hashed_pass,
-                "role": user.role,
-                "google_id": user.google_id,
-                "created_at": user.created_at,
-            }
-        )
+        return _user_to_dict(user)
 
 
 async def get_user_by_google_id(google_id: str) -> Optional[dict]:
@@ -42,16 +47,16 @@ async def get_user_by_google_id(google_id: str) -> Optional[dict]:
         user = result.scalar_one_or_none()
         if user is None:
             return None
-        return serialize_doc(
-            {
-                "id": user.id,
-                "email": user.email,
-                "hashed_pass": user.hashed_pass,
-                "role": user.role,
-                "google_id": user.google_id,
-                "created_at": user.created_at,
-            }
-        )
+        return _user_to_dict(user)
+
+
+async def get_user_by_supabase_id(supabase_id: str) -> Optional[dict]:
+    async with async_session() as session:
+        result = await session.execute(select(User).where(User.supabase_id == supabase_id))
+        user = result.scalar_one_or_none()
+        if user is None:
+            return None
+        return _user_to_dict(user)
 
 
 async def create_user(user_data: UserInDB) -> str:
@@ -62,6 +67,7 @@ async def create_user(user_data: UserInDB) -> str:
                 hashed_pass=user_data.hashed_pass,
                 role=user_data.role.value,
                 google_id=user_data.google_id,
+                supabase_id=user_data.supabase_id,
             )
             session.add(user)
             await session.commit()
@@ -84,19 +90,10 @@ async def get_user_by_id(user_id: str) -> Optional[dict]:
         user = result.scalar_one_or_none()
         if user is None:
             return None
-        return serialize_doc(
-            {
-                "id": user.id,
-                "email": user.email,
-                "hashed_pass": user.hashed_pass,
-                "role": user.role,
-                "google_id": user.google_id,
-                "created_at": user.created_at,
-            }
-        )
+        return _user_to_dict(user)
 
 
-_ALLOWED_USER_FIELDS = frozenset({"google_id", "hashed_pass"})
+_ALLOWED_USER_FIELDS = frozenset({"google_id", "supabase_id", "hashed_pass"})
 
 
 async def update_user(user_id: str, **fields):

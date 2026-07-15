@@ -46,6 +46,7 @@ class UserInDB(BaseModel):
     hashed_pass: str = ""
     role: Role
     google_id: Optional[str] = None
+    supabase_id: Optional[str] = None
 
 
 class UserPublic(BaseModel):
@@ -54,6 +55,5 @@ class UserPublic(BaseModel):
     role: Role
 
 
-class GoogleLogin(BaseModel):
-    id_token: str
-    client_id: str
+class SupabaseLogin(BaseModel):
+    access_token: str

@@ -5,6 +5,7 @@ from backend.app.pgdatabase.models import Base, User, Conversation, QueryHistory
 from backend.app.pgdatabase.users import (
     get_user_by_email,
     get_user_by_google_id,
+    get_user_by_supabase_id,
     get_user_by_id,
     create_user,
     update_user,
@@ -46,6 +47,7 @@ __all__ = [
     "RecentConnection",
     "get_user_by_email",
     "get_user_by_google_id",
+    "get_user_by_supabase_id",
     "get_user_by_id",
     "create_user",
     "update_user",
