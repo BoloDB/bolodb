@@ -270,9 +270,7 @@
   <link rel="canonical" href="https://bolodb.dev/" />
   <link rel="alternate" href="https://bolodb.dev/" hreflang="x-default" />
   <link rel="alternate" href="https://bolodb.dev/" hreflang="en" />
-  <script type="application/ld+json">
-    {ldJson}
-  </script>
+  {@html `<script type="application/ld+json">${ldJson}</script>`}
 </svelte:head>
 
 <div class="marketing-shell">
