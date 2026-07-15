@@ -6,8 +6,8 @@ from datetime import datetime
 from sqlalchemy import select, delete, update, text
 
 from backend.app.pgdatabase.engine import async_session
-from backend.app.pgdatabase.models import Conversation, QueryHistory
-from backend.app.pgdatabase.serialization import _to_uuid, _utcnow, serialize_doc
+from backend.app.pgdatabase.models import Conversation, QueryHistory, _utcnow
+from backend.app.pgdatabase.serialization import _to_uuid, serialize_doc
 
 
 async def create_conversation(user_id, title="", database_id=None):
