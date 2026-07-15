@@ -21,7 +21,11 @@ import jwt
 from jwt import PyJWKClient
 from datetime import datetime, timedelta, UTC
 from fastapi.concurrency import run_in_threadpool
-from backend.app.secrets import get_jwt_secret, get_supabase_jwt_secret, get_supabase_url
+from backend.app.secrets import (
+    get_jwt_secret,
+    get_supabase_jwt_secret,
+    get_supabase_url,
+)
 
 log = logging.getLogger(__name__)
 
@@ -167,12 +171,8 @@ async def supabase_google_login(access_token: str):
     if provider == "google" and email_verified is True:
         existing_by_email = await get_user_by_email(email)
         if existing_by_email:
-            await update_user(
-                existing_by_email["_id"], supabase_id=supabase_id
-            )
-            return create_jwt(
-                str(existing_by_email["_id"]), existing_by_email["role"]
-            )
+            await update_user(existing_by_email["_id"], supabase_id=supabase_id)
+            return create_jwt(str(existing_by_email["_id"]), existing_by_email["role"])
 
     user_in_db = UserInDB(email=email, role=Role.user, supabase_id=supabase_id)
     try:

@@ -107,7 +107,9 @@ def _validate_db_url(url: str) -> str:
         try:
             ip = ipaddress.ip_address(hostname)
             if ip.is_loopback:
-                raise ValueError(f"Connection to loopback address '{hostname}' is not allowed")
+                raise ValueError(
+                    f"Connection to loopback address '{hostname}' is not allowed"
+                )
         except ValueError:
             pass
 

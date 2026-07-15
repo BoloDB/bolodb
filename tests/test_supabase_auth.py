@@ -129,12 +129,14 @@ async def test_skips_linking_for_non_google_provider(monkeypatch):
     """Email linking must not happen when the provider is not Google."""
     monkeypatch.setenv("JWT_SECRET", "test-secret")
     monkeypatch.setenv("SUPABASE_JWT_SECRET", "test-secret")
-    token = _make_valid_token({
-        "sub": "supabase-nolink",
-        "email": "existing@example.com",
-        "app_metadata": {"provider": "github"},
-        "user_metadata": {"email_verified": True},
-    })
+    token = _make_valid_token(
+        {
+            "sub": "supabase-nolink",
+            "email": "existing@example.com",
+            "app_metadata": {"provider": "github"},
+            "user_metadata": {"email_verified": True},
+        }
+    )
 
     update_called = []
 
