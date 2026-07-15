@@ -80,7 +80,6 @@ const ja = {
     theAnswerYouGetBack: "得られる回答。",
     pickWhereAiRuns:
       "AIの実行場所を選択し、データベースに接続して質問を開始 — SQLの知識は不要です。",
-    runningLocally: "ローカルで実行中 · localhost:4321",
     recentDatabases: "最近のデータベース",
     pickUpWhereYouLeft: "中断したところから再開",
     connect: "接続",

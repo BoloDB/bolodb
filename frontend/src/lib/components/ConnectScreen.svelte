@@ -188,15 +188,6 @@
       style="display:flex;align-items:center;justify-content:space-between;margin-bottom:42px"
     >
       <Logo size={30} sub />
-      <span
-        class="chip"
-        style="cursor:default;background:var(--surface);color:var(--muted);border-color:var(--border-2)"
-      >
-        <span
-          class="pulse"
-          style="width:7px;height:7px;border-radius:99px;background:var(--brand)"
-        ></span> Running locally · localhost:4321
-      </span>
     </div>
 
     <!-- hero -->

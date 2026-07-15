@@ -80,7 +80,6 @@ const en = {
     theAnswerYouGetBack: "the answer you get back.",
     pickWhereAiRuns:
       "Pick where the AI runs, connect your database, and start asking questions \u2014 no SQL knowledge needed.",
-    runningLocally: "Running locally \u00b7 localhost:4321",
     recentDatabases: "Recent databases",
     pickUpWhereYouLeft: "Pick up where you left off",
     connect: "Connect",

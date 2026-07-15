@@ -80,7 +80,6 @@ const es = {
     theAnswerYouGetBack: "la respuesta que obtiene.",
     pickWhereAiRuns:
       "Elija dónde se ejecuta la IA, conecte su base de datos y comience a hacer preguntas — no se necesitan conocimientos de SQL.",
-    runningLocally: "Ejecutándose localmente · localhost:4321",
     recentDatabases: "Bases de datos recientes",
     pickUpWhereYouLeft: "Continúe donde lo dejó",
     connect: "Conectar",

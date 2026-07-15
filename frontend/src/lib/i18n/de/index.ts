@@ -81,7 +81,6 @@ const de = {
     theAnswerYouGetBack: "der Antwort, die Sie erhalten.",
     pickWhereAiRuns:
       "Wählen Sie, wo die KI läuft, verbinden Sie Ihre Datenbank und stellen Sie Fragen — kein SQL-Wissen erforderlich.",
-    runningLocally: "Läuft lokal · localhost:4321",
     recentDatabases: "Letzte Datenbanken",
     pickUpWhereYouLeft: "Machen Sie weiter, wo Sie aufgehört haben",
     connect: "Verbinden",

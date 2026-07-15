@@ -289,10 +289,6 @@ type RootTranslation = {
      */
     pickWhereAiRuns: string;
     /**
-     * R​u​n​n​i​n​g​ ​l​o​c​a​l​l​y​ ​·​ ​l​o​c​a​l​h​o​s​t​:​4​3​2​1
-     */
-    runningLocally: string;
-    /**
      * R​e​c​e​n​t​ ​d​a​t​a​b​a​s​e​s
      */
     recentDatabases: string;
@@ -1856,10 +1852,6 @@ export type TranslationFunctions = {
      * Pick where the AI runs, connect your database, and start asking questions — no SQL knowledge needed.
      */
     pickWhereAiRuns: () => LocalizedString;
-    /**
-     * Running locally · localhost:4321
-     */
-    runningLocally: () => LocalizedString;
     /**
      * Recent databases
      */
