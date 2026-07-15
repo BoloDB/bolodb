@@ -86,20 +86,49 @@ async def signup(user: UserSignup):
 async def supabase_google_login(access_token: str):
     """Verify a Supabase access token and return BoloDB JWT tokens.
 
-    Supabase JWTs use HS256 signed with the project's JWT_SECRET.
-    The 'sub' claim is the Supabase user UUID, 'email' is the user's email.
+    Supports both ES256 (current) and HS256 (legacy) Supabase tokens.
+    Auto-detects the algorithm from the token header.
     """
-    jwt_secret = get_supabase_jwt_secret()
     try:
-        payload = jwt.decode(
-            access_token,
-            jwt_secret,
-            algorithms=["HS256"],
-            audience="authenticated",
-        )
+        header = jwt.get_unverified_header(access_token)
+    except Exception as e:
+        log.warning("Failed to decode Supabase token header: %s", e)
+        raise HTTPException(status_code=401, detail="Invalid Supabase token")
+
+    alg = header.get("alg", "")
+
+    try:
+        if alg == "ES256":
+            from jwt import PyJWKClient
+            from backend.app.secrets import get_supabase_url
+
+            supabase_url = get_supabase_url()
+            if not supabase_url:
+                raise HTTPException(status_code=500, detail="Supabase URL not configured")
+            jwks_url = f"{supabase_url}/auth/v1/.well-known/jwks.json"
+            jwks_client = PyJWKClient(jwks_url, cache_keys=True)
+            signing_key = jwks_client.get_signing_key_from_jwt(access_token)
+            payload = jwt.decode(
+                access_token,
+                signing_key.key,
+                algorithms=["ES256"],
+                audience="authenticated",
+            )
+        elif alg == "HS256":
+            jwt_secret = get_supabase_jwt_secret()
+            payload = jwt.decode(
+                access_token,
+                jwt_secret,
+                algorithms=["HS256"],
+                audience="authenticated",
+            )
+        else:
+            raise HTTPException(status_code=401, detail=f"Unsupported signing algorithm: {alg}")
     except jwt.ExpiredSignatureError:
         raise HTTPException(status_code=401, detail="Supabase token has expired")
-    except jwt.InvalidTokenError as e:
+    except HTTPException:
+        raise
+    except Exception as e:
         log.warning("Supabase token verification failed: %s", e)
         raise HTTPException(status_code=401, detail="Invalid Supabase token")
 
