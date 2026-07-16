@@ -22,9 +22,9 @@ TIMEOUT_SECONDS = 8.0
 def _get_api_key() -> Optional[str]:
     """
     Retrieve the MyEmailVerifier API key from the environment.
-    
+
     Returns:
-    	str: The configured API key, or `None` when it is not set.
+        str: The configured API key, or `None` when it is not set.
     """
     return os.environ.get("MYEMAILVERIFIER_API_KEY")
 
@@ -43,7 +43,7 @@ class EmailVerificationOutcome:
     ):
         """
         Initialize an email verification outcome.
-        
+
         Parameters:
             allowed (bool): Whether the email is permitted.
             status (str): Normalized verification status.
@@ -63,10 +63,10 @@ class EmailVerificationOutcome:
 async def verify_email(email: str) -> EmailVerificationOutcome:
     """
     Verify an email address through MyEmailVerifier and determine whether signup is allowed.
-    
+
     Parameters:
         email (str): Email address to verify.
-    
+
     Returns:
         EmailVerificationOutcome: Verification result, including the decision, normalized status,
             diagnostic reason, service flags, and whether verification was skipped. Service
@@ -89,7 +89,7 @@ async def verify_email(email: str) -> EmailVerificationOutcome:
             r.raise_for_status()
             data = r.json()
     except (httpx.HTTPError, ValueError) as e:
-        log.warning("MyEmailVerifier call failed for %s: %s", email, e)
+        log.warning("Email verification service call failed: %s", e.__class__.__name__)
         return EmailVerificationOutcome(
             allowed=True,
             status="error",
@@ -129,11 +129,21 @@ async def verify_email(email: str) -> EmailVerificationOutcome:
             catch_all=catch_all,
         )
 
-    # Valid or catch-all → allow
+    # Explicitly allow only "valid" or "catch_all" statuses
+    if status in {"valid"} or (status == "catch_all" or catch_all):
+        return EmailVerificationOutcome(
+            allowed=True,
+            status=status or ("catch_all" if catch_all else "valid"),
+            reason="",
+            disposable=False,
+            catch_all=catch_all,
+        )
+
+    # Reject missing or unrecognized statuses
     return EmailVerificationOutcome(
-        allowed=True,
-        status=status or "valid",
-        reason="",
+        allowed=False,
+        status=status or "unrecognized",
+        reason="We couldn't verify this email address. Please try a different one.",
         disposable=False,
         catch_all=catch_all,
     )
@@ -142,10 +152,10 @@ async def verify_email(email: str) -> EmailVerificationOutcome:
 def _to_bool(v) -> bool:
     """
     Convert a value to a boolean using recognized string representations.
-    
+
     Parameters:
         v: The value to convert.
-    
+
     Returns:
         bool: `True` for boolean `True`, strings representing true, or truthy values; `False` otherwise.
     """

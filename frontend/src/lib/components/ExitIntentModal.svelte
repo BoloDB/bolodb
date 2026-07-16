@@ -9,6 +9,9 @@
   const DELAY_BEFORE_ARMED_MS = 12000; // wait 12s before arming so users don't see it instantly
   let show = $state(false);
   let armed = false;
+  let shownThisMount = false;
+  let previouslyFocusedElement: HTMLElement | null = null;
+  let modalElement: HTMLDivElement;
 
   function alreadyShownThisSession(): boolean {
     try {
@@ -23,8 +26,9 @@
   }
 
   function trigger() {
-    if (!armed || show || alreadyShownThisSession()) return;
+    if (!armed || show || shownThisMount || alreadyShownThisSession()) return;
     show = true;
+    shownThisMount = true;
     markShown();
     posthog.capture("exit_intent_shown");
   }
@@ -37,12 +41,39 @@
   }
 
   function onKey(e: KeyboardEvent) {
-    if (e.key === "Escape" && show) close();
+    if (e.key === "Escape" && show) {
+      close();
+      return;
+    }
+    // Trap focus with Tab/Shift+Tab
+    if (show && e.key === "Tab" && modalElement) {
+      const focusableElements = modalElement.querySelectorAll(
+        'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+      );
+      const firstFocusable = focusableElements[0] as HTMLElement;
+      const lastFocusable = focusableElements[focusableElements.length - 1] as HTMLElement;
+
+      if (e.shiftKey) {
+        if (document.activeElement === firstFocusable) {
+          lastFocusable?.focus();
+          e.preventDefault();
+        }
+      } else {
+        if (document.activeElement === lastFocusable) {
+          firstFocusable?.focus();
+          e.preventDefault();
+        }
+      }
+    }
   }
 
   function close() {
     show = false;
     posthog.capture("exit_intent_dismissed");
+    if (previouslyFocusedElement) {
+      previouslyFocusedElement.focus();
+      previouslyFocusedElement = null;
+    }
   }
 
   function claim() {
@@ -51,6 +82,17 @@
     show = false;
     authModal.show("signup");
   }
+
+  $effect(() => {
+    if (show && modalElement) {
+      previouslyFocusedElement = document.activeElement as HTMLElement;
+      const focusableElements = modalElement.querySelectorAll(
+        'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+      );
+      const firstFocusable = focusableElements[0] as HTMLElement;
+      firstFocusable?.focus();
+    }
+  });
 
   onMount(() => {
     if (!browser) return;
@@ -77,7 +119,7 @@
     onclick={(e) => { if (e.target === e.currentTarget) close(); }}
     onkeydown={(e) => { if (e.key === "Escape") close(); }}
   >
-    <div class="exit-modal">
+    <div class="exit-modal" bind:this={modalElement}>
       <button
         class="exit-close"
         onclick={close}

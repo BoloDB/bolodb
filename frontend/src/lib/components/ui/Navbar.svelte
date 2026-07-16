@@ -76,7 +76,7 @@
       <button
         class="profile-btn"
         onclick={toggleMenu}
-        aria-haspopup="menu"
+        aria-haspopup="true"
         aria-expanded={menuOpen}
         aria-label="Open profile menu"
         data-testid="profile-menu-button"
@@ -84,7 +84,7 @@
         <span class="avatar" aria-hidden="true">{initials || '?'}</span>
       </button>
       {#if menuOpen}
-        <div class="profile-menu" role="menu" data-testid="profile-menu">
+        <div class="profile-menu" data-testid="profile-menu">
           <div class="profile-header">
             <div class="avatar avatar-lg" aria-hidden="true">{initials || '?'}</div>
             <div style="min-width:0;flex:1">
@@ -93,16 +93,16 @@
             </div>
           </div>
           <div class="profile-divider"></div>
-          <button class="menu-item" role="menuitem" onclick={() => { closeMenu(); goto('/profile'); }} data-testid="profile-menu-profile">
+          <button class="menu-item" onclick={() => { closeMenu(); goto('/profile'); }} data-testid="profile-menu-profile">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4.4 3.6-8 8-8s8 3.6 8 8"/></svg>
             Profile
           </button>
-          <button class="menu-item" role="menuitem" onclick={() => { closeMenu(); goto('/connect'); }} data-testid="profile-menu-connect">
+          <button class="menu-item" onclick={() => { closeMenu(); goto('/connect'); }} data-testid="profile-menu-connect">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="6" rx="7" ry="3"/><path d="M5 6v6c0 1.66 3.13 3 7 3s7-1.34 7-3V6M5 12v6c0 1.66 3.13 3 7 3s7-1.34 7-3v-6"/></svg>
             Databases
           </button>
           <div class="profile-divider"></div>
-          <button class="menu-item menu-item-danger" role="menuitem" onclick={() => { closeMenu(); appState.logout(); }} data-testid="profile-menu-logout">
+          <button class="menu-item menu-item-danger" onclick={() => { closeMenu(); appState.logout(); }} data-testid="profile-menu-logout">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
             Log out
           </button>

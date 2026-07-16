@@ -55,7 +55,7 @@
   }
 
   $effect(() => {
-    if (open && typeof window !== "undefined") {
+    if (open) {
       window.addEventListener("keydown", handleKey);
       document.body.style.overflow = "hidden";
       return () => {

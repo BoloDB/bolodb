@@ -1,4 +1,6 @@
 import logging
+import hashlib
+import secrets
 
 import bcrypt
 from pydantic import EmailStr
@@ -17,10 +19,13 @@ from backend.app.pgdatabase import (
     update_user,
     UserAlreadyExistsError,
 )
+from backend.app.pgdatabase.models import PasswordResetToken
+from backend.app.pgdatabase.engine import get_engine
 import jwt
 from jwt import PyJWKClient
 from datetime import datetime, timedelta, UTC
 from fastapi.concurrency import run_in_threadpool
+from sqlalchemy import select, update as sqlalchemy_update
 from backend.app.secrets import (
     get_jwt_secret,
     get_supabase_jwt_secret,
@@ -90,12 +95,12 @@ async def signup(user: UserSignup):
     # Real-time email verification (blocks invalid/unknown/disposable addresses)
     """
     Create a user account after verifying the email address.
-    
+
     Parameters:
-    	user (UserSignup): The signup details, including email and password.
-    
+        user (UserSignup): The signup details, including email and password.
+
     Returns:
-    	bool: `True` when the account is created successfully.
+        bool: `True` when the account is created successfully.
     """
     from backend.app.services.email_verification import verify_email
 
@@ -219,14 +224,14 @@ async def supabase_google_login(access_token: str):
 async def change_password(user_id, old_password, new_password):
     """
     Change the password for a locally authenticated user.
-    
+
     Parameters:
-    	user_id: Identifier of the user whose password is being changed.
-    	old_password: The user's current password.
-    	new_password: The replacement password.
-    
+        user_id: Identifier of the user whose password is being changed.
+        old_password: The user's current password.
+        new_password: The replacement password.
+
     Returns:
-    	bool: `True` when the password is changed successfully.
+        bool: `True` when the password is changed successfully.
     """
     validate_password_strength(new_password)
     user_details = await get_user_by_id(user_id)
@@ -257,20 +262,37 @@ async def change_password(user_id, old_password, new_password):
 # in this preview env, the link is logged so it can be copied from the console.
 
 
-def create_reset_token(user_id: str) -> str:
+async def create_reset_token(user_id: str) -> str:
     """
     Create a short-lived token for resetting a user's password.
-    
+
     Parameters:
-    	user_id (str): Identifier of the user whose password will be reset.
-    
+        user_id (str): Identifier of the user whose password will be reset.
+
     Returns:
-    	str: A password reset token that expires after 15 minutes.
+        str: A password reset token that expires after 15 minutes.
     """
+    jti = secrets.token_urlsafe(32)
+    jti_hash = hashlib.sha256(jti.encode()).hexdigest()
+    expires_at = datetime.now(UTC) + timedelta(minutes=15)
+
+    # Persist the hashed JTI with its expiry
+    engine = get_engine()
+    async with engine.begin() as conn:
+        await conn.execute(
+            PasswordResetToken.__table__.insert().values(
+                user_id=user_id,
+                jti_hash=jti_hash,
+                expires_at=expires_at,
+                consumed=False,
+            )
+        )
+
     data = {
         "user_id": user_id,
         "type": "password_reset",
-        "exp": datetime.now(UTC) + timedelta(minutes=15),
+        "jti": jti,
+        "exp": expires_at,
     }
     return jwt.encode(data, get_jwt_secret(), algorithm="HS256")
 
@@ -278,24 +300,26 @@ def create_reset_token(user_id: str) -> str:
 async def request_password_reset(email: str, base_url: str = ""):
     """
     Request a password reset without revealing whether the email belongs to an eligible account.
-    
+
     Parameters:
         email (str): Email address associated with the account.
         base_url (str): Optional base URL used to construct the reset link.
-    
+
     Returns:
         bool: `True` in all cases.
     """
     user = await get_user_by_email(email)
     if user and user.get("hashed_pass"):
-        token = create_reset_token(str(user["_id"]))
+        token = await create_reset_token(str(user["_id"]))
         link = (
             f"{base_url.rstrip('/')}/reset-password?token={token}"
             if base_url
             else f"/reset-password?token={token}"
         )
-        # TODO: Send this via email service (Resend/SendGrid). Logged for dev.
-        log.info("PASSWORD RESET LINK for %s: %s", email, link)
+        # TODO: Deliver this via an email service (Resend/SendGrid) in production.
+        # Until then the link is logged so operators can retrieve it in dev/preview
+        # environments — without it the reset flow has no delivery channel at all.
+        log.info("Password reset link generated: %s", link)
     # Always return generic success to prevent user enumeration
     return True
 
@@ -303,11 +327,11 @@ async def request_password_reset(email: str, base_url: str = ""):
 async def reset_password(token: str, new_password: str):
     """
     Reset a user's password using a valid password-reset token.
-    
+
     Parameters:
         token (str): Password-reset token containing the target user identifier.
         new_password (str): Replacement password that meets the required strength criteria.
-    
+
     Returns:
         bool: `True` when the password is successfully updated.
     """
@@ -324,10 +348,51 @@ async def reset_password(token: str, new_password: str):
     if payload.get("type") != "password_reset":
         raise HTTPException(status_code=400, detail="Invalid reset link.")
 
+    jti = payload.get("jti")
+    if not jti:
+        raise HTTPException(status_code=400, detail="Invalid reset link.")
+
     user_id = payload.get("user_id")
     user = await get_user_by_id(user_id)
     if not user:
         raise HTTPException(status_code=400, detail="Invalid reset link.")
+
+    # Hash the JTI and atomically consume the stored record
+    jti_hash = hashlib.sha256(jti.encode()).hexdigest()
+    engine = get_engine()
+    async with engine.begin() as conn:
+        # Lock the row so two concurrent resets can't both pass the consumed check.
+        result = await conn.execute(
+            select(PasswordResetToken)
+            .where(
+                PasswordResetToken.jti_hash == jti_hash,
+                PasswordResetToken.user_id == user_id,
+            )
+            .with_for_update()
+        )
+        token_record = result.scalar_one_or_none()
+
+        if not token_record:
+            raise HTTPException(status_code=400, detail="Invalid reset link.")
+
+        if token_record.consumed:
+            raise HTTPException(status_code=400, detail="Reset link already used.")
+
+        if datetime.now(UTC) > token_record.expires_at:
+            raise HTTPException(
+                status_code=400, detail="Reset link expired. Please request a new one."
+            )
+
+        # Mark as consumed. The extra `consumed == False` guard makes the write a
+        # no-op for an already-used token even if the lock above is unavailable.
+        await conn.execute(
+            sqlalchemy_update(PasswordResetToken)
+            .where(
+                PasswordResetToken.jti_hash == jti_hash,
+                PasswordResetToken.consumed.is_(False),
+            )
+            .values(consumed=True)
+        )
 
     salt = bcrypt.gensalt()
     new_hashed = bcrypt.hashpw(new_password.encode("utf-8"), salt).decode("utf-8")
