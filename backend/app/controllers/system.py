@@ -1,4 +1,5 @@
 import os
+import logging
 
 from backend.app import config as cfgmod
 from backend.app.secrets import (
@@ -6,6 +7,8 @@ from backend.app.secrets import (
     get_supabase_url,
     get_supabase_anon_key,
 )
+
+log = logging.getLogger(__name__)
 
 
 async def get_state(user_id, db, cfg, kb):
@@ -86,5 +89,9 @@ async def update_config(user_id, cfg, providers, req_data):
         providers.invalidate(user_id)
 
     cfgmod.save_config(cfg)
-    h = await providers.get(user_id).health_check()
+    try:
+        h = await providers.get(user_id).health_check()
+    except Exception:
+        log.exception("Health check failed after config update")
+        h = {"status": "error", "message": "Health check failed"}
     return {"config": cfgmod.public_config(cfg, user_id), "health": h}
