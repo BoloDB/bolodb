@@ -48,9 +48,9 @@ async def save(user_id, db, kb, req_data):
     for s in req_data.starters:
         kb.add_verified(
             db_id,
-            s.get("question", ""),
-            s.get("sql", ""),
-            s.get("restatement", ""),
+            s.question,
+            s.sql,
+            s.restatement,
         )
     # Seed the semantic catalog (issue #90) with the deterministic backbone —
     # join paths and value-map scaffolding derived straight from the schema —
