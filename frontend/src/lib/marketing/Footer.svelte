@@ -4,23 +4,22 @@
 
 <footer class="marketing-footer">
   <div class="footer-inner">
-    <div class="footer-col">
+    <div class="footer-left">
       <span class="footer-brand">{$LL.common.appName()}</span>
-      <span class="footer-tagline">{$LL.common.tagline()}</span>
+      <div class="footer-links">
+        <a href="https://github.com/HAAHIT/bolodb/tree/master/docs" class="footer-link">Docs</a>
+        <a href="https://github.com/HAAHIT/bolodb" class="footer-link">GitHub</a>
+        <span class="footer-link">MIT License</span>
+      </div>
     </div>
 
-    <div class="footer-links">
-      <a href="https://github.com/HAAHIT/bolodb/tree/master/docs" class="footer-link">Docs</a>
-      <a href="https://github.com/HAAHIT/bolodb" class="footer-link">GitHub</a>
-      <span class="footer-link">MIT License</span>
-    </div>
-
-    <div class="footer-reassurance">
-      Your database data never leaves your machine. Anonymous product analytics only, honors Do Not Track.
-    </div>
-
-    <div class="footer-copy">
-      {$LL.landing.copyright()}
+    <div class="footer-right">
+      <p class="footer-reassurance">
+        Your database data never leaves your machine. Anonymous product analytics only, honors Do Not Track.
+      </p>
+      <p class="footer-copy">
+        {$LL.landing.copyright()}
+      </p>
     </div>
   </div>
 </footer>
@@ -38,27 +37,21 @@
     max-width: 1100px;
     margin: 0 auto;
     display: flex;
-    flex-wrap: wrap;
-    align-items: center;
     justify-content: space-between;
-    gap: 24px;
+    align-items: flex-start;
+    gap: 32px;
   }
 
-  .footer-col {
+  .footer-left {
     display: flex;
     flex-direction: column;
-    gap: 4px;
+    gap: 12px;
   }
 
   .footer-brand {
     font-size: 15px;
     font-weight: 700;
     color: var(--ink);
-  }
-
-  .footer-tagline {
-    font-size: 12px;
-    color: var(--faint);
   }
 
   .footer-links {
@@ -77,18 +70,34 @@
     color: var(--ink);
   }
 
+  .footer-right {
+    text-align: right;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
   .footer-reassurance {
     font-size: 12px;
     color: var(--faint);
     font-weight: 500;
     letter-spacing: 0.01em;
+    margin: 0;
   }
 
   .footer-copy {
     font-size: 11.5px;
     color: var(--faint);
-    width: 100%;
-    text-align: center;
-    margin-top: 8px;
+    margin: 0;
+  }
+
+  @media (max-width: 640px) {
+    .footer-inner {
+      flex-direction: column;
+      gap: 24px;
+    }
+    .footer-right {
+      text-align: left;
+    }
   }
 </style>
