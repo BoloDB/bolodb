@@ -19,7 +19,7 @@
       <svg width="13" height="13" viewBox="0 0 24 24" fill="none"><path d="M4 12a8 8 0 1 0 2.5-5.8M4 4v4h4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M12 8v4l3 2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
       Questions verified for this database:
     </div>
-    <div style="display:flex;flex-wrap:wrap;gap:9px;justify-content:center;max-width:580px;margin:0 auto">
+    <div data-tour="starters" data-testid="chat-starters" style="display:flex;flex-wrap:wrap;gap:9px;justify-content:center;max-width:580px;margin:0 auto">
       {#each starters as s}
         <button class="chip" onclick={() => onPick(s)} style="font-weight:550;text-align:left">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" style="color:var(--brand);flex-shrink:0"><path d="M5 12h14M13 6l6 6-6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>

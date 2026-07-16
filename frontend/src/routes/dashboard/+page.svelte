@@ -23,12 +23,6 @@
   });
 
   $effect(() => {
-    if (appState.isLoaded && !appState.dbInfo) {
-      goto('/connect');
-    }
-  });
-
-  $effect(() => {
     if (appState.isLoaded && appState.dbInfo) {
       loadStats();
     }
@@ -193,6 +187,17 @@
         </div>
       {/if}
 
+    {:else if appState.isLoaded && !appState.dbInfo}
+      <div style="display:flex;align-items:center;justify-content:center;min-height:40vh;">
+        <div style="display:flex;flex-direction:column;align-items:center;gap:12px;text-align:center;max-width:360px;">
+          <div style="width:56px;height:56px;border-radius:14px;background:var(--brand-tint);color:var(--brand);display:grid;place-items:center;">
+            <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="6" rx="7" ry="3"/><path d="M5 6v6c0 1.66 3.13 3 7 3s7-1.34 7-3V6M5 12v6c0 1.66 3.13 3 7 3s7-1.34 7-3v-6"/></svg>
+          </div>
+          <h2 style="font-size:18px;font-weight:700;color:var(--ink);margin:0;">No database connected</h2>
+          <p style="font-size:14px;color:var(--muted);margin:0;line-height:1.55;">Connect a database to view your dashboard analytics.</p>
+          <button class="btn btn-primary" onclick={() => goto('/connect')}>Connect a database</button>
+        </div>
+      </div>
     {:else}
       <div class="flex justify-center items-center h-64">
         <div class="spin" style="width:32px;height:32px;border:3px solid var(--border-2);border-top-color:var(--brand);border-radius:50%;"></div>

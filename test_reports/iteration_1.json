@@ -3,16 +3,32 @@
   "backend_issues": {
     "critical": [],
     "minor": [
-      {"endpoint": "/api/auth/signup", "issue": "Returns 500/502 because PostgreSQL is not available (EXPECTED per environment note, degraded mode)"},
-      {"endpoint": "/api/health", "issue": "Returns status=degraded, postgres=disconnected (EXPECTED)"}
+      {
+        "endpoint": "/api/auth/signup",
+        "issue": "Returns 500/502 because PostgreSQL is not available (EXPECTED per environment note, degraded mode)"
+      },
+      {
+        "endpoint": "/api/health",
+        "issue": "Returns status=degraded, postgres=disconnected (EXPECTED)"
+      }
     ]
   },
   "frontend_issues": {
     "ui_bugs": [],
     "integration_issues": [],
     "design_issues": [
-      {"screen": "Landing hero (mobile 375px)", "issues": ["'SQL Server' label in the trust-strip DB list wraps onto two lines at ~375px due to gap:12px between logos — cosmetic only, still readable; consider reducing gap or shrinking font on <420px to keep the list on a single line."]},
-      {"screen": "MarketingNav.svelte", "issues": ["Unused local variable `const before = appState.theme;` in handleThemeToggle() — dead code, minor cleanup."]}
+      {
+        "screen": "Landing hero (mobile 375px)",
+        "issues": [
+          "'SQL Server' label in the trust-strip DB list wraps onto two lines at ~375px due to gap:12px between logos — cosmetic only, still readable; consider reducing gap or shrinking font on <420px to keep the list on a single line."
+        ]
+      },
+      {
+        "screen": "MarketingNav.svelte",
+        "issues": [
+          "Unused local variable `const before = appState.theme;` in handleThemeToggle() — dead code, minor cleanup."
+        ]
+      }
     ]
   },
   "test_report_links": [],
@@ -29,7 +45,10 @@
     "Positive: excellent data-testid coverage across all interactive elements, proper aria-live regions, skip-to-content link, aria-pressed on DB type buttons, autocomplete hints on all form fields."
   ],
   "updated_files": [],
-  "success_rate": {"backend": "N/A (frontend-only testing per request; backend intentionally degraded)", "frontend": "100% (16/16 checkpoints)"},
+  "success_rate": {
+    "backend": "N/A (frontend-only testing per request; backend intentionally degraded)",
+    "frontend": "100% (16/16 checkpoints)"
+  },
   "test_credentials": "N/A - no auth credentials needed; test_credentials.md was not present.",
   "seed_data_creation": "None",
   "retest_needed": false,

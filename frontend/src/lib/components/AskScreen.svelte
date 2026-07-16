@@ -352,6 +352,14 @@
       question_length: q.length,
     });
 
+    // Fire the funnel event "first_query_asked" exactly once per user
+    try {
+      if (!localStorage.getItem("bolodb_first_query")) {
+        posthog.capture("first_query_asked", { question_length: q.length });
+        localStorage.setItem("bolodb_first_query", "1");
+      }
+    } catch {}
+
     try {
       await runQuery(
         q,
@@ -598,6 +606,8 @@
         {/if}
         <form
           onsubmit={handleSubmit}
+          data-tour="ask-input"
+          data-testid="chat-ask-form"
           style="display:flex;align-items:center;gap:10px;padding:7px 7px 7px 18px;border:1.5px solid var(--border-2);border-radius:var(--radius-lg);background:var(--surface);box-shadow:var(--shadow-sm);transition:border-color .15s, box-shadow .15s"
         >
           <textarea

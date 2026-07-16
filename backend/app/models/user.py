@@ -47,6 +47,7 @@ class UserInDB(BaseModel):
     role: Role
     google_id: Optional[str] = None
     supabase_id: Optional[str] = None
+    email_verified: bool = False
 
 
 class UserPublic(BaseModel):
@@ -57,3 +58,11 @@ class UserPublic(BaseModel):
 
 class SupabaseLogin(BaseModel):
     access_token: str
+
+
+class VerifyEmailOTP(BaseModel):
+    code: str
+
+
+class UpdateProfile(BaseModel):
+    email: Optional[EmailStr] = None

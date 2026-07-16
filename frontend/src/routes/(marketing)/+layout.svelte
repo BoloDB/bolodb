@@ -1,5 +1,6 @@
 <script lang="ts">
   import "../layout.css";
+  import "$lib/styles/auth.css";
   import { browser } from "$app/environment";
   import { locale } from "$lib/i18n/i18n-svelte";
   import { initLenis, destroyLenis, scrollTo } from "$lib/motion/lenis";
@@ -7,6 +8,9 @@
   import { trackLpView, trackScrollDepth } from "$lib/marketing/analytics";
   import MarketingNav from "$lib/marketing/MarketingNav.svelte";
   import Footer from "$lib/marketing/Footer.svelte";
+  import AuthChoiceModal from "$lib/components/AuthChoiceModal.svelte";
+  import ExitIntentModal from "$lib/components/ExitIntentModal.svelte";
+  import { authModal } from "$lib/stores/authModal";
 
   let { children } = $props();
 
@@ -176,7 +180,10 @@
 </script>
 
 <svelte:head>
-  <meta name="robots" content="index, follow" />
+  <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1" />
+  <meta name="keywords" content="text to sql, natural language to SQL, AI SQL assistant, ask your database, database chatbot, PostgreSQL AI, MySQL AI, SQL Server AI, no-code data analytics, self-hosted text-to-SQL, open source SQL AI, Gemini SQL, business intelligence AI, data analyst AI, plain English to SQL" />
+  <meta name="author" content="BoloDB" />
+  <meta name="theme-color" content="#1b9e6b" />
   <meta property="og:title" content="BoloDB — Talk to Your Database Like a Human | AI Data Analyst" />
   <meta property="og:description" content="BoloDB is the AI data analyst you can trust. Ask questions in plain English and get verified, SQL-backed answers from PostgreSQL, MySQL, SQL Server, or SQLite — read-only, no code required." />
   <meta property="og:url" content="https://bolodb.dev/" />
@@ -186,14 +193,17 @@
   <meta property="og:image" content="https://bolodb.dev/og-image.svg" />
   <meta property="og:image:width" content="1200" />
   <meta property="og:image:height" content="630" />
+  <meta property="og:image:alt" content="BoloDB — Talk to your database like a human. Trust the answer." />
   <meta name="twitter:card" content="summary_large_image" />
   <meta name="twitter:title" content="BoloDB — Talk to Your Database Like a Human | AI Data Analyst" />
   <meta name="twitter:description" content="BoloDB is the AI data analyst you can trust. Ask questions in plain English and get verified, SQL-backed answers from PostgreSQL, MySQL, SQL Server, or SQLite — read-only, no code required." />
   <meta name="twitter:image" content="https://bolodb.dev/og-image.svg" />
+  <meta name="twitter:image:alt" content="BoloDB — Talk to your database like a human. Trust the answer." />
   <link rel="canonical" href="https://bolodb.dev/" />
   <link rel="alternate" href="https://bolodb.dev/" hreflang="x-default" />
   <link rel="alternate" href="https://bolodb.dev/" hreflang="en" />
-  {@html `<script type="application/ld+json">${ldJson}</script>`}
+  <link rel="alternate" type="text/plain" href="https://bolodb.dev/llms.txt" title="BoloDB — LLM-friendly summary" />
+  {@html `<script type="application/ld+json">${ldJson.replace(/<\/script>/gi, '<\\/script>')}</script>`}
 </svelte:head>
 
 <div class="marketing-shell">
@@ -203,6 +213,12 @@
     {@render children()}
   </main>
   <Footer />
+  <AuthChoiceModal
+    open={$authModal.open}
+    mode={$authModal.mode}
+    onClose={() => authModal.hide()}
+  />
+  <ExitIntentModal />
 </div>
 
 <style>

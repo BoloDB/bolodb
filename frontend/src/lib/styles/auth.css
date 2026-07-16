@@ -1,0 +1,316 @@
+/* Shared auth screens (Signup, Login, Forgot Password, Reset Password)
+   Extracted from inline styles for reuse and theme consistency. */
+
+.auth-page {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  padding: 20px;
+  box-sizing: border-box;
+  background: var(--bg);
+}
+
+.auth-card {
+  width: 100%;
+  max-width: 420px;
+  padding: 40px;
+  box-sizing: border-box;
+}
+
+.auth-header {
+  text-align: center;
+  margin-bottom: 32px;
+}
+
+.auth-logo-wrap {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 16px;
+}
+
+.auth-title {
+  margin: 0;
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--ink);
+}
+
+.auth-subtitle {
+  margin: 8px 0 0;
+  color: var(--muted);
+  font-size: 14.5px;
+  line-height: 1.5;
+}
+
+.auth-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.auth-label {
+  display: block;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--faint);
+  margin-bottom: 6px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.auth-field-wrap {
+  position: relative;
+}
+
+.auth-password-toggle {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 4px;
+  color: var(--muted);
+  display: flex;
+  align-items: center;
+  border-radius: 6px;
+  transition:
+    color 0.15s,
+    background 0.15s;
+}
+.auth-password-toggle:hover {
+  color: var(--ink);
+  background: var(--surface-2);
+}
+.auth-password-toggle:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--ring);
+}
+
+.auth-checks {
+  list-style: none;
+  margin: 6px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.auth-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--faint);
+  transition: color 0.15s var(--ease);
+}
+.auth-check.met {
+  color: var(--brand-ink);
+}
+.auth-check-dot {
+  width: 15px;
+  height: 15px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  background: transparent;
+  border: 1.5px solid var(--border-2);
+  transition: all 0.15s var(--ease);
+}
+.auth-check.met .auth-check-dot {
+  background: var(--brand);
+  border-color: var(--brand);
+}
+
+.auth-error {
+  padding: 10px 14px;
+  background: var(--c-low-tint);
+  border: 1px solid #ebc6bd;
+  border-radius: var(--radius-sm);
+  color: var(--c-low-ink);
+  font-size: 13px;
+  font-weight: 550;
+  line-height: 1.5;
+}
+
+.auth-success {
+  padding: 16px;
+  background: var(--brand-tint);
+  border: 1px solid var(--brand-tint-2);
+  border-radius: var(--radius);
+  color: var(--brand-ink);
+  text-align: center;
+  font-weight: 550;
+  line-height: 1.5;
+}
+
+.auth-divider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 20px 0;
+}
+.auth-divider-line {
+  flex: 1;
+  height: 1px;
+  background: var(--border);
+}
+.auth-divider-text {
+  font-size: 12.5px;
+  color: var(--muted);
+  font-weight: 500;
+}
+
+.auth-footer {
+  text-align: center;
+  margin-top: 24px;
+  font-size: 13.5px;
+  color: var(--muted);
+}
+.auth-footer a {
+  color: var(--brand-ink);
+  font-weight: 650;
+  text-decoration: none;
+}
+.auth-footer a:hover {
+  text-decoration: underline;
+}
+
+.auth-forgot-link {
+  text-align: right;
+  font-size: 12.5px;
+  font-weight: 600;
+  margin-top: -8px;
+}
+.auth-forgot-link a {
+  color: var(--brand-ink);
+  text-decoration: none;
+}
+.auth-forgot-link a:hover {
+  text-decoration: underline;
+}
+
+/* Auth choice modal (Google OAuth vs email) */
+.auth-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  z-index: 10000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  animation: authModalFadeIn 0.2s var(--ease);
+}
+@keyframes authModalFadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+.auth-modal {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  max-width: 400px;
+  width: 100%;
+  padding: 32px 28px;
+  animation: authModalPop 0.25s var(--spring);
+}
+@keyframes authModalPop {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+.auth-modal-close {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--muted);
+  padding: 8px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition:
+    color 0.15s,
+    background 0.15s;
+}
+.auth-modal-close:hover {
+  color: var(--ink);
+  background: var(--surface-2);
+}
+.auth-modal-google {
+  width: 100%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 12px 24px;
+  border: 1px solid var(--border-2);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 15px;
+  font-weight: 650;
+  cursor: pointer;
+  transition: all 0.15s var(--ease);
+  box-sizing: border-box;
+}
+.auth-modal-google:hover:not(:disabled) {
+  border-color: var(--faint);
+  background: var(--surface-2);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow);
+}
+.auth-modal-google:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.auth-modal-alt {
+  display: block;
+  width: 100%;
+  margin-top: 14px;
+  background: none;
+  border: none;
+  color: var(--muted);
+  font-size: 13.5px;
+  font-weight: 550;
+  cursor: pointer;
+  padding: 8px;
+  text-align: center;
+  text-decoration: underline;
+  text-decoration-color: var(--border-2);
+  text-underline-offset: 3px;
+}
+.auth-modal-alt:hover {
+  color: var(--brand-ink);
+  text-decoration-color: var(--brand);
+}
+
+@media (max-width: 480px) {
+  .auth-card {
+    padding: 28px 22px;
+  }
+  .auth-modal {
+    padding: 26px 20px;
+  }
+}

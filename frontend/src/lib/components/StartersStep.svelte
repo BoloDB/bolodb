@@ -6,8 +6,8 @@
   import Button from '$lib/components/ui/Button.svelte';
   import Spinner from '$lib/components/ui/Spinner.svelte';
 
-  let { onDone, starterItems, glossary }:
-    { onDone: (count: number) => void; starterItems: StarterItem[] | null; glossary: any[] } = $props();
+  let { onDone, onBack, starterItems, glossary }:
+    { onDone: (count: number) => void; onBack?: () => void; starterItems: StarterItem[] | null; glossary: any[] } = $props();
 
   const items = $derived(starterItems && starterItems.length ? starterItems : defaultStarters);
   let ready = $state(false);
@@ -31,6 +31,7 @@
         .filter((_, i) => verdicts[i] === 'yes')
         .map(s => ({ question: s.q || s.question || '', sql: s.sql || '', restatement: s.restatement || '' }));
       await apiCall('/api/onboard/save', { glossary: glossary || [], starters: verified });
+      saving = false;
       onDone(verifiedCount);
     } catch (e: any) {
       saveErr = "Couldn't save your answers — check that the server is still running, then try again.";
@@ -72,6 +73,11 @@
       {/if}
       <div style="display:flex;align-items:center;justify-content:space-between;padding:15px 20px;border-radius:var(--radius);background:var(--surface);border:1px solid var(--border);box-shadow:var(--shadow-sm)">
         <div style="display:flex;align-items:center;gap:11px">
+          {#if onBack}
+            <Button kind="ghost" onclick={onBack}>
+              ← Back
+            </Button>
+          {/if}
           <span style="width:34px;height:34px;border-radius:10px;background:var(--brand-tint);color:var(--brand);display:grid;place-items:center">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M12 3l1.7 5.1L19 10l-5.3 1.9L12 17l-1.7-5.1L5 10l5.3-1.9L12 3z" fill="currentColor"/></svg>
           </span>

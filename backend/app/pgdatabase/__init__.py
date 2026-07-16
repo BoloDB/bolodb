@@ -7,6 +7,8 @@ from backend.app.pgdatabase.models import (
     Conversation,
     QueryHistory,
     RecentConnection,
+    PasswordResetToken,
+    OtpCode,
 )
 from backend.app.pgdatabase.users import (
     get_user_by_email,
@@ -51,6 +53,8 @@ __all__ = [
     "Conversation",
     "QueryHistory",
     "RecentConnection",
+    "PasswordResetToken",
+    "OtpCode",
     "get_user_by_email",
     "get_user_by_google_id",
     "get_user_by_supabase_id",

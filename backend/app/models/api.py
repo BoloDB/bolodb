@@ -51,9 +51,17 @@ class GlossaryItem(BaseModel):
     sql_hint: str = ""
 
 
+class StarterItem(BaseModel):
+    """A verified Q&A pair from onboarding starters."""
+
+    question: str
+    sql: str
+    restatement: str = ""
+
+
 class SaveOnboardReq(BaseModel):
     glossary: list[GlossaryItem] = []
-    starters: list[dict] = []
+    starters: list[StarterItem] = []
 
 
 # ── Semantic catalog (issue #90) ──────────────────────────────────────

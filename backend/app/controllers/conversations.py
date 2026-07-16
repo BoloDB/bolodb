@@ -1,4 +1,8 @@
+import logging
+
 import backend.app.pgdatabase as mdb
+
+log = logging.getLogger(__name__)
 
 
 async def list_conversations(user_id):

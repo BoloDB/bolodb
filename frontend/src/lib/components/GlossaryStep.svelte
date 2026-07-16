@@ -3,7 +3,7 @@
   import type { GlossaryItem } from '$lib/types';
   import Button from '$lib/components/ui/Button.svelte';
 
-  let { onNext, glossaryItems }: { onNext: (g: any[]) => void; glossaryItems: GlossaryItem[] | null } = $props();
+  let { onNext, onBack, glossaryItems }: { onNext: (g: any[]) => void; onBack?: () => void; glossaryItems: GlossaryItem[] | null } = $props();
 
   const items = $derived(glossaryItems && glossaryItems.length ? glossaryItems : defaultGlossary);
   const glossList = $derived(items.map(g => g.def !== undefined ? g : { term: g.term, def: g.maps_to || g.def || '', maps_to: g.maps_to || '', alt: g.alt || [], sql_hint: g.sql_hint || '' }));
@@ -57,7 +57,12 @@
       </div>
     {/each}
   </div>
-  <div style="display:flex;justify-content:flex-end;margin-top:20px">
+  <div style="display:flex;justify-content:space-between;margin-top:20px">
+    {#if onBack}
+      <Button kind="ghost" onclick={onBack}>
+        ← Back
+      </Button>
+    {/if}
     <Button kind="primary" size="lg" onclick={next} data-testid="glossary-continue-button">
       {#snippet iconRight()}<svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M5 12h14M13 6l6 6-6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>{/snippet}
       Save terms &amp; verify answers

@@ -1,14 +1,8 @@
 <script lang="ts">
-  import { countUp } from "$lib/actions/countUp";
-  import { reveal } from "$lib/actions/reveal";
-
-  let countEl: HTMLElement;
-  let flywheelEl: HTMLElement;
 </script>
 
-<section id="flywheel" bind:this={flywheelEl} class="flywheel-section" use:reveal>
-  <h2 class="section-label">The Flywheel</h2>
-  <h3 class="section-title">It learns your database</h3>
+<section id="flywheel" class="flywheel-section">
+  <h2 class="section-title">It learns your database</h2>
 
   <div class="flywheel-content">
     <div class="flywheel-diagram">
@@ -28,7 +22,7 @@
 
     <div class="flywheel-stats">
       <div class="stat">
-        <span class="stat-value" bind:this={countEl} use:countUp={{ to: 128940, duration: 2, suffix: "" }}>0</span>
+        <span class="stat-placeholder">—</span>
         <span class="stat-label">verified answers</span>
       </div>
       <div class="stat">
@@ -156,6 +150,14 @@
     color: var(--brand);
     letter-spacing: -0.03em;
     font-variant-numeric: tabular-nums;
+  }
+
+  .stat-placeholder {
+    font-size: 48px;
+    font-weight: 800;
+    color: var(--faint);
+    letter-spacing: -0.03em;
+    opacity: 0.5;
   }
 
   .stat-level {

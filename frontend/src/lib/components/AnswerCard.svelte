@@ -189,7 +189,9 @@
           {#if modelName}
             <span style="font-size:10.5px;font-weight:600;color:var(--faint);letter-spacing:.02em;text-transform:uppercase">{modelName}</span>
           {/if}
-          <ConfidenceBadge level={turn.confidence} reason={turn.reason} />
+          <div data-tour="confidence">
+            <ConfidenceBadge level={turn.confidence} reason={turn.reason} />
+          </div>
         </div>
       </div>
 
@@ -228,7 +230,9 @@
           <ResultTable columns={turn.columns || []} rows={turn.rows || []} />
         {/if}
       {/if}
-      <SqlBlock sql={turn.sql || ''} />
+      <div data-tour="sql-view">
+        <SqlBlock sql={turn.sql || ''} />
+      </div>
 
       <!-- verify zone -->
       {#if !turn.executionError}

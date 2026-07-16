@@ -1,8 +1,11 @@
 from fastapi import HTTPException
 from fastapi.concurrency import run_in_threadpool
 import asyncio
+import logging
 from backend.app.llm import generate_glossary, generate_starters
 from backend.app.semantic import suggest_from_schema
+
+log = logging.getLogger(__name__)
 
 
 async def get_glossary(user_id, db, providers):
@@ -13,8 +16,9 @@ async def get_glossary(user_id, db, providers):
             providers.get(user_id), db.schema_as_text(user_id)
         )
         return {"glossary": terms}
-    except Exception as e:
-        raise HTTPException(502, f"LLM error: {e}")
+    except Exception:
+        log.exception("Failed to generate glossary")
+        raise HTTPException(502, "Failed to generate glossary — please try again")
 
 
 async def get_starters(user_id, db, providers):
@@ -34,8 +38,11 @@ async def get_starters(user_id, db, providers):
 
         starters = list(await asyncio.gather(*[_run_starter(s) for s in starters]))
         return {"starters": starters}
-    except Exception as e:
-        raise HTTPException(502, f"LLM error: {e}")
+    except Exception:
+        log.exception("Failed to generate starters")
+        raise HTTPException(
+            502, "Failed to generate example questions — please try again"
+        )
 
 
 async def save(user_id, db, kb, req_data):
@@ -48,9 +55,9 @@ async def save(user_id, db, kb, req_data):
     for s in req_data.starters:
         kb.add_verified(
             db_id,
-            s.get("question", ""),
-            s.get("sql", ""),
-            s.get("restatement", ""),
+            s.question,
+            s.sql,
+            s.restatement,
         )
     # Seed the semantic catalog (issue #90) with the deterministic backbone —
     # join paths and value-map scaffolding derived straight from the schema —

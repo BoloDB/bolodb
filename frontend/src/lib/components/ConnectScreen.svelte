@@ -58,11 +58,15 @@
     try {
       const data = await apiCall("/api/connections");
       recentConnections = data.connections || [];
-    } catch {}
+    } catch (e) {
+      console.error("Failed to load recent connections:", e);
+    }
     try {
       const s = await apiCall("/api/state");
       keyIsSet = !!s.config?.api_keys_set?.gemini;
-    } catch {}
+    } catch (e) {
+      console.error("Failed to load API key status:", e);
+    }
   });
 
   async function saveGeminiKey() {
@@ -166,7 +170,9 @@
     try {
       await apiCall(`/api/connections/${conn._id}`, undefined, "DELETE");
       recentConnections = recentConnections.filter((c) => c._id !== conn._id);
-    } catch {}
+    } catch (e) {
+      console.error("Failed to remove recent connection:", e);
+    }
   }
 
   function timeAgo(iso: string): string {

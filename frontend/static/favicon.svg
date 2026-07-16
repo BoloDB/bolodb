@@ -1,4 +1,9 @@
-<svg width="32" height="32" viewBox="0 0 28 28" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <rect width="28" height="28" rx="8" fill="#4da6ff"/>
-  <path d="M10.8 6.5 L10.8 18 L13.2 18 L13.2 6.5 Z M6.5 12.8 L18 12.8 L18 10.4 L6.5 10.4 Z" fill="#fff" transform="translate(1.5, 1.5) scale(0.85)"/>
+<svg width="32" height="32" viewBox="0 0 256 256" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <path d="M 52 44 Q 52 30 66 30 L 190 30 Q 204 30 204 44 L 204 138 Q 204 152 190 152 L 116 152 L 88 176 L 92 152 L 66 152 Q 52 152 52 138 Z" stroke="#1b9e6b" stroke-width="8" fill="none"/>
+  <g stroke="#1b9e6b" stroke-width="8" stroke-linecap="round" fill="none">
+    <ellipse cx="128" cy="66" rx="34" ry="11"/>
+    <path d="M 94 66 L 94 108 Q 94 119 128 119 Q 162 119 162 108 L 162 66"/>
+    <path d="M 94 87 Q 94 98 128 98 Q 162 98 162 87"/>
+  </g>
+  <circle cx="182" cy="46" r="6" fill="#1b9e6b"/>
 </svg>

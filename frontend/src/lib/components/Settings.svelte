@@ -56,7 +56,9 @@
       const s = await apiCall("/api/state");
       keyIsSet = !!s.config?.api_keys_set?.gemini;
       if (s.config?.model) model = s.config.model;
-    } catch {}
+    } catch (e) {
+      console.error("Failed to load settings:", e);
+    }
   });
 
   async function save() {

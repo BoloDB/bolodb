@@ -1,6 +1,6 @@
 import json
 import logging
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 from backend.app.dependencies import (
     get_current_user,
@@ -37,32 +37,40 @@ async def query(
     providers=Depends(get_providers),
     session_log=Depends(get_session_log),
 ) -> dict:
-    user_id = user_token["user_id"]
-    out = await ctrl.run_query(user_id, db, kb, cfg, providers, session_log, req)
+    try:
+        user_id = user_token["user_id"]
+        out = await ctrl.run_query(user_id, db, kb, cfg, providers, session_log, req)
 
-    if out.get("answered") and out.get("sql"):
-        conf = out.get("confidence", "low")
-        conf_str = "High" if conf == "high" else "Medium" if conf == "medium" else "Low"
-        conversation_id = req.conversation_id
-        if conversation_id and not await mdb.conversation_owned_by(
-            user_id, conversation_id
-        ):
-            conversation_id = None
-        try:
-            await mdb.save_query(
-                user_id=user_token["user_id"],
-                question=req.question,
-                sql=out["sql"],
-                result=out.get("rows", []),
-                confidence=conf_str,
-                conversation_id=conversation_id,
-                restatement=out.get("restatement", ""),
+        if out.get("answered") and out.get("sql"):
+            conf = out.get("confidence", "low")
+            conf_str = (
+                "High" if conf == "high" else "Medium" if conf == "medium" else "Low"
             )
-            if conversation_id:
-                await mdb.touch_conversation(conversation_id)
-        except Exception:
-            log.warning("Failed to persist query history", exc_info=True)
-    return out
+            conversation_id = req.conversation_id
+            if conversation_id and not await mdb.conversation_owned_by(
+                user_id, conversation_id
+            ):
+                conversation_id = None
+            try:
+                await mdb.save_query(
+                    user_id=user_token["user_id"],
+                    question=req.question,
+                    sql=out["sql"],
+                    result=out.get("rows", []),
+                    confidence=conf_str,
+                    conversation_id=conversation_id,
+                    restatement=out.get("restatement", ""),
+                )
+                if conversation_id:
+                    await mdb.touch_conversation(conversation_id)
+            except Exception:
+                log.warning("Failed to persist query history", exc_info=True)
+        return out
+    except HTTPException:
+        raise
+    except Exception:
+        log.exception("Failed to process query")
+        raise HTTPException(500, "Failed to process your question")
 
 
 @router.post("/api/query/stream")
@@ -75,17 +83,25 @@ async def query_stream(
     providers=Depends(get_providers),
     session_log=Depends(get_session_log),
 ) -> StreamingResponse:
-    user_id = user_token["user_id"]
-    stream = ctrl.run_query_stream(user_id, db, kb, cfg, providers, session_log, req)
+    try:
+        user_id = user_token["user_id"]
+        stream = ctrl.run_query_stream(
+            user_id, db, kb, cfg, providers, session_log, req
+        )
 
-    return StreamingResponse(
-        _format_sse(stream),
-        media_type="text/event-stream",
-        headers={
-            "Cache-Control": "no-cache",
-            "X-Accel-Buffering": "no",
-        },
-    )
+        return StreamingResponse(
+            _format_sse(stream),
+            media_type="text/event-stream",
+            headers={
+                "Cache-Control": "no-cache",
+                "X-Accel-Buffering": "no",
+            },
+        )
+    except HTTPException:
+        raise
+    except Exception:
+        log.exception("Failed to start streaming query")
+        raise HTTPException(500, "Failed to start streaming query")
 
 
 @router.post("/api/feedback")
@@ -96,8 +112,14 @@ async def feedback(
     kb=Depends(get_kb),
     session_log=Depends(get_session_log),
 ) -> dict:
-    user_id = user_token["user_id"]
-    return await ctrl.feedback(user_id, db, kb, session_log, req)
+    try:
+        user_id = user_token["user_id"]
+        return await ctrl.feedback(user_id, db, kb, session_log, req)
+    except HTTPException:
+        raise
+    except Exception:
+        log.exception("Failed to process feedback")
+        raise HTTPException(500, "Failed to save feedback")
 
 
 @router.post("/api/verify")
@@ -107,16 +129,28 @@ async def verify(
     db=Depends(get_db),
     kb=Depends(get_kb),
 ) -> dict:
-    user_id = user_token["user_id"]
-    return await ctrl.verify(user_id, db, kb, req)
+    try:
+        user_id = user_token["user_id"]
+        return await ctrl.verify(user_id, db, kb, req)
+    except HTTPException:
+        raise
+    except Exception:
+        log.exception("Failed to verify answer")
+        raise HTTPException(500, "Failed to verify answer")
 
 
 @router.post("/api/execute")
 async def execute(
     req: RawSQLReq, user_token=Depends(get_current_user), db=Depends(get_db)
 ) -> dict:
-    user_id = user_token["user_id"]
-    return await ctrl.execute(user_id, db, req)
+    try:
+        user_id = user_token["user_id"]
+        return await ctrl.execute(user_id, db, req)
+    except HTTPException:
+        raise
+    except Exception:
+        log.exception("Failed to execute SQL")
+        raise HTTPException(500, "Failed to execute SQL query")
 
 
 @router.post("/api/explain")
@@ -126,5 +160,11 @@ async def explain(
     db=Depends(get_db),
     providers=Depends(get_providers),
 ) -> dict:
-    user_id = user_token["user_id"]
-    return await ctrl.explain(user_id, db, providers, req)
+    try:
+        user_id = user_token["user_id"]
+        return await ctrl.explain(user_id, db, providers, req)
+    except HTTPException:
+        raise
+    except Exception:
+        log.exception("Failed to explain SQL")
+        raise HTTPException(500, "Failed to generate SQL explanation")

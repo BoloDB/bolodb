@@ -13,7 +13,10 @@ that could originate from a CTE or subquery, and anything inside an opaque
 source are left alone rather than flagged.
 """
 
+import logging
 from sqlglot import exp, parse_one
+
+log = logging.getLogger(__name__)
 
 # sqlalchemy dialect name -> sqlglot dialect name (only where they differ).
 # Mirrors backend/app/database.py so validation parses with the same dialect
@@ -48,8 +51,9 @@ def validate_sql(sql, schema, dialect=""):
     glot_dialect = _GLOT_DIALECT.get(dialect, dialect) or None
     try:
         tree = parse_one(sql, dialect=glot_dialect)
-    except Exception as e:  # sqlglot raises ParseError and friends
-        return {"ok": False, "errors": [f"Could not parse SQL: {e}"]}
+    except Exception:  # sqlglot raises ParseError and friends
+        log.warning("SQL parse failed during validation", exc_info=True)
+        return {"ok": False, "errors": ["Could not parse SQL statement."]}
     if tree is None:
         return {"ok": False, "errors": ["Could not parse SQL: empty parse result."]}
 

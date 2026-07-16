@@ -27,6 +27,7 @@ def _user_to_dict(user) -> dict:
             "role": user.role,
             "google_id": user.google_id,
             "supabase_id": user.supabase_id,
+            "email_verified": user.email_verified,
             "created_at": user.created_at,
         }
     )
@@ -70,6 +71,7 @@ async def create_user(user_data: UserInDB) -> str:
                 role=user_data.role.value,
                 google_id=user_data.google_id,
                 supabase_id=user_data.supabase_id,
+                email_verified=user_data.email_verified,
             )
             session.add(user)
             await session.commit()
@@ -95,7 +97,9 @@ async def get_user_by_id(user_id: str) -> Optional[dict]:
         return _user_to_dict(user)
 
 
-_ALLOWED_USER_FIELDS = frozenset({"google_id", "supabase_id", "hashed_pass"})
+_ALLOWED_USER_FIELDS = frozenset(
+    {"google_id", "supabase_id", "hashed_pass", "email_verified", "email"}
+)
 
 
 async def update_user(user_id: str, **fields):

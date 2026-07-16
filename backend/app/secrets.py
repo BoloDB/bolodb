@@ -38,3 +38,18 @@ def get_supabase_jwt_secret():
             "Find it in your Supabase dashboard under Settings > API > JWT Secret."
         )
     return secret
+
+
+def get_frontend_url():
+    """Return the public frontend URL for building reset links. Returns None if not configured."""
+    return os.getenv("FRONTEND_URL") or None
+
+
+def get_resend_api_key():
+    """Return the Resend API key for sending emails. Returns None if not configured."""
+    return os.getenv("RESEND_API_KEY") or None
+
+
+def get_resend_from_email():
+    """Return the sender email address for Resend. Returns a default if not configured."""
+    return os.getenv("RESEND_FROM_EMAIL", "noreply@bolodb.dev")

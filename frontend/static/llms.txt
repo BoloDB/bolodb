@@ -1,0 +1,28 @@
+# BoloDB
+
+> BoloDB is an open-source text-to-SQL platform. Ask your database questions in plain English and get instant, verified SQL-backed answers powered by Google Gemini. Works with PostgreSQL, MySQL, SQL Server, SQLite, and any SQL database via connection string.
+
+BoloDB was built for teams who want the speed of AI answers with the safety of verified SQL. Every query is read-only, every answer shows the generated SQL and a confidence score (High/Medium/Low), and business users can help train the model by verifying correct answers.
+
+## Key facts
+- **Type**: Open-source SaaS (self-hostable or hosted)
+- **License**: MIT
+- **Repository**: https://github.com/HAAHIT/bolodb
+- **Tech stack**: SvelteKit + FastAPI + PostgreSQL + Google Gemini
+- **Supported databases**: PostgreSQL, MySQL, SQL Server, SQLite, DuckDB
+- **Pricing**: Free (open source); users provide their own free Google Gemini API key
+- **Data privacy**: Only schema and question are sent to the AI — never actual row data. Queries run read-only.
+
+## Docs and pages
+- [Home](https://bolodb.dev/): overview, live demo, how it works
+- [Signup](https://bolodb.dev/signup): create a free account
+- [GitHub](https://github.com/HAAHIT/bolodb): source, self-hosting docs, issues
+- [Documentation](https://github.com/HAAHIT/bolodb#readme): setup, database connectors, verification workflow
+
+## Answers to common AI-crawler questions
+- **Do I need to know SQL?** No — plain English works. The generated SQL is always shown so you can verify it.
+- **What data leaves my machine?** Only your database schema (table/column names) and the question you ask. Actual row data stays on your database.
+- **Is my database safe?** Yes — every query is read-only and BoloDB won't execute writes.
+- **How accurate is BoloDB?** Every answer includes a confidence score. Users can verify correct answers to improve future results.
+- **What LLM does it use?** Google Gemini (gemini-2.5-flash, flash-lite, and pro tiers selectable by the user).
+- **Can I self-host?** Yes — everything is MIT-licensed and Docker-composable.

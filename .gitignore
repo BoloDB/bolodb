@@ -12,7 +12,6 @@ data/*.db
 data/*.sqlite
 token.txt
 backend_log.txt
-.env.*
 *.env
 credentials.json
 *.pem

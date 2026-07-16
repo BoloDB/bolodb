@@ -30,11 +30,11 @@
     loading = true;
     error = "";
     try {
-      await apiCall("/api/auth/signup", { email, password });
+      const result = await apiCall("/api/auth/signup", { email, password });
       posthog.identify(email, { email });
       posthog.capture("user_signed_up", { method: "email" });
       success = true;
-      setTimeout(() => goto("/login"), 2000);
+      setTimeout(() => goto(`/verify-email?email=${encodeURIComponent(email)}`), 1500);
     } catch (err: any) {
       error = err.message || "Signup failed";
       posthog.captureException(err);
@@ -44,83 +44,58 @@
   }
 </script>
 
-<div
-  class="page"
-  style="display:flex;align-items:center;justify-content:center;min-height:100vh;padding:20px;box-sizing:border-box;background:var(--bg)"
->
-  <div
-    class="card rise"
-    style="width:100%;max-width:400px;padding:40px;box-sizing:border-box"
-    data-testid="signup-card"
-  >
-    <div style="text-align:center;margin-bottom:32px">
-      <div style="display:flex;justify-content:center;margin-bottom:16px">
-        <Logo size={40} />
-      </div>
-      <h1 style="margin:0;font-size:24px;font-weight:700">Create an account</h1>
-      <p style="margin:8px 0 0;color:var(--muted);font-size:14.5px">
-        Join BoloDB today
-      </p>
+<div class="auth-page">
+  <div class="card rise auth-card" data-testid="signup-card">
+    <div class="auth-header">
+      <div class="auth-logo-wrap"><Logo size={40} /></div>
+      <h1 class="auth-title">Create an account</h1>
+      <p class="auth-subtitle">Join BoloDB today — no credit card required</p>
     </div>
 
     {#if success}
       <div
         role="status"
         aria-live="polite"
+        class="auth-success"
         data-testid="signup-success-message"
-        style="padding:16px;background:var(--brand-tint);border:1px solid var(--brand-tint-2);border-radius:var(--radius);color:var(--brand-ink);text-align:center;font-weight:550;line-height:1.5"
       >
-        Account created successfully!<br />
-        Redirecting you to login…
+        Account created! Check your email for the verification code.
       </div>
     {:else}
-      <form
-        onsubmit={signup}
-        style="display:flex;flex-direction:column;gap:16px"
-        data-testid="signup-form"
-      >
+      <form onsubmit={signup} class="auth-form" data-testid="signup-form">
         <div>
-          <label
-            for="email"
-            style="display:block;font-size:12px;font-weight:700;color:var(--faint);margin-bottom:6px;text-transform:uppercase;letter-spacing:.05em"
-            >Email</label
-          >
+          <label for="email" class="auth-label">Email</label>
           <input
             id="email"
             type="email"
             class="field"
             bind:value={email}
             placeholder="you@company.com"
-            style="width:100%;box-sizing:border-box"
             data-testid="signup-email-input"
             autocomplete="email"
             required
           />
         </div>
         <div>
-          <label
-            for="password"
-            style="display:block;font-size:12px;font-weight:700;color:var(--faint);margin-bottom:6px;text-transform:uppercase;letter-spacing:.05em"
-            >Password</label
-          >
-          <div style="position:relative">
+          <label for="password" class="auth-label">Password</label>
+          <div class="auth-field-wrap">
             <input
               id="password"
               type={showPassword ? "text" : "password"}
               class="field"
               bind:value={password}
               placeholder="••••••••"
-              style="width:100%;box-sizing:border-box;padding-right:42px"
+              style="padding-right:42px"
               data-testid="signup-password-input"
-              required
               autocomplete="new-password"
+              required
             />
             <button
               type="button"
+              class="auth-password-toggle"
               onclick={() => (showPassword = !showPassword)}
               aria-label={showPassword ? "Hide password" : "Show password"}
               data-testid="toggle-password-visibility"
-              style="position:absolute;right:10px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;padding:4px;color:var(--muted);display:flex;align-items:center"
             >
               {#if showPassword}
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
@@ -131,10 +106,10 @@
           </div>
         </div>
 
-        <ul aria-live="polite" style="list-style:none;margin:10px 0 0;padding:0;display:flex;flex-direction:column;gap:5px">
+        <ul class="auth-checks" aria-live="polite">
           {#each passwordChecks as check}
-            <li style="display:flex;align-items:center;gap:8px;font-size:12.5px;font-weight:600;color:{check.met ? 'var(--brand-ink)' : 'var(--faint)'};transition:color .15s var(--ease)">
-              <span style="width:15px;height:15px;border-radius:50%;flex-shrink:0;display:grid;place-items:center;background:{check.met ? 'var(--brand)' : 'transparent'};border:1.5px solid {check.met ? 'var(--brand)' : 'var(--border-2)'};transition:all .15s var(--ease)">
+            <li class="auth-check {check.met ? 'met' : ''}">
+              <span class="auth-check-dot">
                 {#if check.met}
                   <svg width="8" height="8" viewBox="0 0 24 24" fill="none"><path d="M5 12.5l4.2 4.2L19 7" stroke="white" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
                 {/if}
@@ -145,12 +120,7 @@
         </ul>
 
         {#if error}
-          <div
-            role="alert"
-            aria-live="polite"
-            data-testid="signup-error-message"
-            style="padding:10px 14px;background:var(--c-low-tint);border:1px solid #EBC6BD;border-radius:var(--radius-sm);color:var(--c-low-ink);font-size:13px;font-weight:550"
-          >
+          <div role="alert" aria-live="polite" class="auth-error" data-testid="signup-error-message">
             {error}
           </div>
         {/if}
@@ -159,7 +129,7 @@
           kind="primary"
           class="btn-block"
           disabled={!canSubmit}
-          style="margin-top:8px"
+          style="margin-top:4px"
           data-testid="signup-submit-button"
         >
           {#snippet icon()}
@@ -169,15 +139,8 @@
         </Button>
       </form>
 
-      <div
-        style="text-align:center;margin-top:24px;font-size:13.5px;color:var(--muted)"
-      >
-        Already have an account? <a
-          href="/login"
-          data-testid="signup-signin-link"
-          style="color:var(--brand-ink);font-weight:650;text-decoration:none"
-          >Sign in</a
-        >
+      <div class="auth-footer">
+        Already have an account? <a href="/login" data-testid="signup-signin-link">Sign in</a>
       </div>
     {/if}
   </div>
