@@ -22,9 +22,10 @@ def client_key(request):
     xff = request.headers.get("x-forwarded-for")
     if xff:
         # Left-most entry is the original client per nginx's proxy_add_x_forwarded_for.
-        first = xff.split(",")[0].strip()
-        if first:
-            return first
+        # comment made by somesh/Entropy-rgb , i think the rightmost shall be the original client id , and the left most can be fake id hence modyfying following code
+        last = xff.split(",")[-1].strip()
+        if last:
+            return last
     return get_remote_address(request)
 
 
