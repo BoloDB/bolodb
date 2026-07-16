@@ -203,7 +203,7 @@
   <link rel="alternate" href="https://bolodb.dev/" hreflang="x-default" />
   <link rel="alternate" href="https://bolodb.dev/" hreflang="en" />
   <link rel="alternate" type="text/plain" href="https://bolodb.dev/llms.txt" title="BoloDB — LLM-friendly summary" />
-  {@html `<script type="application/ld+json">${ldJson}</script>`}
+  {@html `<script type="application/ld+json">${ldJson.replace(/<\/script>/gi, '<\\/script>')}</script>`}
 </svelte:head>
 
 <div class="marketing-shell">

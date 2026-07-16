@@ -92,7 +92,7 @@
       );
     }
 
-    function maybeStartResultTour(driverFactory: typeof driver) {
+    function maybeStartResultTour(driverFactory: (opts?: any) => Driver) {
       if (resultTargetsExist()) {
         startResultTour(driverFactory);
       } else {
@@ -117,7 +117,7 @@
       }
     }
 
-    function startResultTour(driverFactory: typeof driver) {
+    function startResultTour(driverFactory: (opts?: any) => Driver) {
       if (!isMounted) return;
 
       const resultSteps = (
@@ -167,7 +167,7 @@
         },
         steps: resultSteps,
       });
-      d.drive();
+      d?.drive();
     }
 
     initTour();
