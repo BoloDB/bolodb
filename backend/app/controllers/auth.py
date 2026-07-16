@@ -327,7 +327,14 @@ async def resend_verification_email(email: str):
     if user.get("email_verified"):
         raise HTTPException(status_code=400, detail="Email is already verified")
 
-    otp_code = await create_otp(str(user["_id"]), purpose="signup")
+    try:
+        otp_code = await create_otp(str(user["_id"]), purpose="signup")
+    except Exception:
+        log.warning("create_otp failed for %s, retrying with fresh delete", email)
+        from backend.app.pgdatabase.otp import delete_otp_for_user
+
+        await delete_otp_for_user(str(user["_id"]), purpose="signup")
+        otp_code = await create_otp(str(user["_id"]), purpose="signup")
     await send_otp_email(email, otp_code)
 
     return {"message": "Verification code sent"}

@@ -1,7 +1,6 @@
 <script lang="ts">
-  import { goto } from "$app/navigation";
   import { appState } from "$lib/appState.svelte";
-  import { scrollTo } from "$lib/motion/lenis";
+  import { scrollTo, getLenis } from "$lib/motion/lenis";
   import { trackCtaClick, trackThemeToggle } from "$lib/marketing/analytics";
   import { authModal } from "$lib/stores/authModal";
   import Logo from "../components/ui/Logo.svelte";
@@ -16,12 +15,24 @@
 
   $effect(() => {
     if (typeof window === "undefined") return;
-    function onScroll() {
-      visible = window.scrollY > 200;
+
+    function checkScroll() {
+      const lenis = getLenis();
+      const scrollY = lenis ? lenis.scroll : window.scrollY;
+      visible = scrollY > 200;
     }
-    onScroll();
-    window.addEventListener("scroll", onScroll, { passive: true });
-    return () => window.removeEventListener("scroll", onScroll);
+
+    checkScroll();
+
+    // Prefer Lenis scroll event when available, fall back to native
+    const lenis = getLenis();
+    if (lenis) {
+      const unsub = lenis.on("scroll", checkScroll);
+      return () => unsub();
+    } else {
+      window.addEventListener("scroll", checkScroll, { passive: true });
+      return () => window.removeEventListener("scroll", checkScroll);
+    }
   });
 
   function handleThemeToggle() {
@@ -79,7 +90,8 @@
     z-index: 1000;
     opacity: 0;
     pointer-events: none;
-    transition: opacity 0.3s var(--ease), transform 0.3s var(--ease);
+    transition: opacity 0.25s ease-out, transform 0.25s ease-out;
+    will-change: opacity, transform;
   }
 
   .pill-nav.visible {

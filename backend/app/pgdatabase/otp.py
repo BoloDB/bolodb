@@ -5,7 +5,7 @@ import logging
 import secrets
 from datetime import datetime, timedelta, timezone
 
-from sqlalchemy import select, update as sqlalchemy_update
+from sqlalchemy import delete as sqlalchemy_delete, select, update as sqlalchemy_update
 
 from backend.app.pgdatabase.engine import get_engine
 from backend.app.pgdatabase.models import OtpCode
@@ -28,8 +28,8 @@ def generate_otp() -> str:
 async def create_otp(user_id: str, purpose: str = "signup") -> str:
     """Create an OTP code for a user and return the plain-text code.
 
-    Any existing unused OTP for the same (user_id, purpose) is marked as used
-    before creating a new one.
+    Any existing OTP for the same (user_id, purpose) is deleted before creating
+    a new one, avoiding unique-constraint conflicts.
     """
     code = generate_otp()
     code_hash = _hash_code(code)
@@ -38,13 +38,10 @@ async def create_otp(user_id: str, purpose: str = "signup") -> str:
     engine = get_engine()
     async with engine.begin() as conn:
         await conn.execute(
-            sqlalchemy_update(OtpCode)
-            .where(
+            sqlalchemy_delete(OtpCode).where(
                 OtpCode.user_id == user_id,
                 OtpCode.purpose == purpose,
-                OtpCode.used.is_(False),
             )
-            .values(used=True)
         )
         await conn.execute(
             OtpCode.__table__.insert().values(
@@ -59,6 +56,18 @@ async def create_otp(user_id: str, purpose: str = "signup") -> str:
     return code
 
 
+async def delete_otp_for_user(user_id: str, purpose: str = "signup") -> None:
+    """Delete all OTPs for a user/purpose pair."""
+    engine = get_engine()
+    async with engine.begin() as conn:
+        await conn.execute(
+            sqlalchemy_delete(OtpCode).where(
+                OtpCode.user_id == user_id,
+                OtpCode.purpose == purpose,
+            )
+        )
+
+
 async def verify_otp(user_id: str, code: str, purpose: str = "signup") -> bool:
     """Verify an OTP code. Returns True if valid and marks it as used."""
     code_hash = _hash_code(code)
@@ -66,7 +75,7 @@ async def verify_otp(user_id: str, code: str, purpose: str = "signup") -> bool:
     engine = get_engine()
     async with engine.begin() as conn:
         result = await conn.execute(
-            select(OtpCode)
+            select(OtpCode.id, OtpCode.expires_at)
             .where(
                 OtpCode.user_id == user_id,
                 OtpCode.purpose == purpose,
@@ -75,18 +84,20 @@ async def verify_otp(user_id: str, code: str, purpose: str = "signup") -> bool:
             )
             .with_for_update()
         )
-        record = result.scalar_one_or_none()
+        row = result.first()
 
-        if not record:
+        if not row:
             return False
 
-        if datetime.now(timezone.utc) > record.expires_at:
+        otp_id, expires_at = row
+
+        if datetime.now(timezone.utc) > expires_at:
             return False
 
         await conn.execute(
             sqlalchemy_update(OtpCode)
             .where(
-                OtpCode.id == record.id,
+                OtpCode.id == otp_id,
                 OtpCode.used.is_(False),
             )
             .values(used=True)

@@ -30,11 +30,11 @@
     loading = true;
     error = "";
     try {
-      await apiCall("/api/auth/signup", { email, password });
+      const result = await apiCall("/api/auth/signup", { email, password });
       posthog.identify(email, { email });
       posthog.capture("user_signed_up", { method: "email" });
       success = true;
-      setTimeout(() => goto("/login"), 2000);
+      setTimeout(() => goto(`/verify-email?email=${encodeURIComponent(email)}`), 1500);
     } catch (err: any) {
       error = err.message || "Signup failed";
       posthog.captureException(err);
@@ -59,8 +59,7 @@
         class="auth-success"
         data-testid="signup-success-message"
       >
-        Account created successfully!<br />
-        Redirecting you to login…
+        Account created! Check your email for the verification code.
       </div>
     {:else}
       <form onsubmit={signup} class="auth-form" data-testid="signup-form">

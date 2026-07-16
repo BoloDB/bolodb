@@ -31,6 +31,7 @@ services:
       - SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY:?SUPABASE_ANON_KEY must be set}
       - SUPABASE_JWT_SECRET=${SUPABASE_JWT_SECRET:?SUPABASE_JWT_SECRET must be set}
       - MYEMAILVERIFIER_API_KEY=${MYEMAILVERIFIER_API_KEY}
+      - RESEND_API_KEY=${RESEND_API_KEY}
     extra_hosts:
       - "host.docker.internal:host-gateway"
     networks:
