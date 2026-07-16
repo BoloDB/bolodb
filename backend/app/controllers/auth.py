@@ -100,9 +100,11 @@ async def signup(user: UserSignup):
         user (UserSignup): The signup details, including email and password.
 
     Returns:
-        bool: `True` when the account is created successfully.
+        dict: {"email": user.email} when the account is created successfully.
     """
     from backend.app.services.email_verification import verify_email
+    from backend.app.pgdatabase.otp import create_otp
+    from backend.app.services.email import send_verification_email
 
     verification = await verify_email(user.email)
     if not verification.allowed:
@@ -118,12 +120,17 @@ async def signup(user: UserSignup):
     hashed_pw = hashed_pw.decode("utf-8")
     user_in_db = UserInDB(email=user.email, hashed_pass=hashed_pw, role=Role.user)
     try:
-        await create_user(user_in_db)
+        uid = await create_user(user_in_db)
     except UserAlreadyExistsError:
         raise HTTPException(
             status_code=400, detail="An account with this email already exists"
         )
-    return True
+
+    # Generate OTP and send verification email
+    otp_code = await create_otp(str(uid), purpose="signup")
+    await send_verification_email(user.email, otp_code)
+
+    return {"email": user.email}
 
 
 async def supabase_google_login(access_token: str):
@@ -260,6 +267,72 @@ async def change_password(user_id, old_password, new_password):
     raise HTTPException(status_code=401, detail="Incorrect Password, Please try again")
 
 
+# ── Email verification ──────────────────────────────────────────────────
+
+
+async def verify_email_code(email: str, code: str):
+    """Verify an OTP code and log the user in.
+
+    Parameters:
+        email (str): The user's email address.
+        code (str): The 6-digit OTP code.
+
+    Returns:
+        dict: JWT tokens on success.
+
+    Raises:
+        HTTPException: If the user is not found, code is invalid/expired,
+            or email is already verified.
+    """
+    from backend.app.pgdatabase.otp import verify_otp
+
+    user = await get_user_by_email(email)
+    if not user:
+        raise HTTPException(status_code=404, detail="No account found with that email")
+
+    if user.get("email_verified"):
+        raise HTTPException(status_code=400, detail="Email is already verified")
+
+    valid = await verify_otp(str(user["_id"]), code, purpose="signup")
+    if not valid:
+        raise HTTPException(
+            status_code=400, detail="Invalid or expired verification code"
+        )
+
+    # Mark email as verified
+    await update_user(user["_id"], email_verified=True)
+
+    return create_jwt(str(user["_id"]), user["role"])
+
+
+async def resend_verification_email(email: str):
+    """Regenerate and resend the verification OTP.
+
+    Parameters:
+        email (str): The user's email address.
+
+    Returns:
+        dict: Always returns success to prevent email enumeration.
+
+    Raises:
+        HTTPException: If user not found or already verified.
+    """
+    from backend.app.pgdatabase.otp import create_otp
+    from backend.app.services.email import send_verification_email as send_otp_email
+
+    user = await get_user_by_email(email)
+    if not user:
+        raise HTTPException(status_code=404, detail="No account found with that email")
+
+    if user.get("email_verified"):
+        raise HTTPException(status_code=400, detail="Email is already verified")
+
+    otp_code = await create_otp(str(user["_id"]), purpose="signup")
+    await send_otp_email(email, otp_code)
+
+    return {"message": "Verification code sent"}
+
+
 # ── Forgot / reset password ──────────────────────────────────────────────
 # We generate a short-lived JWT reset token (15 min) rather than storing tokens
 # server-side. For production, deliver the reset link via email (Resend/SendGrid);
@@ -320,11 +393,9 @@ async def request_password_reset(email: str, base_url: str = ""):
             if base_url
             else f"/reset-password?token={token}"
         )
-        # TODO: Deliver this via an email service (Resend/SendGrid) in production.
-        # Until then the link is logged at DEBUG so operators can retrieve it in
-        # dev/preview (enable DEBUG logging) without leaking reset tokens into
-        # production logs, which typically run at INFO or above.
-        log.debug("Password reset link generated: %s", link)
+        from backend.app.services.email import send_password_reset_email
+
+        await send_password_reset_email(email, link)
     # Always return generic success to prevent user enumeration
     return True
 

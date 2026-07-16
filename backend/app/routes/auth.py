@@ -24,6 +24,15 @@ class ResetPasswordReq(BaseModel):
     new_password: str
 
 
+class VerifyEmailReq(BaseModel):
+    email: str
+    code: str
+
+
+class ResendVerificationReq(BaseModel):
+    email: str
+
+
 @router.post("/refresh")
 async def refresh_jwt(refresh_token: str = Cookie(None)):
     """
@@ -97,8 +106,11 @@ async def login(login_data: UserLogin):
 
 @router.post("/signup")
 async def signup(user_data: UserSignup):
-    await backend.app.controllers.auth.signup(user_data)
-    return JSONResponse({"message": "Signup Successful"}, status_code=201)
+    result = await backend.app.controllers.auth.signup(user_data)
+    return JSONResponse(
+        {"message": "Check your email for verification code", "email": result["email"]},
+        status_code=201,
+    )
 
 
 @router.post("/supabase-google")
@@ -187,3 +199,33 @@ async def reset_password(req: ResetPasswordReq):
     """
     await backend.app.controllers.auth.reset_password(req.token, req.new_password)
     return JSONResponse({"message": "Password reset successfully"})
+
+
+@router.post("/verify-email")
+async def verify_email(req: VerifyEmailReq):
+    """Verify email with OTP code and log the user in."""
+    tokens = await backend.app.controllers.auth.verify_email_code(req.email, req.code)
+    response = JSONResponse({"message": "Email verified successfully"})
+    secure = get_cookie_secure()
+    response.set_cookie(
+        key="access_token",
+        value=tokens["access_token"],
+        httponly=True,
+        secure=secure,
+        samesite="lax",
+    )
+    response.set_cookie(
+        key="refresh_token",
+        value=tokens["refresh_token"],
+        httponly=True,
+        secure=secure,
+        samesite="lax",
+    )
+    return response
+
+
+@router.post("/resend-verification")
+async def resend_verification(req: ResendVerificationReq):
+    """Resend the email verification OTP code."""
+    result = await backend.app.controllers.auth.resend_verification_email(req.email)
+    return JSONResponse(result)
