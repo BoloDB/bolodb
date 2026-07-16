@@ -22,7 +22,6 @@
   ];
 
   let pipelineEl: HTMLElement;
-  let spineEl: SVGPathElement;
 
   $effect(() => {
     if (!browser || !pipelineEl || motionPrefs.reduced) return;
@@ -41,7 +40,7 @@
   <div class="pipeline-desktop">
     <svg class="pipeline-spine" viewBox="0 0 300 12" preserveAspectRatio="none" aria-hidden="true">
       <path d="M 10 6 L 290 6" stroke="var(--border-2)" stroke-width="3" stroke-linecap="round" fill="none" />
-      <path bind:this={spineEl} d="M 10 6 L 290 6" stroke="var(--brand)" stroke-width="3" stroke-linecap="round" fill="none" />
+      <path d="M 10 6 L 290 6" stroke="var(--brand)" stroke-width="3" stroke-linecap="round" fill="none" />
       <circle cx="50" cy="6" r="4" fill="var(--surface-2)" stroke="var(--border-2)" stroke-width="1.5" />
       <circle cx="150" cy="6" r="4" fill="var(--surface-2)" stroke="var(--border-2)" stroke-width="1.5" />
       <circle cx="250" cy="6" r="4" fill="var(--surface-2)" stroke="var(--border-2)" stroke-width="1.5" />

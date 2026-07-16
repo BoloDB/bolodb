@@ -1,8 +1,7 @@
 <script lang="ts">
-  let flywheelEl: HTMLElement;
 </script>
 
-<section id="flywheel" bind:this={flywheelEl} class="flywheel-section">
+<section id="flywheel" class="flywheel-section">
   <h2 class="section-title">It learns your database</h2>
 
   <div class="flywheel-content">
