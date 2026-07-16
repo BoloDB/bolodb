@@ -75,7 +75,7 @@ async def verify_otp(user_id: str, code: str, purpose: str = "signup") -> bool:
     engine = get_engine()
     async with engine.begin() as conn:
         result = await conn.execute(
-            select(OtpCode)
+            select(OtpCode.id, OtpCode.expires_at)
             .where(
                 OtpCode.user_id == user_id,
                 OtpCode.purpose == purpose,
@@ -84,18 +84,20 @@ async def verify_otp(user_id: str, code: str, purpose: str = "signup") -> bool:
             )
             .with_for_update()
         )
-        record = result.scalar_one_or_none()
+        row = result.first()
 
-        if not record:
+        if not row:
             return False
 
-        if datetime.now(timezone.utc) > record.expires_at:
+        otp_id, expires_at = row
+
+        if datetime.now(timezone.utc) > expires_at:
             return False
 
         await conn.execute(
             sqlalchemy_update(OtpCode)
             .where(
-                OtpCode.id == record.id,
+                OtpCode.id == otp_id,
                 OtpCode.used.is_(False),
             )
             .values(used=True)
