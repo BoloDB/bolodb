@@ -50,6 +50,7 @@ const en = {
     passwordChanged: "Password changed successfully",
   },
   landing: {
+    eyebrow: "BoloDB — Text-to-SQL you can trust",
     talkToYourDatabase: "Talk to your database",
     likeAHuman: "like a human.",
     noSqlRequired:

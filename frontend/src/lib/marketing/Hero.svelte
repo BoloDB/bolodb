@@ -9,6 +9,7 @@
   import { authModal } from "$lib/stores/authModal";
 
   let heroEl: HTMLElement;
+  let eyebrowEl: HTMLElement;
   let h1Line1: HTMLElement;
   let h1Line2: HTMLElement;
   let subEl: HTMLElement;
@@ -16,6 +17,7 @@
   let trustEl: HTMLElement;
 
   function revealInstant() {
+    if (eyebrowEl) eyebrowEl.style.opacity = "1";
     if (h1Line1) h1Line1.style.clipPath = "none";
     if (h1Line2) h1Line2.style.clipPath = "none";
     if (subEl) subEl.style.opacity = "1";
@@ -57,6 +59,11 @@
         });
 
         tl.fromTo(
+          eyebrowEl,
+          { y: 10, opacity: 0 },
+          { y: 0, opacity: 1, duration: 0.4 }
+        )
+          .fromTo(
           h1Line1,
           { clipPath: "inset(0 0 100% 0)" },
           { clipPath: "inset(0 0 0% 0)", duration: 0.7 }
@@ -104,6 +111,7 @@
 <section bind:this={heroEl} class="hero">
   <div class="hero-grid">
     <div class="hero-text">
+      <span class="hero-eyebrow" bind:this={eyebrowEl}>{$LL.landing.eyebrow()}</span>
       <h1 class="hero-h1">
         <span class="h1-mask" bind:this={h1Line1}><span class="h1-line">{$LL.landing.talkToYourDatabase()}</span></span>
         <span class="h1-mask" bind:this={h1Line2}><span class="h1-line h1-accent">{$LL.landing.likeAHuman()}</span></span>
@@ -166,6 +174,21 @@
     flex-direction: column;
     gap: 24px;
     align-items: flex-start;
+  }
+
+  .hero-eyebrow {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 14px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 99px;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--muted);
+    letter-spacing: 0.01em;
+    white-space: nowrap;
   }
 
   .hero-h1 {
@@ -262,6 +285,9 @@
     .hero-text {
       align-items: center;
       text-align: center;
+    }
+    .hero-eyebrow {
+      margin: 0 auto;
     }
     .hero-ctas {
       justify-content: center;

@@ -1,11 +1,11 @@
 # ──────────────────────────────────────────────
 #  BoloDB  ·  Backend
-#  Python 3.12 / FastAPI served via Uvicorn
+#  Python 3.13 / FastAPI served via Uvicorn
 # ──────────────────────────────────────────────
 #  Build context: project root
 #  docker build -f backend/DOCKERFILE -t bolodb-backend .
 # ──────────────────────────────────────────────
-FROM python:3.14-slim AS base
+FROM python:3.13-slim AS base
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1

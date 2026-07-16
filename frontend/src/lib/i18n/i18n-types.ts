@@ -201,6 +201,10 @@ type RootTranslation = {
   };
   landing: {
     /**
+     * B​o​l​o​D​B​ ​—​ ​T​e​x​t​-​t​o​-​S​Q​L​ ​y​o​u​ ​c​a​n​ ​t​r​u​s​t
+     */
+    eyebrow: string;
+    /**
      * T​a​l​k​ ​t​o​ ​y​o​u​r​ ​d​a​t​a​b​a​s​e
      */
     talkToYourDatabase: string;
@@ -1764,6 +1768,10 @@ export type TranslationFunctions = {
     passwordChanged: () => LocalizedString;
   };
   landing: {
+    /**
+     * BoloDB — Text-to-SQL you can trust
+     */
+    eyebrow: () => LocalizedString;
     /**
      * Talk to your database
      */
