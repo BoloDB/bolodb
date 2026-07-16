@@ -17,7 +17,11 @@ export async function apiCall(
   opts.credentials = "include";
   const r = await fetch(path, opts);
   const data = await r.json().catch(() => ({}));
-  if (!r.ok) throw new Error(data.detail || `Request failed: ${r.status}`);
+  if (!r.ok) {
+    const error: any = new Error(data.detail || `Request failed: ${r.status}`);
+    error.status = r.status;
+    throw error;
+  }
   return data;
 }
 

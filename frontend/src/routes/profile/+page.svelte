@@ -19,7 +19,7 @@
       user = res?.content || null;
     } catch (e: any) {
       error = e.message || 'Could not load your profile';
-      if (String(e.message || '').includes('401') || String(e.message || '').includes('Access')) {
+      if (e.status === 401) {
         goto('/login');
       }
     } finally {

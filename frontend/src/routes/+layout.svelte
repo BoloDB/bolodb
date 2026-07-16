@@ -7,6 +7,9 @@
   import Navbar from '$lib/components/ui/Navbar.svelte';
 
   let { children } = $props();
+
+  const hiddenPaths = ['/', '/login', '/signup', '/onboard', '/forgot-password', '/reset-password'];
+  const showNavbar = $derived(appState.isLoaded && !hiddenPaths.includes($page.url.pathname));
 </script>
 
 <svelte:head>
@@ -14,11 +17,11 @@
 </svelte:head>
 
 <!-- Hide navbar on marketing/auth/onboard pages; show on chat/dashboard/connect/profile. -->
-{#if appState.isLoaded && !['/', '/login', '/signup', '/onboard', '/forgot-password', '/reset-password'].includes($page.url.pathname)}
+{#if showNavbar}
   <Navbar />
 {/if}
 
-<div class="main-content" class:has-navbar={appState.isLoaded && !['/', '/login', '/signup', '/onboard', '/forgot-password', '/reset-password'].includes($page.url.pathname)}>
+<div class="main-content" class:has-navbar={showNavbar}>
   {@render children()}
 </div>
 

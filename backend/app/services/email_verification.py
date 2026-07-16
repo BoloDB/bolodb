@@ -89,7 +89,7 @@ async def verify_email(email: str) -> EmailVerificationOutcome:
             r.raise_for_status()
             data = r.json()
     except (httpx.HTTPError, ValueError) as e:
-        log.warning("MyEmailVerifier call failed for %s: %s", email, e)
+        log.warning("Email verification service call failed: %s", e.__class__.__name__)
         return EmailVerificationOutcome(
             allowed=True,
             status="error",
@@ -129,11 +129,21 @@ async def verify_email(email: str) -> EmailVerificationOutcome:
             catch_all=catch_all,
         )
 
-    # Valid or catch-all → allow
+    # Explicitly allow only "valid" or "catch_all" statuses
+    if status in {"valid"} or (status == "catch_all" or catch_all):
+        return EmailVerificationOutcome(
+            allowed=True,
+            status=status or "catch_all" if catch_all else "valid",
+            reason="",
+            disposable=False,
+            catch_all=catch_all,
+        )
+
+    # Reject missing or unrecognized statuses
     return EmailVerificationOutcome(
-        allowed=True,
-        status=status or "valid",
-        reason="",
+        allowed=False,
+        status=status or "unrecognized",
+        reason="We couldn't verify this email address. Please try a different one.",
         disposable=False,
         catch_all=catch_all,
     )

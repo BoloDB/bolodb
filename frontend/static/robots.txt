@@ -13,11 +13,50 @@ Disallow: /auth/
 # AI crawlers welcome — see /llms.txt for a machine-readable summary.
 User-agent: GPTBot
 Allow: /
+Disallow: /chat
+Disallow: /dashboard
+Disallow: /connect
+Disallow: /onboard
+Disallow: /profile
+Disallow: /api/
+Disallow: /forgot-password
+Disallow: /reset-password
+Disallow: /auth/
+
 User-agent: ClaudeBot
 Allow: /
+Disallow: /chat
+Disallow: /dashboard
+Disallow: /connect
+Disallow: /onboard
+Disallow: /profile
+Disallow: /api/
+Disallow: /forgot-password
+Disallow: /reset-password
+Disallow: /auth/
+
 User-agent: Google-Extended
 Allow: /
+Disallow: /chat
+Disallow: /dashboard
+Disallow: /connect
+Disallow: /onboard
+Disallow: /profile
+Disallow: /api/
+Disallow: /forgot-password
+Disallow: /reset-password
+Disallow: /auth/
+
 User-agent: PerplexityBot
 Allow: /
+Disallow: /chat
+Disallow: /dashboard
+Disallow: /connect
+Disallow: /onboard
+Disallow: /profile
+Disallow: /api/
+Disallow: /forgot-password
+Disallow: /reset-password
+Disallow: /auth/
 
 Sitemap: https://bolodb.dev/sitemap.xml

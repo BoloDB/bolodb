@@ -4,7 +4,7 @@ from pydantic import BaseModel
 from backend.app.models.user import UserSignup, UserLogin, SupabaseLogin
 import backend.app.controllers.auth
 from backend.app.dependencies import get_current_user
-from backend.app.secrets import get_jwt_secret, get_cookie_secure
+from backend.app.secrets import get_jwt_secret, get_cookie_secure, get_frontend_url
 import jwt
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
@@ -159,7 +159,11 @@ async def change_password(
 @router.post("/forgot-password")
 async def forgot_password(req: ForgotPasswordReq, request: Request):
     """Request a password reset link. Always returns success to prevent user enumeration."""
-    base_url = str(request.base_url).rstrip("/")
+    frontend_url = get_frontend_url()
+    if frontend_url:
+        base_url = frontend_url.rstrip("/")
+    else:
+        base_url = str(request.base_url).rstrip("/")
     await backend.app.controllers.auth.request_password_reset(
         req.email, base_url=base_url
     )

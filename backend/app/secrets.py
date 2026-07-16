@@ -38,3 +38,8 @@ def get_supabase_jwt_secret():
             "Find it in your Supabase dashboard under Settings > API > JWT Secret."
         )
     return secret
+
+
+def get_frontend_url():
+    """Return the public frontend URL for building reset links. Returns None if not configured."""
+    return os.getenv("FRONTEND_URL") or None
