@@ -9,7 +9,8 @@
       <div class="footer-links">
         <a href="https://github.com/HAAHIT/bolodb/tree/master/docs" class="footer-link">Docs</a>
         <a href="https://github.com/HAAHIT/bolodb" class="footer-link">GitHub</a>
-        <span class="footer-link">MIT License</span>
+        <a href="/privacy" class="footer-link">Privacy</a>
+        <a href="/terms" class="footer-link">Terms</a>
       </div>
     </div>
 
