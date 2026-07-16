@@ -1,7 +1,6 @@
 import logging
 
 from fastapi import APIRouter, Depends, Request, HTTPException
-
 from backend.app.dependencies import get_current_user, get_db, get_kb, get_providers
 from backend.app.models.api import SaveOnboardReq
 from backend.app.ratelimit import limiter
