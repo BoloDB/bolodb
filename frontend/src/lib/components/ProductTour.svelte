@@ -2,6 +2,7 @@
   import { onMount } from "svelte";
   import { browser } from "$app/environment";
   import posthog from "posthog-js";
+  import type { DriveStep } from "driver.js";
 
   const STORAGE_KEY = "bolodb_tour_completed_v1";
 
@@ -33,7 +34,7 @@
       onDestroyed: () => {
         markDone();
       },
-      steps: [
+      steps: ([
         {
           element: '[data-tour="ask-input"]',
           popover: {
@@ -84,9 +85,11 @@
             align: "end",
           },
         },
-      ].filter((s) => {
+      ] satisfies DriveStep[]).filter((s) => {
         if (typeof document === "undefined") return true;
-        return document.querySelector(s.element) !== null;
+        return typeof s.element === "string"
+          ? document.querySelector(s.element) !== null
+          : true;
       }),
     });
 
