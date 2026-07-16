@@ -4,6 +4,8 @@
   import { onMount } from 'svelte';
   import { goto } from '$app/navigation';
 
+  let redirected = $state(false);
+
   onMount(() => {
     if (!appState.isLoaded) {
       appState.init(false);
@@ -12,9 +14,10 @@
 
   $effect(() => {
     if (appState.isLoaded) {
-      if (!appState.dbInfo) {
+      if (!appState.dbInfo && !redirected) {
+        redirected = true;
         goto('/connect');
-      } else if (appState.dbInfo.has_knowledge) {
+      } else if (appState.dbInfo?.has_knowledge) {
         goto('/chat');
       }
     }
@@ -32,5 +35,26 @@
       dbInfo={appState.dbInfo}
       schema={appState.realSchema}
     />
+  {:else}
+    <div style="display:flex;align-items:center;justify-content:center;min-height:60vh;">
+      <div style="display:flex;flex-direction:column;align-items:center;gap:12px;text-align:center;">
+        <div class="spinner-large"></div>
+        <p style="font-size:14px;color:var(--muted);margin:0;">Loading…</p>
+      </div>
+    </div>
   {/if}
 </div>
+
+<style>
+  .spinner-large {
+    width: 36px;
+    height: 36px;
+    border: 3px solid var(--border-2);
+    border-top-color: var(--brand);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+  @keyframes spin {
+    to { transform: rotate(360deg); }
+  }
+</style>
