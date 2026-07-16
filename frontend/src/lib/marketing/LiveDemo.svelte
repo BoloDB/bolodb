@@ -188,18 +188,16 @@
 </script>
 
 <section id="demo" class="demo-section" aria-label="Product demo">
-  <h2 class="demo-label">{$LL.landing.demoTitle()}</h2>
-  <h3 class="section-title">See it in action</h3>
+  <h2 class="section-title">See it in action</h2>
 
-  <div class="device" bind:this={deviceEl}>
-    <div class="device-bar">
-      <span class="tl red"></span><span class="tl amber"></span><span class="tl green"></span>
-      <span class="device-title mono">bolodb-chat-demo</span>
+  <div class="demo-panel" bind:this={deviceEl}>
+    <div class="demo-top">
+      <span class="demo-badge">Demo</span>
       <button class="skip-btn" bind:this={skipBtnEl} aria-pressed={skip} onclick={() => { if (skip) handlePlay(); else handleSkip(); }}>
-        {skip ? "Play animation" : "Skip animation"}
+        {skip ? "Replay" : "Skip"}
       </button>
     </div>
-    <div class="device-body">
+    <div class="demo-body">
       <div class="bubble user">
         <span bind:this={typedEl}>{typedText}</span><span class="caret" bind:this={caretEl}>|</span>
       </div>
@@ -262,15 +260,6 @@
     gap: 12px;
   }
 
-  .demo-label {
-    font-size: 12px;
-    font-weight: 600;
-    color: var(--faint);
-    font-family: var(--font-mono);
-    letter-spacing: 0.05em;
-    text-transform: uppercase;
-  }
-
   .section-title {
     font-size: clamp(1.5rem, 3.5vw, 2.25rem);
     font-weight: 700;
@@ -280,7 +269,7 @@
     text-wrap: balance;
   }
 
-  .device {
+  .demo-panel {
     width: 100%;
     background: var(--surface);
     border: 1px solid var(--border);
@@ -289,26 +278,22 @@
     overflow: hidden;
   }
 
-  .device-bar {
+  .demo-top {
     display: flex;
     align-items: center;
-    gap: 8px;
+    justify-content: space-between;
     padding: 12px 16px;
     background: var(--surface-2);
     border-bottom: 1px solid var(--border);
   }
 
-  .tl { width: 10px; height: 10px; border-radius: 50%; }
-  .red { background: #f87171; }
-  .amber { background: #fbbf24; }
-  .green { background: #34d399; }
-
-  .device-title {
-    font-size: 12px;
-    font-weight: 500;
-    color: var(--muted);
-    margin-left: 4px;
-    flex: 1;
+  .demo-badge {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--brand);
+    background: var(--brand-tint);
+    padding: 3px 10px;
+    border-radius: 99px;
   }
 
   .skip-btn {
@@ -329,7 +314,7 @@
     box-shadow: 0 0 0 4px var(--ring);
   }
 
-  .device-body {
+  .demo-body {
     padding: 24px;
     min-height: 320px;
     display: flex;

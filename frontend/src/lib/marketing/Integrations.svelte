@@ -1,5 +1,4 @@
 <script lang="ts">
-  import { reveal } from "$lib/actions/reveal";
 
   const dbs = [
     { name: "PostgreSQL", color: "#336791" },
@@ -31,9 +30,8 @@
   let activeTabIdx = $state(0);
 </script>
 
-<section id="integrations" class="integrations-section" use:reveal>
-  <h2 class="section-label">Connect</h2>
-  <h3 class="section-title">Works with every major database</h3>
+<section id="integrations" class="integrations-section">
+  <h2 class="section-title">Works with every major database</h2>
 
   <div class="db-grid">
     {#each dbs as db}
@@ -91,16 +89,6 @@
     margin: 0 auto;
     padding: 100px 24px;
     text-align: center;
-  }
-
-  .section-label {
-    font-size: 12px;
-    font-weight: 600;
-    color: var(--faint);
-    font-family: var(--font-mono);
-    letter-spacing: 0.05em;
-    text-transform: uppercase;
-    margin: 0 0 8px;
   }
 
   .section-title {

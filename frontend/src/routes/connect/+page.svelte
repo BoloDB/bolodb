@@ -4,29 +4,121 @@
   import { onMount } from 'svelte';
   import { goto } from '$app/navigation';
 
+  let showSwitchConfirm = $state(false);
+
   onMount(() => {
     if (!appState.isLoaded) {
        appState.init(false);
     }
   });
 
-  $effect(() => {
-    if (appState.isLoaded && appState.dbInfo) {
-      if (appState.dbInfo.has_knowledge) {
-        goto('/chat');
-      } else {
-        goto('/onboard');
-      }
-    }
-  });
+  const isConnected = $derived(appState.isLoaded && !!appState.dbInfo);
+
+  function handleDisconnect() {
+    showSwitchConfirm = false;
+    appState.disconnect();
+  }
 </script>
 
 <svelte:head>
-  <title>Connect — BoloDB</title>
+  <title>{isConnected ? 'Switch Database' : 'Connect'} — BoloDB</title>
 </svelte:head>
 
 <div class="app-shell">
+  {#if isConnected}
+    <div class="connected-banner">
+      <div class="connected-banner-inner">
+        <div class="connected-info">
+          <span class="connected-dot"></span>
+          <span class="connected-label">
+            Connected to <strong>{appState.dbInfo!.dialect || 'database'}</strong>
+            {#if appState.dbInfo!.tables} · {appState.dbInfo!.tables} table{appState.dbInfo!.tables === 1 ? '' : 's'}{/if}
+          </span>
+        </div>
+        <div class="connected-actions">
+          <button class="btn btn-ghost btn-sm" onclick={() => goto('/chat')}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+            Back to chat
+          </button>
+          {#if !showSwitchConfirm}
+            <button class="btn btn-ghost btn-sm" onclick={() => showSwitchConfirm = true}>
+              Switch database
+            </button>
+          {:else}
+            <div class="switch-confirm">
+              <span class="switch-confirm-text">Switch? This will disconnect the current database.</span>
+              <button class="btn btn-sm" style="background:var(--c-low);color:#fff;" onclick={handleDisconnect}>
+                Confirm switch
+              </button>
+              <button class="btn btn-ghost btn-sm" onclick={() => showSwitchConfirm = false}>
+                Cancel
+              </button>
+            </div>
+          {/if}
+        </div>
+      </div>
+    </div>
+  {/if}
+
   <ConnectScreen
     onConnect={(isSample, res) => appState.setConnect(isSample, res)}
   />
 </div>
+
+<style>
+  .connected-banner {
+    background: var(--brand-tint);
+    border-bottom: 1px solid var(--brand-tint-2);
+    padding: 12px 24px;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+  }
+  .connected-banner-inner {
+    max-width: 980px;
+    margin: 0 auto;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    flex-wrap: wrap;
+  }
+  .connected-info {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .connected-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--brand);
+    box-shadow: 0 0 6px rgba(27, 158, 107, 0.6);
+    flex-shrink: 0;
+  }
+  .connected-label {
+    font-size: 13.5px;
+    font-weight: 600;
+    color: var(--brand-ink);
+  }
+  .connected-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .switch-confirm {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    animation: fadeIn 0.15s var(--ease);
+  }
+  .switch-confirm-text {
+    font-size: 12.5px;
+    color: var(--muted);
+    font-weight: 600;
+  }
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateX(4px); }
+    to { opacity: 1; transform: translateX(0); }
+  }
+</style>

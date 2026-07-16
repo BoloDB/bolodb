@@ -1,39 +1,21 @@
 <script lang="ts">
-  import { browser } from "$app/environment";
-  import { motionPrefs } from "$lib/motion/motionPrefs";
   import { spotlight } from "$lib/actions/spotlight";
   import { reveal } from "$lib/actions/reveal";
 
   let flipped = $state(0);
-  let sectionEl: HTMLElement;
-  let titleEl: HTMLElement;
-
-  $effect(() => {
-    if (!browser || !sectionEl) return;
-    if (motionPrefs.reduced) return;
-    let st: any;
-    (async () => {
-      const { loadGsap } = await import("$lib/motion/gsap");
-      const { gsap, ScrollTrigger } = await loadGsap();
-      st = ScrollTrigger.create({
-        trigger: sectionEl,
-        start: "top 80%",
-        onEnter: () => {
-          gsap.fromTo(titleEl, { y: 24, opacity: 0 }, { y: 0, opacity: 1, duration: 0.6, ease: "power3.out" });
-        },
-        once: true,
-      });
-    })();
-    return () => { st?.kill(); };
-  });
 
   const sampleSQL =
-    "SELECT name, email, SUM(revenue) as total_revenue\nFROM customers\nJOIN orders ON customers.id = orders.customer_id\nWHERE orders.created_at >= date('now', 'start of month')\nGROUP BY customers.id\nORDER BY total_revenue DESC\nLIMIT 3;";
+    "SELECT c.name, SUM(o.amount) AS total\n" +
+    "FROM customers c\n" +
+    "JOIN orders o ON o.customer_id = c.id\n" +
+    "WHERE o.created_at >= date('now','start of month')\n" +
+    "GROUP BY c.id\n" +
+    "ORDER BY total DESC\n" +
+    "LIMIT 3;";
 </script>
 
-<section id="trust" bind:this={sectionEl} class="trust-section">
-  <h2 class="section-label" bind:this={titleEl}>Trust Engine</h2>
-  <h3 class="section-title">Total transparency into every answer</h3>
+<section id="trust" class="trust-section">
+  <h2 class="section-title">Total transparency into every answer</h2>
 
   <div class="trust-grid">
     <div class="trust-card" class:is-flipped={flipped === 1} use:spotlight use:reveal>
@@ -139,8 +121,12 @@
 
   .trust-grid {
     display: grid;
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: 1fr 1fr;
     gap: 24px;
+  }
+
+  .trust-grid :global(.trust-card:first-child) {
+    grid-column: 1 / -1;
   }
 
   @media (max-width: 768px) {
@@ -148,6 +134,9 @@
       grid-template-columns: 1fr;
       max-width: 420px;
       margin: 0 auto;
+    }
+    .trust-grid :global(.trust-card:first-child) {
+      grid-column: 1;
     }
   }
 
@@ -158,7 +147,7 @@
     flex-direction: column;
     align-items: center;
     gap: 12px;
-    padding: 36px 24px;
+    padding: 28px 24px;
     background: var(--surface);
     border: 1px solid var(--border);
     border-radius: var(--radius-lg);

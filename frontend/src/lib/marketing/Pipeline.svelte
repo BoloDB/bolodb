@@ -22,81 +22,25 @@
   ];
 
   let pipelineEl: HTMLElement;
-  let spineEl: SVGPathElement;
 
   $effect(() => {
-    if (!browser) return;
-    if (!pipelineEl) return;
-    if (motionPrefs.reduced) return;
+    if (!browser || !pipelineEl || motionPrefs.reduced) return;
 
-    let sts: any[] = [];
-    let mm: any;
-
-    (async () => {
-      const { loadGsap } = await import("$lib/motion/gsap");
-      const { gsap, ScrollTrigger } = await loadGsap();
-
-      mm = gsap.matchMedia();
-
-      mm.add("(min-width: 768px)", () => {
-        const cards = pipelineEl.querySelectorAll<HTMLElement>(".pipeline-step");
-        const spine = spineEl;
-        if (!cards.length || !spine) return;
-
-        const spineLen = spine.getTotalLength();
-        gsap.set(spine, { strokeDasharray: spineLen, strokeDashoffset: spineLen });
-
-        const st = ScrollTrigger.create({
-          trigger: pipelineEl,
-          start: "top center",
-          end: "bottom center",
-          pin: false,
-          scrub: 1.2,
-          onUpdate: (self: any) => {
-            const p = self.progress;
-            const drawLen = spineLen * p;
-            gsap.set(spine, { strokeDashoffset: spineLen - drawLen });
-            cards.forEach((card, i) => {
-              const stepProgress = Math.min(1, Math.max(0, (p - i * 0.28) * 3));
-              gsap.set(card, {
-                opacity: 0.3 + stepProgress * 0.7,
-                y: 20 - stepProgress * 20,
-                scale: 0.95 + stepProgress * 0.05,
-                boxShadow: stepProgress > 0.5 ? "var(--shadow-lg)" : "none",
-              });
-              const number = card.querySelector(".step-number") as HTMLElement;
-              if (number) {
-                gsap.set(number, {
-                  background: stepProgress > 0.5 ? "var(--brand)" : "var(--brand-tint)",
-                  color: stepProgress > 0.5 ? "#fff" : "var(--brand)",
-                });
-              }
-            });
-          },
-        });
-        sts.push(st);
-
-        return () => sts.forEach((t: any) => t.kill());
-      });
-
-      ScrollTrigger.refresh();
-    })();
-
-    return () => {
-      sts.forEach((t: any) => t.kill());
-      mm?.revert();
-    };
+    const cards = pipelineEl.querySelectorAll<HTMLElement>(".pipeline-step");
+    cards.forEach((card) => {
+      card.style.opacity = "1";
+      card.style.transform = "none";
+    });
   });
 </script>
 
 <section id="pipeline" bind:this={pipelineEl} class="pipeline-section">
-  <h2 class="section-label">How it works</h2>
-  <h3 class="section-title">From question to trusted answer in three steps</h3>
+  <h2 class="section-title">From question to trusted answer in three steps</h2>
 
   <div class="pipeline-desktop">
     <svg class="pipeline-spine" viewBox="0 0 300 12" preserveAspectRatio="none" aria-hidden="true">
       <path d="M 10 6 L 290 6" stroke="var(--border-2)" stroke-width="3" stroke-linecap="round" fill="none" />
-      <path bind:this={spineEl} d="M 10 6 L 290 6" stroke="var(--brand)" stroke-width="3" stroke-linecap="round" fill="none" />
+      <path d="M 10 6 L 290 6" stroke="var(--brand)" stroke-width="3" stroke-linecap="round" fill="none" />
       <circle cx="50" cy="6" r="4" fill="var(--surface-2)" stroke="var(--border-2)" stroke-width="1.5" />
       <circle cx="150" cy="6" r="4" fill="var(--surface-2)" stroke="var(--border-2)" stroke-width="1.5" />
       <circle cx="250" cy="6" r="4" fill="var(--surface-2)" stroke="var(--border-2)" stroke-width="1.5" />
@@ -104,7 +48,7 @@
 
     <div class="pipeline-grid">
       {#each steps as step, i}
-        <div class="pipeline-step" style="opacity:0;transform:translateY(20px) scale(0.95)">
+        <div class="pipeline-step">
           <div class="step-number">{i + 1}</div>
           <div class="step-icon">
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -164,16 +108,6 @@
     text-align: center;
   }
 
-  .section-label {
-    font-size: 12px;
-    font-weight: 600;
-    color: var(--faint);
-    font-family: var(--font-mono);
-    letter-spacing: 0.05em;
-    text-transform: uppercase;
-    margin: 0 0 8px;
-  }
-
   .section-title {
     font-size: clamp(1.5rem, 3.5vw, 2.25rem);
     font-weight: 700;
@@ -214,7 +148,7 @@
     flex-direction: column;
     align-items: center;
     gap: 12px;
-    padding: 32px 20px;
+    padding: 24px 20px;
     background: var(--surface);
     border: 1px solid var(--border);
     border-radius: var(--radius-lg);

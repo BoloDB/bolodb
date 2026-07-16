@@ -102,45 +102,45 @@
 </script>
 
 <section bind:this={heroEl} class="hero">
-  <div class="hero-content">
-    <span class="eyebrow">AI data analyst you can trust</span>
+  <div class="hero-grid">
+    <div class="hero-text">
+      <h1 class="hero-h1">
+        <span class="h1-mask" bind:this={h1Line1}><span class="h1-line">{$LL.landing.talkToYourDatabase()}</span></span>
+        <span class="h1-mask" bind:this={h1Line2}><span class="h1-line h1-accent">{$LL.landing.likeAHuman()}</span></span>
+      </h1>
 
-    <h1 class="hero-h1">
-      <span class="h1-mask" bind:this={h1Line1}><span class="h1-line">{$LL.landing.talkToYourDatabase()}</span></span>
-      <span class="h1-mask" bind:this={h1Line2}><span class="h1-line h1-accent">{$LL.landing.likeAHuman()}</span></span>
-    </h1>
+      <p class="hero-sub" bind:this={subEl}>{$LL.landing.noSqlRequired()}</p>
 
-    <p class="hero-sub" bind:this={subEl}>{$LL.landing.noSqlRequired()}</p>
-
-    <div class="hero-ctas" bind:this={ctaRow}>
-      <button
-        class="btn btn-primary btn-lg"
-        use:magnetic
-        data-testid="hero-start-free-button"
-        onclick={() => { trackCtaClick("hero", "Start for free", "/signup"); authModal.show("signup"); }}
-      >
-        {$LL.landing.startForFree()}
-      </button>
-      <button
-        class="btn btn-ghost btn-lg"
-        data-testid="hero-demo-button"
-        onclick={() => { trackCtaClick("hero", "Watch it work", "#demo"); scrollTo("demo"); }}
-      >
-        {$LL.landing.viewDemo()}
-      </button>
+      <div class="hero-ctas" bind:this={ctaRow}>
+        <button
+          class="btn btn-primary btn-lg"
+          use:magnetic
+          data-testid="hero-start-free-button"
+          onclick={() => { trackCtaClick("hero", "Start for free", "/signup"); authModal.show("signup"); }}
+        >
+          {$LL.landing.startForFree()}
+        </button>
+        <button
+          class="btn btn-ghost btn-lg"
+          data-testid="hero-demo-button"
+          onclick={() => { trackCtaClick("hero", "Watch it work", "#demo"); scrollTo("demo"); }}
+        >
+          {$LL.landing.viewDemo()}
+        </button>
+      </div>
     </div>
 
-    <div class="trust-strip" bind:this={trustEl}>
-      <div class="db-logos">
-        <span class="db-logo">PostgreSQL</span>
-        <span class="db-dot">•</span>
-        <span class="db-logo">MySQL</span>
-        <span class="db-dot">•</span>
-        <span class="db-logo">SQL Server</span>
-        <span class="db-dot">•</span>
-        <span class="db-logo">SQLite</span>
+    <div class="hero-side" bind:this={trustEl}>
+      <div class="trust-card">
+        <span class="trust-label">Works with</span>
+        <div class="db-logos">
+          <span class="db-logo">PostgreSQL</span>
+          <span class="db-logo">MySQL</span>
+          <span class="db-logo">SQL Server</span>
+          <span class="db-logo">SQLite</span>
+        </div>
+        <span class="trust-line">read-only · your data stays yours</span>
       </div>
-      <span class="trust-line">read-only • your data stays yours</span>
     </div>
   </div>
 </section>
@@ -149,32 +149,23 @@
   .hero {
     position: relative;
     z-index: 2;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    min-height: 90vh;
-    padding: 160px 24px 80px;
+    padding: 140px 24px 80px;
   }
 
-  .hero-content {
-    max-width: 800px;
-    text-align: center;
+  .hero-grid {
+    max-width: 1100px;
+    margin: 0 auto;
+    display: grid;
+    grid-template-columns: 1.2fr 0.8fr;
+    gap: 48px;
+    align-items: center;
+  }
+
+  .hero-text {
     display: flex;
     flex-direction: column;
-    align-items: center;
     gap: 24px;
-  }
-
-  .eyebrow {
-    display: inline-flex;
-    padding: 6px 14px;
-    border-radius: 99px;
-    font-size: 13px;
-    font-weight: 600;
-    color: var(--brand);
-    background: var(--brand-tint);
-    border: 1px solid var(--brand-tint-2);
-    letter-spacing: -0.01em;
+    align-items: flex-start;
   }
 
   .hero-h1 {
@@ -190,11 +181,13 @@
 
   .h1-line {
     display: block;
-    font-size: clamp(2.5rem, 6vw, 4.75rem);
+    font-size: clamp(2.5rem, 5.5vw, 4.5rem);
     font-weight: 800;
     line-height: 1.05;
     letter-spacing: -0.02em;
     color: var(--ink);
+    overflow-wrap: anywhere;
+    min-width: 0;
   }
 
   .h1-accent {
@@ -202,10 +195,10 @@
   }
 
   .hero-sub {
-    font-size: clamp(1rem, 2vw, 1.25rem);
+    font-size: clamp(1rem, 2vw, 1.2rem);
     line-height: 1.6;
     color: var(--muted);
-    max-width: 600px;
+    max-width: 520px;
     text-wrap: balance;
   }
 
@@ -213,47 +206,81 @@
     display: flex;
     gap: 12px;
     flex-wrap: wrap;
-    justify-content: center;
-    margin-top: 8px;
   }
 
-  .trust-strip {
+  .hero-side {
+    display: flex;
+    justify-content: flex-end;
+  }
+
+  .trust-card {
     display: flex;
     flex-direction: column;
-    align-items: center;
     gap: 12px;
-    margin-top: 32px;
-    opacity: 0.7;
+    padding: 24px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow);
+    max-width: 280px;
+  }
+
+  .trust-label {
+    font-size: 11.5px;
+    font-weight: 700;
+    color: var(--faint);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
   }
 
   .db-logos {
     display: flex;
-    align-items: center;
-    gap: 12px;
-    font-size: 13px;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .db-logo {
+    font-size: 13.5px;
     font-weight: 600;
-    color: var(--faint);
+    color: var(--ink-2);
     font-family: var(--font-mono);
   }
 
-  .db-dot {
-    opacity: 0.3;
-  }
-
   .trust-line {
-    font-size: 12.5px;
+    font-size: 12px;
     color: var(--faint);
     letter-spacing: 0.02em;
+    padding-top: 8px;
+    border-top: 1px solid var(--border);
   }
 
-  /* Tighter mobile spacing so DB list doesn't wrap */
+  @media (max-width: 768px) {
+    .hero-grid {
+      grid-template-columns: 1fr;
+      gap: 32px;
+    }
+    .hero-text {
+      align-items: center;
+      text-align: center;
+    }
+    .hero-ctas {
+      justify-content: center;
+    }
+    .hero-sub {
+      margin: 0 auto;
+    }
+    .hero-side {
+      justify-content: center;
+    }
+    .trust-card {
+      max-width: 100%;
+      width: 100%;
+    }
+  }
+
   @media (max-width: 420px) {
     .hero {
-      padding: 130px 16px 60px;
-    }
-    .db-logos {
-      gap: 8px;
-      font-size: 12px;
+      padding: 120px 16px 60px;
     }
   }
 </style>

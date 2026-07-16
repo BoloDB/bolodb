@@ -6,11 +6,11 @@
   import { apiCall } from '$lib/api';
   import Logo from './Logo.svelte';
 
-  const navLinks = [
+  const navLinks = $derived([
     { label: 'Chat', path: '/chat' },
     { label: 'Dashboard', path: '/dashboard' },
-    { label: 'Connect', path: '/connect' }
-  ];
+    { label: appState.dbInfo ? 'Switch DB' : 'Connect', path: '/connect' }
+  ]);
 
   let userEmail = $state<string>('');
   let menuOpen = $state(false);

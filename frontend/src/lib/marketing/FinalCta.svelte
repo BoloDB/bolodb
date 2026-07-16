@@ -1,36 +1,11 @@
 <script lang="ts">
-  import { browser } from "$app/environment";
   import { goto } from "$app/navigation";
-  import { motionPrefs } from "$lib/motion/motionPrefs";
-  import { magnetic } from "$lib/actions/magnetic";
   import { trackCtaClick } from "$lib/marketing/analytics";
   import { authModal } from "$lib/stores/authModal";
-
-  let panelEl: HTMLElement;
-
-  $effect(() => {
-    if (!browser || !panelEl) return;
-    if (motionPrefs.reduced) return;
-    let st: any;
-    (async () => {
-      const { loadGsap } = await import("$lib/motion/gsap");
-      const { gsap, ScrollTrigger } = await loadGsap();
-      gsap.set(panelEl, { y: 32, opacity: 0, scale: 0.97 });
-      st = ScrollTrigger.create({
-        trigger: panelEl,
-        start: "top 85%",
-        onEnter: () => {
-          gsap.to(panelEl, { y: 0, opacity: 1, scale: 1, duration: 0.7, ease: "power3.out" });
-        },
-        once: true,
-      });
-    })();
-    return () => { st?.kill(); };
-  });
 </script>
 
 <section class="cta-section">
-  <div bind:this={panelEl} class="cta-panel">
+  <div class="cta-panel">
     <h2 class="cta-title">Ask your first question in a minute.</h2>
     <p class="cta-desc">
       Get a free Gemini API key, connect your database, and start asking
@@ -39,7 +14,6 @@
     <div class="cta-buttons">
       <button
         class="btn btn-primary btn-lg"
-        use:magnetic
         data-testid="final-cta-start-button"
         onclick={() => { trackCtaClick("final", "Start for free", "/signup"); authModal.show("signup"); }}
       >
@@ -61,14 +35,13 @@
     position: relative;
     z-index: 2;
     padding: 100px 24px;
-    display: flex;
-    justify-content: center;
+    max-width: 900px;
+    margin: 0 auto;
   }
 
   .cta-panel {
     max-width: 640px;
     width: 100%;
-    text-align: center;
     padding: 64px 40px;
     border-radius: var(--radius-xl);
     background: var(--surface);

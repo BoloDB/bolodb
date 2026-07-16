@@ -8,7 +8,7 @@
 
   let { children } = $props();
 
-  const hiddenPaths = ['/', '/login', '/signup', '/onboard', '/forgot-password', '/reset-password'];
+  const hiddenPaths = ['/', '/login', '/signup', '/onboard', '/forgot-password', '/reset-password', '/privacy', '/terms'];
   const showNavbar = $derived(appState.isLoaded && !hiddenPaths.includes($page.url.pathname));
 </script>
 
