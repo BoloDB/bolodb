@@ -3,6 +3,15 @@
   import { reveal } from "$lib/actions/reveal";
 
   let flipped = $state(0);
+
+  const sampleSQL =
+    "SELECT c.name, SUM(o.amount) AS total\n" +
+    "FROM customers c\n" +
+    "JOIN orders o ON o.customer_id = c.id\n" +
+    "WHERE o.created_at >= date('now','start of month')\n" +
+    "GROUP BY c.id\n" +
+    "ORDER BY total DESC\n" +
+    "LIMIT 3;";
 </script>
 
 <section id="trust" class="trust-section">
@@ -138,7 +147,7 @@
     flex-direction: column;
     align-items: center;
     gap: 12px;
-    padding: 36px 24px;
+    padding: 28px 24px;
     background: var(--surface);
     border: 1px solid var(--border);
     border-radius: var(--radius-lg);

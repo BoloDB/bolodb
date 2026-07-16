@@ -148,7 +148,7 @@
     flex-direction: column;
     align-items: center;
     gap: 12px;
-    padding: 32px 20px;
+    padding: 24px 20px;
     background: var(--surface);
     border: 1px solid var(--border);
     border-radius: var(--radius-lg);
