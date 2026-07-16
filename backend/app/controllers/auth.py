@@ -95,12 +95,12 @@ async def signup(user: UserSignup):
     # Real-time email verification (blocks invalid/unknown/disposable addresses)
     """
     Create a user account after verifying the email address.
-    
+
     Parameters:
-    	user (UserSignup): The signup details, including email and password.
-    
+        user (UserSignup): The signup details, including email and password.
+
     Returns:
-    	bool: `True` when the account is created successfully.
+        bool: `True` when the account is created successfully.
     """
     from backend.app.services.email_verification import verify_email
 
@@ -224,14 +224,14 @@ async def supabase_google_login(access_token: str):
 async def change_password(user_id, old_password, new_password):
     """
     Change the password for a locally authenticated user.
-    
+
     Parameters:
-    	user_id: Identifier of the user whose password is being changed.
-    	old_password: The user's current password.
-    	new_password: The replacement password.
-    
+        user_id: Identifier of the user whose password is being changed.
+        old_password: The user's current password.
+        new_password: The replacement password.
+
     Returns:
-    	bool: `True` when the password is changed successfully.
+        bool: `True` when the password is changed successfully.
     """
     validate_password_strength(new_password)
     user_details = await get_user_by_id(user_id)
@@ -267,10 +267,10 @@ async def create_reset_token(user_id: str) -> str:
     Create a short-lived token for resetting a user's password.
 
     Parameters:
-    	user_id (str): Identifier of the user whose password will be reset.
+        user_id (str): Identifier of the user whose password will be reset.
 
     Returns:
-    	str: A password reset token that expires after 15 minutes.
+        str: A password reset token that expires after 15 minutes.
     """
     jti = secrets.token_urlsafe(32)
     jti_hash = hashlib.sha256(jti.encode()).hexdigest()
