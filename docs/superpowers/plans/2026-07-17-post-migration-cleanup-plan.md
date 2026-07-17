@@ -408,9 +408,6 @@ to:
 - [ ] **Step 2: Remove tracked generated files from index**
 
 Run:
-```bash
-cd /home/somesh/Documents/bolodb && git ls-files frontend/.svelte-kit-root-owned/ | xargs git rm --cached
-```
 
 - [ ] **Step 3: Commit**
 
