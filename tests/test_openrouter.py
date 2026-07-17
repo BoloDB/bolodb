@@ -45,7 +45,7 @@ def test_complete_sends_correct_messages(mock_openai):
     assert out == "Hello"
     mock_client.chat.completions.create.assert_called_once()
     kwargs = mock_client.chat.completions.create.call_args[1]
-    assert kwargs["model"] == "deepseek-v4-flash"
+    assert kwargs["model"] == "deepseek/deepseek-v4-flash"
     assert kwargs["messages"][0]["role"] == "system"
     assert kwargs["messages"][0]["content"] == "system prompt"
     assert kwargs["messages"][1]["role"] == "user"
@@ -76,6 +76,7 @@ def test_complete_passes_json_schema(mock_openai):
     inner = kwargs["response_format"]["json_schema"]["schema"]
     assert inner["type"] == "object"
     assert "properties" in inner
+    assert inner == SQL_SCHEMA["schema"]
 
 
 @patch("backend.app.llm.openai.AsyncOpenAI")
@@ -143,10 +144,9 @@ def test_provider_manager_reconfigure_clears():
 def test_create_provider_builds_openrouter():
     p = create_provider({"openrouter_key": "sk-test"}, "user-1")
     assert isinstance(p, OpenRouterProvider)
-    assert p.model == "deepseek-v4-flash"
+    assert p.model == "deepseek/deepseek-v4-flash"
 
 
-def test_create_provider_rejects_missing_key(monkeypatch):
-    monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
-    with pytest.raises(ValueError, match="OPENROUTER_API_KEY"):
+def test_create_provider_rejects_missing_key():
+    with pytest.raises(LLMError, match="empty api_key"):
         create_provider({"openrouter_key": ""}, "user-1")

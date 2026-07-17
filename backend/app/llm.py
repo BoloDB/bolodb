@@ -13,11 +13,12 @@ import openai
 
 log = logging.getLogger(__name__)
 
-MODEL = "deepseek-v4-flash"
+MODEL = "deepseek/deepseek-v4-flash"
 
 
 def _redact_error_text(text, max_len=200):
     s = text[:max_len]
+    s = re.sub(r"sk-or-v1-[A-Za-z0-9]+", "[REDACTED_KEY]", s)
     s = re.sub(r"sk-[A-Za-z0-9]{10,}", "[REDACTED_KEY]", s)
     s = re.sub(r"Bearer\s+[A-Za-z0-9._-]{20,}", "Bearer [REDACTED]", s)
     return s
@@ -250,6 +251,7 @@ class OpenRouterProvider(LLMProvider):
             base_url="https://openrouter.ai/api/v1",
             api_key=api_key,
             max_retries=2,
+            timeout=30.0,
         )
 
     async def complete(self, system, user, json_mode=False, schema=None, **kwargs):
@@ -324,9 +326,10 @@ class OpenRouterProvider(LLMProvider):
 def create_provider(cfg, user_id=None):
     key = cfg.get("openrouter_key", "")
     if not key:
-        raise ValueError(
-            "OPENROUTER_API_KEY is not set. "
-            "Set it in the environment or config to use AI features."
+        raise LLMError(
+            "OpenRouter API key is not configured. "
+            "Set OPENROUTER_API_KEY in the server environment.",
+            detail="empty api_key in create_provider",
         )
     return OpenRouterProvider(api_key=key)
 
