@@ -489,8 +489,8 @@ def build_sql_system_prompt(
 ):
     hint = _DIALECT_HINTS.get(dialect, "")
     return (
-        f"Answer in English\n"
-        "You are an expert {dialect} analyst. Convert the user's question into "
+        "Answer in English\n"
+        f"You are an expert {dialect} analyst. Convert the user's question into "
         "exactly one read-only SELECT query.\n\n"
         "Rules:\n"
         "1. SELECT (or WITH ... SELECT) only — never modify data.\n"
@@ -595,6 +595,7 @@ async def shortlist_tables(provider, question, schema, max_columns=4):
 
 async def explain_sql(provider, sql, dialect):
     system = (
+        "Answer in English\n"
         f"You explain {dialect} SQL to non-technical business users.\n"
         "Describe what the query returns in 2-4 short plain sentences: which "
         "data it looks at, how it filters/groups, and how results are ordered "
@@ -608,6 +609,7 @@ async def explain_sql(provider, sql, dialect):
 
 async def suggest_catalog(provider, schema_text):
     system = (
+        "Answer in English\n"
         "You are a data analyst documenting a database for non-technical users.\n"
         f"{schema_text}\n\n"
         "Produce a concise semantic catalog:\n"
@@ -639,6 +641,7 @@ async def suggest_catalog(provider, schema_text):
 
 async def generate_glossary(provider, schema_text):
     system = (
+        "Answer in English\n"
         f"You are a database analyst.\n{schema_text}\n\n"
         "Identify the 3 most important BUSINESS TERMS a non-technical user of this database would say "
         "(e.g. revenue, active customer, best seller) and map each to plain language + a short SQL hint.\n"
@@ -656,6 +659,7 @@ async def generate_glossary(provider, schema_text):
 
 async def generate_starters(provider, schema_text, dialect):
     system = (
+        "Answer in English\n"
         f"You are a database analyst. {dialect} database.\n{schema_text}\n\n"
         "Generate 3 common useful questions a non-technical user would ask, each with the SQL and "
         "a one-sentence plain-English description.\n"
