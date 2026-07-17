@@ -7,6 +7,7 @@ from backend.app.secrets import (
     get_supabase_url,
     get_supabase_anon_key,
 )
+import backend.app.pgdatabase as mdb
 
 log = logging.getLogger(__name__)
 
@@ -14,7 +15,8 @@ log = logging.getLogger(__name__)
 async def get_state(user_id, db, cfg, kb):
     config = cfgmod.public_config(cfg, user_id)
     config.pop("last_db_url", None)
-    s = {"connected": db.connected(user_id), "config": config}
+    user = await mdb.get_user_by_id(user_id)
+    s = {"connected": db.connected(user_id), "config": config, "tour_completed": user.get("tour_completed", False) if user else False}
     if db.connected(user_id):
         dbid = db.get_db_id(user_id)
         s["database"] = {
@@ -64,6 +66,11 @@ async def get_health(pg_status="unknown"):
         "env": env_checks,
         "supabase_jwks": jwks_status,
     }
+
+
+async def set_tour_completed(user_id):
+    await mdb.update_user(user_id, tour_completed=True)
+    return {"ok": True, "tour_completed": True}
 
 
 async def update_config(user_id, cfg, providers, req_data):

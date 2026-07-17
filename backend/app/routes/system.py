@@ -26,6 +26,14 @@ async def state(
     return await ctrl.get_state(user_id, db, cfg, kb)
 
 
+@router.post("/api/tour-complete")
+async def tour_complete(
+    user_token=Depends(get_current_user),
+):
+    user_id = user_token["user_id"]
+    return await ctrl.set_tour_completed(user_id)
+
+
 @router.get("/api/health")
 async def health():
     pg_status = "connected"
