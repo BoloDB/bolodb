@@ -6,16 +6,16 @@ import backend.app.routes.database as database_routes
 
 
 class DummyKB:
-    def trust_level(self, db_id):
+    async def trust_level(self, user_id, db_id):
         return f"trust:{db_id}"
 
-    def get_glossary(self, db_id):
+    async def get_glossary(self, user_id, db_id):
         return [{"db_id": db_id}]
 
-    def count_verified(self, db_id):
+    async def count_verified(self, user_id, db_id):
         return 1
 
-    def get_verified(self, db_id):
+    async def get_verified(self, user_id, db_id):
         return [{"question": f"starter:{db_id}"}]
 
 
