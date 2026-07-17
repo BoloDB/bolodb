@@ -22,7 +22,7 @@ services:
       - ./data:/app/data
     environment:
       - JWT_SECRET=${JWT_SECRET:?JWT_SECRET must be set}
-      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY:?OPENROUTER_API_KEY must be set}
       - DATABASE_URL=${DATABASE_URL:? Database URL must be set}
       - PYTHONUNBUFFERED=1
       - RUNNING_IN_DOCKER=true
