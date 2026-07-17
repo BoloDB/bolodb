@@ -12,7 +12,11 @@ log = logging.getLogger(__name__)
 
 
 async def get_state(user_id, db, cfg, kb):
-    s = {"connected": db.connected(user_id), "config": cfgmod.public_config(cfg)}
+    s = {
+        "connected": db.connected(user_id),
+        "config": cfgmod.public_config(cfg),
+        "openrouter_ready": bool(os.environ.get("OPENROUTER_API_KEY")),
+    }
     if db.connected(user_id):
         s["database"] = {
             "url": db.get_info(user_id)["url"],

@@ -304,12 +304,11 @@
       (err: Error) => {
         const errMsg = err.message || "Request failed";
         const isApiKeyError =
-          errMsg.toLowerCase().includes("api key") ||
-          errMsg.toLowerCase().includes("no gemini");
+          errMsg.toLowerCase().includes("api key");
         onUpdateTurn(id, {
           thinking: false,
           restatement: isApiKeyError
-            ? "API key not configured — open Settings to add one."
+            ? "AI not ready — set OPENROUTER_API_KEY in the server environment."
             : "Something went wrong — please try again.",
           sql: "",
           columns: [],

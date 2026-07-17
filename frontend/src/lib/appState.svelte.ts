@@ -12,6 +12,7 @@ class AppState {
   starters = $state<string[]>([]);
   isLoaded = $state(false);
   theme = $state("dark");
+  openrouterReady = $state(false);
   activeConversationId = $state<string | null>(null);
 
   constructor() {
@@ -39,6 +40,7 @@ class AppState {
   async init(redirect: boolean = true) {
     try {
       const s = await apiCall("/api/state");
+      this.openrouterReady = s.openrouter_ready ?? false;
       if (s.connected) {
         this.verifiedCount = s.trust?.verified || 0;
         this.dbInfo = s.database || null;

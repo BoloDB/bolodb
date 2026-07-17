@@ -2,6 +2,7 @@
   import { apiCall } from "$lib/api";
   import { humanError } from "$lib/data";
   import type { DbInfo } from "$lib/types";
+  import { appState } from "$lib/appState.svelte";
   import posthog from "posthog-js";
   import Logo from "$lib/components/ui/Logo.svelte";
   import Button from "$lib/components/ui/Button.svelte";
@@ -343,8 +344,12 @@
           stroke-width="1.8"
         /></svg
       >
-      AI ready. Only your
-      <b>database structure and your question</b> are sent — never your actual data.
+      {#if appState.openrouterReady}
+        AI ready. Only your
+        <b>database structure and your question</b> are sent — never your actual data.
+      {:else}
+        AI not yet ready — set <b>OPENROUTER_API_KEY</b> in the server environment.
+      {/if}
     </div>
 
     <!-- step 1 — connect -->
