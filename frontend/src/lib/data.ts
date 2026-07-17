@@ -1,6 +1,5 @@
 /** BoloDB — Static data & helpers (formerly window.BOLO) */
 import type {
-  Provider,
   TrustLevel,
   WrongReason,
   SchemaTable,
@@ -114,23 +113,6 @@ export const starters: StarterItem[] = [
     ],
   },
 ];
-
-/** BoloDB runs all AI operations on Google Gemini (see docs/03-the-ai-layer-gemini.md). */
-export const providers: Provider[] = [
-  {
-    id: "gemini",
-    name: "Google Gemini",
-    sub: "Gemini API",
-    privacy: "Schema + question sent to Google — never your row data",
-    cost: "Free tier available, then pay per use",
-    accuracy: "Highest",
-    badge: "Default",
-    model: "gemini-flash-latest",
-    tier: "large",
-  },
-];
-
-export const GEMINI_KEY_URL = "https://aistudio.google.com/app/api-keys";
 
 export const wrongReasons: WrongReason[] = [
   { id: "numbers", label: "Wrong numbers" },

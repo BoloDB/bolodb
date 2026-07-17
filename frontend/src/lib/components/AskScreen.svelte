@@ -24,9 +24,6 @@
   import posthog from "posthog-js";
 
   let {
-    engine,
-    modelName,
-    apiKeySet,
     verifiedCount,
     onVerify,
     onUpdateStarters,
@@ -37,9 +34,6 @@
     onDisconnect,
     onActiveConversationChange = (_id: string | null) => {},
   }: {
-    engine: string;
-    modelName: string;
-    apiKeySet: boolean;
     verifiedCount: number;
     onVerify: (count?: number) => void;
     onUpdateStarters: (s: string[]) => void;
@@ -485,9 +479,6 @@
 
 <div class="page" style="display:flex;height:100%">
   <Sidebar
-    {engine}
-    {modelName}
-    {apiKeySet}
     {verifiedCount}
     onSettings={() => (settingsOpen = true)}
     schema={realSchema}
@@ -574,7 +565,6 @@
               liveArtifacts={t.thinking ? currentArtifacts : undefined}
               onRegenerate={regenerate}
               onEditPrompt={editAndRequery}
-              modelName={t.thinking ? modelName : modelName}
             />
           {/each}
         {/if}

@@ -1,5 +1,4 @@
 <script lang="ts">
-  import { GEMINI_KEY_URL } from "$lib/data";
   import { apiCall } from "$lib/api";
   import { humanError } from "$lib/data";
   import type { DbInfo } from "$lib/types";
@@ -394,7 +393,7 @@
             >
               Get a free API key from
               <a
-                href={GEMINI_KEY_URL}
+                href="https://aistudio.google.com/app/api-keys"
                 target="_blank"
                 rel="noopener"
                 style="color:var(--brand-ink);font-weight:700;text-decoration:none"

@@ -1,15 +1,14 @@
 <script lang="ts">
-  import { schema as defaultSchema, trustFor, providers, formatTime } from '$lib/data';
+  import { schema as defaultSchema, trustFor, formatTime } from '$lib/data';
   import type { SchemaTable, DbInfo, Conversation } from '$lib/types';
   import Logo from '$lib/components/ui/Logo.svelte';
   import TrustMeter from '$lib/components/ui/TrustMeter.svelte';
   import { getConversations, deleteConversation, clearConversations, renameConversation } from '$lib/api';
 
-  let { engine, modelName, apiKeySet, verifiedCount, onSettings, schema, dbInfo, onConversationSelect, activeConversationId, conversationTrigger = 0 }:
-    { engine: string; modelName: string; apiKeySet: boolean; verifiedCount: number; onSettings: () => void; schema: SchemaTable[] | null; dbInfo: DbInfo | null; onConversationSelect?: (id: string) => void; activeConversationId?: string | null; conversationTrigger?: number } = $props();
+  let { verifiedCount, onSettings, schema, dbInfo, onConversationSelect, activeConversationId, conversationTrigger = 0 }:
+    { verifiedCount: number; onSettings: () => void; schema: SchemaTable[] | null; dbInfo: DbInfo | null; onConversationSelect?: (id: string) => void; activeConversationId?: string | null; conversationTrigger?: number } = $props();
 
   const trust = $derived(trustFor(verifiedCount));
-  const prov = $derived(providers.find(p => p.id === engine) ?? providers[0]);
   let openTable: string | null = $state(null);
   let conversations: Conversation[] = $state([]);
   let openConversations: boolean = $state(true);
@@ -190,15 +189,10 @@
       </span>
       <div style="flex:1;min-width:0">
         <div style="font-weight:700;font-size:13px;display:flex;align-items:center;gap:6px">
-          {prov.name}
-          <span style="width:7px;height:7px;border-radius:99px;flex-shrink:0;background:{apiKeySet ? 'var(--green, #22c55e)' : 'var(--red, #ef4444)'}" title={apiKeySet ? 'API key configured' : 'No API key'}></span>
+          OpenRouter
         </div>
         <div class="mono" style="font-size:11px;color:var(--faint);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">
-          {#if apiKeySet}
-            {modelName || prov.model}
-          {:else}
-            No API key — click to set
-          {/if}
+          gpt-4o
         </div>
       </div>
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" style="color:var(--faint);flex-shrink:0"><circle cx="12" cy="12" r="3.2" stroke="currentColor" stroke-width="1.9"/><path d="M12 2.5v2.3M12 19.2v2.3M21.5 12h-2.3M4.8 12H2.5M18.7 5.3l-1.6 1.6M6.9 17.1l-1.6 1.6M18.7 18.7l-1.6-1.6M6.9 6.9L5.3 5.3" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/></svg>

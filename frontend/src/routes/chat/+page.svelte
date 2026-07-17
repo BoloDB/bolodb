@@ -28,9 +28,6 @@
 <div class="app-shell">
   {#if appState.isLoaded && appState.dbInfo}
     <AskScreen
-      engine={appState.engine}
-      modelName={appState.modelName}
-      apiKeySet={appState.apiKeySet}
       verifiedCount={appState.verifiedCount}
       onVerify={(apiCount) => appState.verify(apiCount)}
       onUpdateStarters={(s) => appState.starters = s}

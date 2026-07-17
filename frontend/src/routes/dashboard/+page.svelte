@@ -89,14 +89,12 @@
             </div>
             <div style="display:flex;justify-content:space-between;align-items:center;">
               <span style="font-size:12px;color:var(--muted);">Engine</span>
-              <span style="font-size:14px;font-weight:700;color:var(--ink);text-transform:capitalize;">{appState.engine}</span>
+              <span style="font-size:14px;font-weight:700;color:var(--ink);">OpenRouter</span>
             </div>
-            {#if appState.modelName}
-              <div style="display:flex;justify-content:space-between;align-items:center;">
-                <span style="font-size:12px;color:var(--muted);">Model</span>
-                <span style="font-size:14px;font-weight:700;color:var(--ink);font-family:var(--font-mono);font-size:12px;">{appState.modelName}</span>
-              </div>
-            {/if}
+            <div style="display:flex;justify-content:space-between;align-items:center;">
+              <span style="font-size:12px;color:var(--muted);">Model</span>
+              <span style="font-size:14px;font-weight:700;color:var(--ink);font-family:var(--font-mono);font-size:12px;">gpt-4o</span>
+            </div>
           </div>
         </div>
 
