@@ -21,4 +21,4 @@ Thumbs.db
 # Vite
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
-frontend/.svelte-kit-root-owned/
+/.svelte-kit-root-owned/
