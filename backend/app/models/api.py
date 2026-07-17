@@ -2,12 +2,7 @@ from pydantic import BaseModel
 
 
 class ConfigUpdate(BaseModel):
-    # `provider` is accepted for backwards compatibility but ignored — Gemini
-    # is currently the only AI provider (see backend/app/llm.py).
-    provider: str | None = None
-    model: str | None = None
-    api_key: str | None = None
-    clear_api_key: bool = False
+    last_db_url: str | None = None
 
 
 class ConnectReq(BaseModel):

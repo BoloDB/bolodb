@@ -6,7 +6,7 @@ and returns SQL + results + a confidence signal. The steps, in order:
 1. Look up user knowledge: glossary terms + previously verified similar answers.
 2. Schema linking: pick only the relevant tables (backend/app/schema_link.py).
 3. Generate→validate→execute→repair loop (backend/app/repair.py) with the
-   Gemini provider (backend/app/llm.py) as the generator.
+   the LLM provider (backend/app/llm.py) as the generator.
 4. Score confidence from real signals and log the query.
 """
 
@@ -80,7 +80,7 @@ async def run_query(user_id, db, kb, cfg, providers, session_log, req_data):
     retrieved = kb.retrieve_similar(db_id, q, k=3)
 
     # Step 2 — schema linking: budget for the configured model, then pick tables.
-    budget = model_budget(cfg.get("model", ""))
+    budget = model_budget()
     full_schema = db.get_schema(user_id)
     dialect = db.get_dialect(user_id)
     context_tables = (
@@ -339,7 +339,7 @@ async def run_query_stream(user_id, db, kb, cfg, providers, session_log, req_dat
     glossary = kb.get_glossary(db.get_db_id(user_id))
     catalog = kb.get_catalog(db.get_db_id(user_id))
     retrieved = kb.retrieve_similar(db.get_db_id(user_id), q, k=3)
-    budget = model_budget(cfg.get("model", ""))
+    budget = model_budget()
     full_schema = db.get_schema(user_id)
     context_tables = (
         extract_table_names_from_prev_query(context[-1].sql, db.get_dialect(user_id))

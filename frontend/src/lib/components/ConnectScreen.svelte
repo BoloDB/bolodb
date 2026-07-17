@@ -1,8 +1,8 @@
 <script lang="ts">
-  import { GEMINI_KEY_URL } from "$lib/data";
   import { apiCall } from "$lib/api";
   import { humanError } from "$lib/data";
   import type { DbInfo } from "$lib/types";
+  import { appState } from "$lib/appState.svelte";
   import posthog from "posthog-js";
   import Logo from "$lib/components/ui/Logo.svelte";
   import Button from "$lib/components/ui/Button.svelte";
@@ -45,12 +45,7 @@
   let recentConnections: any[] = $state([]);
   let reconnecting: string | null = $state(null);
 
-  // Gemini API key state (step 1)
-  let geminiKey = $state("");
-  let keyIsSet = $state(false);
-  let keySaving = $state(false);
-  let keyError = $state("");
-  let editingKey = $state(false);
+
 
   const isFileBased = $derived(dbType === "sqlite" || dbType === "duckdb");
 
@@ -61,33 +56,10 @@
     } catch (e) {
       console.error("Failed to load recent connections:", e);
     }
-    try {
-      const s = await apiCall("/api/state");
-      keyIsSet = !!s.config?.api_keys_set?.gemini;
-    } catch (e) {
-      console.error("Failed to load API key status:", e);
-    }
+
   });
 
-  async function saveGeminiKey() {
-    if (!geminiKey.trim()) return;
-    keySaving = true;
-    keyError = "";
-    try {
-      await apiCall("/api/config", {
-        provider: "gemini",
-        api_key: geminiKey.trim(),
-      });
-      keyIsSet = true;
-      editingKey = false;
-      geminiKey = "";
-      posthog.capture("api_key_configured", { provider: "gemini" });
-    } catch (e: any) {
-      keyError = e.message || "Could not save the API key.";
-      posthog.captureException(e);
-    }
-    keySaving = false;
-  }
+
 
   function buildUrl(): string {
     if (dbType === "sqlite") return `sqlite:///${filePath.trim()}`;
@@ -348,146 +320,41 @@
       </div>
     {/if}
 
-    <!-- step 1 — Gemini API key -->
+    <!-- AI info -->
+    <div
+      style="display:flex;align-items:center;gap:9px;padding:11px 15px;background:var(--brand-tint);border:1px solid var(--brand-tint-2);border-radius:var(--radius-sm);color:var(--brand-ink);font-size:13.5px;font-weight:500;margin-bottom:20px"
+    >
+      <svg
+        width="18"
+        height="18"
+        viewBox="0 0 24 24"
+        fill="none"
+        style="flex-shrink:0"
+        ><rect
+          x="5"
+          y="10.5"
+          width="14"
+          height="9.5"
+          rx="2.4"
+          stroke="currentColor"
+          stroke-width="1.8"
+        /><path
+          d="M8 10.5V8a4 4 0 018 0v2.5"
+          stroke="currentColor"
+          stroke-width="1.8"
+        /></svg
+      >
+      {#if appState.openrouterReady}
+        AI ready. Only your
+        <b>database structure and your question</b> are sent — never your actual data.
+      {:else}
+        AI not yet ready — set <b>OPENROUTER_API_KEY</b> in the server environment.
+      {/if}
+    </div>
+
+    <!-- step 1 — connect -->
     <Section
       num="1"
-      title="Set up the AI"
-      hint="BoloDB uses Google Gemini to turn your questions into database queries. You just need a free API key."
-    >
-      {#snippet children()}
-        {#if keyIsSet && !editingKey}
-          <div
-            style="display:flex;align-items:center;gap:10px;padding:14px 16px;background:var(--brand-tint);border:1px solid var(--brand-tint-2);border-radius:var(--radius-sm)"
-          >
-            <svg
-              width="16"
-              height="16"
-              viewBox="0 0 24 24"
-              fill="none"
-              style="flex-shrink:0;color:var(--brand)"
-              ><path
-                d="M5 12.5l4.2 4.2L19 7"
-                stroke="currentColor"
-                stroke-width="2.3"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-              /></svg
-            >
-            <span
-              style="flex:1;font-size:13.5px;font-weight:650;color:var(--brand-ink)"
-              >Gemini API key configured — the AI is ready.</span
-            >
-            <button
-              onclick={() => {
-                editingKey = true;
-                geminiKey = "";
-              }}
-              style="font-size:12.5px;font-weight:700;color:var(--brand-ink);background:none;border:none;cursor:pointer;padding:4px 8px;border-radius:var(--radius-sm)"
-            >
-              Change key
-            </button>
-          </div>
-        {:else}
-          <div class="card" style="padding:18px 20px">
-            <div
-              style="font-size:13.5px;color:var(--ink-2);font-weight:550;line-height:1.6;margin-bottom:12px"
-            >
-              Get a free API key from
-              <a
-                href={GEMINI_KEY_URL}
-                target="_blank"
-                rel="noopener"
-                style="color:var(--brand-ink);font-weight:700;text-decoration:none"
-                >Google AI Studio →</a
-              >
-              (sign in with any Google account, click "Create API key", copy it) and
-              paste it below.
-            </div>
-            <div style="display:flex;gap:10px">
-              <input
-                class="field mono"
-                type="password"
-                bind:value={geminiKey}
-                placeholder="AIza•••"
-                style="font-size:13.5px;flex:1"
-                data-testid="gemini-api-key-input"
-              />
-              <Button
-                kind="primary"
-                disabled={!geminiKey.trim() || keySaving}
-                onclick={saveGeminiKey}
-                data-testid="save-gemini-key-button"
-              >
-                {#snippet icon()}{#if keySaving}<Spinner />{:else}<svg
-                      width="16"
-                      height="16"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      ><path
-                        d="M5 12.5l4.2 4.2L19 7"
-                        stroke="currentColor"
-                        stroke-width="2.3"
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                      /></svg
-                    >{/if}{/snippet}
-                {keySaving ? "Saving…" : "Save key"}
-              </Button>
-            </div>
-            {#if editingKey}
-              <button
-                onclick={() => {
-                  editingKey = false;
-                  geminiKey = "";
-                }}
-                style="font-size:12.5px;color:var(--faint);background:none;border:none;cursor:pointer;font-weight:600;padding:6px 0 0"
-              >
-                ← Cancel, keep existing key
-              </button>
-            {/if}
-            {#if keyError}
-              <div
-                style="margin-top:10px;padding:10px 13px;background:var(--c-low-tint);border:1px solid #EBC6BD;border-radius:var(--radius-sm);color:var(--c-low-ink);font-size:13px;font-weight:550"
-              >
-                {keyError}
-              </div>
-            {/if}
-          </div>
-        {/if}
-
-        <div
-          style="display:flex;align-items:center;gap:9px;margin-top:10px;padding:11px 15px;background:var(--brand-tint);border:1px solid var(--brand-tint-2);border-radius:var(--radius-sm);color:var(--brand-ink);font-size:13.5px;font-weight:500"
-        >
-          <svg
-            width="18"
-            height="18"
-            viewBox="0 0 24 24"
-            fill="none"
-            style="flex-shrink:0"
-            ><rect
-              x="5"
-              y="10.5"
-              width="14"
-              height="9.5"
-              rx="2.4"
-              stroke="currentColor"
-              stroke-width="1.8"
-            /><path
-              d="M8 10.5V8a4 4 0 018 0v2.5"
-              stroke="currentColor"
-              stroke-width="1.8"
-            /></svg
-          >
-          Even with a cloud engine, only your
-          <b>database structure and your question</b> are sent — never your actual
-          rows of data.
-        </div>
-      {/snippet}
-    </Section>
-
-    <!-- step 2 — connect -->
-    <Section
-      num="2"
       title="Connect your database"
       hint="Don't have one yet? Use the sample data to see how it works first."
     >

@@ -70,10 +70,12 @@ def test_empty_dict_defaults():
 
 
 def test_schema_shape():
-    assert SQL_SCHEMA["type"] == "object"
-    assert set(SQL_SCHEMA["required"]) == {"sql", "restatement", "assumptions"}
-    assert SQL_SCHEMA["additionalProperties"] is False
-    assert SQL_SCHEMA["properties"]["assumptions"]["type"] == "array"
+    assert SQL_SCHEMA["name"] == "sql_result"
+    schema = SQL_SCHEMA["schema"]
+    assert schema["type"] == "object"
+    assert set(schema["required"]) == {"sql", "restatement", "assumptions"}
+    assert schema["additionalProperties"] is False
+    assert schema["properties"]["assumptions"]["type"] == "array"
 
 
 # --- generate_sql wiring ----------------------------------------------------

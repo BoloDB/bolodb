@@ -1,74 +1,30 @@
-"""All AI operations for BoloDB, powered by the Google Gemini API.
+"""All AI operations for BoloDB, powered by OpenRouter (deepseek-v4-flash).
 
 This module is the ONLY place in the backend that talks to an AI model.
-Everything AI-related funnels through here:
-
-- :func:`generate_sql`      — turn a plain-English question into one SELECT query
-- :func:`explain_sql`       — turn a SQL query back into plain English (trust feature)
-- :func:`generate_glossary` — suggest business-term meanings during onboarding
-- :func:`generate_starters` — suggest example questions during onboarding
-
-All four functions take a *provider* (today always :class:`GeminiProvider`) as
-their first argument. The provider abstraction is deliberately kept thin so a
-second AI vendor can be added later by writing one new class and registering it
-in :func:`create_provider` — nothing else in the codebase would change.
-
-Cost design (see docs/09-cost-optimisation.md):
-- Prompts contain only the *linked* tables (see schema_link.py), rendered in a
-  compact one-line-per-table format — not the whole database.
-- Structured output (``responseSchema``) means the model can't ramble; we pay
-  for exactly the JSON fields we asked for.
-- Gemini "thinking" is disabled for cheap tasks (glossary, starters, explain)
-  and left dynamic for SQL generation, where accuracy matters most.
-- ``maxOutputTokens`` caps every call, and transient failures retry with
-  exponential backoff instead of hammering the API.
 """
 
-import asyncio
 import json
 import logging
 import re
 import time
 from abc import ABC, abstractmethod
 
-import httpx
-
-from backend.app.config import get_api_key
+import openai
 
 log = logging.getLogger(__name__)
 
+MODEL = "deepseek/deepseek-v4-flash"
+
 
 def _redact_error_text(text, max_len=200):
-    """Strip potentially sensitive data (API keys, tokens) from error text
-    before it is written to logs or included in LLMError.detail."""
     s = text[:max_len]
-    # Gemini API keys start with "AIza"
-    s = re.sub(r"AIza[A-Za-z0-9_-]{10,}", "[REDACTED_KEY]", s)
-    # Bearer tokens
+    s = re.sub(r"sk-or-v1-[A-Za-z0-9]+", "[REDACTED_KEY]", s)
+    s = re.sub(r"sk-[A-Za-z0-9]{10,}", "[REDACTED_KEY]", s)
     s = re.sub(r"Bearer\s+[A-Za-z0-9._-]{20,}", "Bearer [REDACTED]", s)
     return s
 
 
-# The model used when the config doesn't name one. Flash is the sweet spot:
-# near-Pro accuracy on text-to-SQL at a fraction of the cost, with a free tier.
-DEFAULT_GEMINI_MODEL = "gemini-flash-latest"
-
-GEMINI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta"
-
-# Transient HTTP statuses worth retrying (rate limit / server hiccups).
-# 500 is excluded — Gemini may return it for permanent errors (bad model,
-# malformed prompt), not just transient ones.
-_RETRYABLE_STATUS = {429, 502, 503, 504}
-_MAX_ATTEMPTS = 3  # 1 try + 2 retries, backoff 1s then 2s
-
-
 class LLMError(Exception):
-    """Raised when the AI call fails in a way the caller should surface.
-
-    ``user_message`` is safe to show to a non-technical user; ``detail`` keeps
-    the raw technical cause for logs and debugging.
-    """
-
     def __init__(self, user_message, detail=""):
         super().__init__(detail or user_message)
         self.user_message = user_message
@@ -76,7 +32,6 @@ class LLMError(Exception):
 
 
 def parse_json(text):
-    """Tolerantly extract a JSON object from model text (strips ``` fences)."""
     s = text.replace("```json", "").replace("```", "").strip()
     a, b = s.find("{"), s.rfind("}")
     if a != -1 and b != -1:
@@ -84,162 +39,175 @@ def parse_json(text):
     return json.loads(s)
 
 
-# JSON schema for the SQL-generation response. Passed to the provider so the
-# model is constrained to this exact shape, and used to document the contract.
 SQL_SCHEMA = {
-    "type": "object",
-    "properties": {
-        "sql": {
-            "type": "string",
-            "description": "One read-only SELECT query answering the question.",
+    "name": "sql_result",
+    "schema": {
+        "type": "object",
+        "properties": {
+            "sql": {
+                "type": "string",
+                "description": "One read-only SELECT query answering the question.",
+            },
+            "restatement": {
+                "type": "string",
+                "description": "One plain sentence describing what the query returns, no jargon.",
+            },
+            "assumptions": {
+                "type": "array",
+                "items": {"type": "string"},
+                "description": "Any assumptions made while interpreting the question.",
+            },
         },
-        "restatement": {
-            "type": "string",
-            "description": "One plain sentence describing what the query returns, no jargon.",
-        },
-        "assumptions": {
-            "type": "array",
-            "items": {"type": "string"},
-            "description": (
-                "Any assumptions made while interpreting the question — e.g. how a "
-                "vague term or date range was resolved. Empty list if none."
-            ),
-        },
+        "required": ["sql", "restatement", "assumptions"],
+        "additionalProperties": False,
     },
-    "required": ["sql", "restatement", "assumptions"],
-    "additionalProperties": False,
 }
 
 GLOSSARY_SCHEMA = {
-    "type": "object",
-    "properties": {
-        "glossary": {
-            "type": "array",
-            "items": {
-                "type": "object",
-                "properties": {
-                    "term": {"type": "string"},
-                    "maps_to": {"type": "string"},
-                    "sql_hint": {"type": "string"},
+    "name": "glossary",
+    "schema": {
+        "type": "object",
+        "properties": {
+            "glossary": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "term": {"type": "string"},
+                        "maps_to": {"type": "string"},
+                        "sql_hint": {"type": "string"},
+                    },
+                    "required": ["term", "maps_to", "sql_hint"],
+                    "additionalProperties": False,
                 },
-                "required": ["term", "maps_to", "sql_hint"],
-            },
-        }
+            }
+        },
+        "required": ["glossary"],
+        "additionalProperties": False,
     },
-    "required": ["glossary"],
 }
 
 STARTERS_SCHEMA = {
-    "type": "object",
-    "properties": {
-        "starters": {
-            "type": "array",
-            "items": {
-                "type": "object",
-                "properties": {
-                    "question": {"type": "string"},
-                    "sql": {"type": "string"},
-                    "restatement": {"type": "string"},
+    "name": "starters",
+    "schema": {
+        "type": "object",
+        "properties": {
+            "starters": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "question": {"type": "string"},
+                        "sql": {"type": "string"},
+                        "restatement": {"type": "string"},
+                    },
+                    "required": ["question", "sql", "restatement"],
+                    "additionalProperties": False,
                 },
-                "required": ["question", "sql", "restatement"],
-            },
-        }
+            }
+        },
+        "required": ["starters"],
+        "additionalProperties": False,
     },
-    "required": ["starters"],
 }
 
 EXPLAIN_SCHEMA = {
-    "type": "object",
-    "properties": {
-        "explanation": {
-            "type": "string",
-            "description": "2-4 plain sentences a non-technical person understands.",
-        }
+    "name": "explanation",
+    "schema": {
+        "type": "object",
+        "properties": {
+            "explanation": {
+                "type": "string",
+                "description": "2-4 plain sentences a non-technical person understands.",
+            }
+        },
+        "required": ["explanation"],
+        "additionalProperties": False,
     },
-    "required": ["explanation"],
 }
 
-# Semantic catalog suggestions (issue #90). Joins and value-map *coverage* are
-# derived deterministically from the schema (backend/app/semantic.py); this
-# schema is what we ask the model to enrich: descriptions, metrics, synonyms,
-# and friendly labels for the stored values.
 CATALOG_SCHEMA = {
-    "type": "object",
-    "properties": {
-        "column_descriptions": {
-            "type": "array",
-            "items": {
-                "type": "object",
-                "properties": {
-                    "table": {"type": "string"},
-                    "column": {"type": "string"},
-                    "description": {"type": "string"},
+    "name": "catalog",
+    "schema": {
+        "type": "object",
+        "properties": {
+            "column_descriptions": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "table": {"type": "string"},
+                        "column": {"type": "string"},
+                        "description": {"type": "string"},
+                    },
+                    "required": ["table", "column", "description"],
+                    "additionalProperties": False,
                 },
-                "required": ["table", "column", "description"],
+            },
+            "metrics": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "name": {"type": "string"},
+                        "description": {"type": "string"},
+                        "sql_expression": {"type": "string"},
+                    },
+                    "required": ["name", "sql_expression"],
+                    "additionalProperties": False,
+                },
+            },
+            "synonyms": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "term": {"type": "string"},
+                        "entity_type": {"type": "string"},
+                        "entity_name": {"type": "string"},
+                    },
+                    "required": ["term", "entity_type", "entity_name"],
+                    "additionalProperties": False,
+                },
+            },
+            "value_maps": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "table": {"type": "string"},
+                        "column": {"type": "string"},
+                        "db_value": {"type": "string"},
+                        "business_label": {"type": "string"},
+                    },
+                    "required": ["table", "column", "db_value", "business_label"],
+                    "additionalProperties": False,
+                },
             },
         },
-        "metrics": {
-            "type": "array",
-            "items": {
-                "type": "object",
-                "properties": {
-                    "name": {"type": "string"},
-                    "description": {"type": "string"},
-                    "sql_expression": {"type": "string"},
-                },
-                "required": ["name", "sql_expression"],
-            },
-        },
-        "synonyms": {
-            "type": "array",
-            "items": {
-                "type": "object",
-                "properties": {
-                    "term": {"type": "string"},
-                    "entity_type": {"type": "string"},
-                    "entity_name": {"type": "string"},
-                },
-                "required": ["term", "entity_type", "entity_name"],
-            },
-        },
-        "value_maps": {
-            "type": "array",
-            "items": {
-                "type": "object",
-                "properties": {
-                    "table": {"type": "string"},
-                    "column": {"type": "string"},
-                    "db_value": {"type": "string"},
-                    "business_label": {"type": "string"},
-                },
-                "required": ["table", "column", "db_value", "business_label"],
-            },
-        },
+        "required": ["column_descriptions", "metrics", "synonyms", "value_maps"],
+        "additionalProperties": False,
     },
-    "required": ["column_descriptions", "metrics", "synonyms", "value_maps"],
 }
 
 SHORTLIST_SCHEMA = {
-    "type": "object",
-    "properties": {
-        "tables": {
-            "type": "array",
-            "items": {"type": "string"},
-            "description": "Names of tables from the catalog that may be needed.",
-        }
+    "name": "shortlist",
+    "schema": {
+        "type": "object",
+        "properties": {
+            "tables": {
+                "type": "array",
+                "items": {"type": "string"},
+                "description": "Names of tables from the catalog that may be needed.",
+            }
+        },
+        "required": ["tables"],
+        "additionalProperties": False,
     },
-    "required": ["tables"],
 }
 
 
 def parse_sql_output(raw):
-    """Normalize a model SQL response into ``{sql, restatement, assumptions}``.
-
-    Accepts either a ``dict`` (already-parsed structured output) or raw text
-    (parsed tolerantly via :func:`parse_json`). Missing or wrongly-typed fields
-    get safe defaults — this never raises, so callers can treat an empty ``sql``
-    as "generation failed".
-    """
     if isinstance(raw, dict):
         obj = raw
     else:
@@ -249,10 +217,8 @@ def parse_sql_output(raw):
             obj = {}
     if not isinstance(obj, dict):
         obj = {}
-
     sql = obj.get("sql")
     restatement = obj.get("restatement")
-
     assumptions = obj.get("assumptions")
     if isinstance(assumptions, str):
         assumptions = [assumptions] if assumptions.strip() else []
@@ -260,60 +226,16 @@ def parse_sql_output(raw):
         assumptions = [str(a) for a in assumptions if str(a).strip()]
     else:
         assumptions = []
-
     sql = (sql if isinstance(sql, str) else ("" if sql is None else str(sql))).strip()
     restatement = (
         restatement
         if isinstance(restatement, str)
         else ("" if restatement is None else str(restatement))
     ).strip()
-
     return {"sql": sql, "restatement": restatement, "assumptions": assumptions}
 
 
-def to_gemini_schema(schema):
-    """Convert a standard JSON schema into Gemini's ``responseSchema`` subset.
-
-    Gemini's v1beta API accepts an OpenAPI-style schema that supports
-    type/properties/required/items/description/enum but rejects keys like
-    ``additionalProperties``. Strip anything it doesn't understand so the same
-    schema constants can be shared with other providers later.
-    """
-    if isinstance(schema, dict):
-        allowed = {
-            "type",
-            "format",
-            "description",
-            "enum",
-            "items",
-            "properties",
-            "required",
-            "nullable",
-        }
-        out = {}
-        for k, v in schema.items():
-            if k not in allowed:
-                continue
-            if k == "properties":
-                # keys here are property NAMES, values are sub-schemas
-                out[k] = {name: to_gemini_schema(sub) for name, sub in v.items()}
-            elif k == "items":
-                out[k] = to_gemini_schema(v)
-            else:
-                out[k] = v
-        return out
-    if isinstance(schema, list):
-        return [to_gemini_schema(v) for v in schema]
-    return schema
-
-
 class LLMProvider(ABC):
-    """Interface every AI vendor integration must implement.
-
-    To add a new vendor later: subclass this, implement both methods, and add a
-    branch to :func:`create_provider`. Nothing else needs to change.
-    """
-
     @abstractmethod
     async def complete(self, system, user, json_mode=False, schema=None): ...
 
@@ -321,218 +243,115 @@ class LLMProvider(ABC):
     async def health_check(self): ...
 
 
-class GeminiProvider(LLMProvider):
-    """Google Gemini via the REST ``generateContent`` endpoint.
-
-    Uses plain httpx (no SDK dependency). One call = one POST to
-    ``{GEMINI_BASE_URL}/models/{model}:generateContent`` with the API key in the
-    ``x-goog-api-key`` header.
-    """
-
-    def __init__(self, api_key, model=""):
+class OpenRouterProvider(LLMProvider):
+    def __init__(self, api_key, model=None):
         self.api_key = api_key
-        self.model = model or DEFAULT_GEMINI_MODEL
+        self.model = model or MODEL
+        self._client = openai.AsyncOpenAI(
+            base_url="https://openrouter.ai/api/v1",
+            api_key=api_key,
+            max_retries=2,
+            timeout=30.0,
+        )
 
-    def _build_body(self, system, user, json_mode, schema, thinking_budget):
-        generation_config = {
-            # Low temperature: SQL generation should be deterministic, not creative.
-            "temperature": 0.1,
-            "maxOutputTokens": 4096,
-        }
-        if schema is not None:
-            generation_config["responseMimeType"] = "application/json"
-            generation_config["responseSchema"] = to_gemini_schema(schema)
-        elif json_mode:
-            generation_config["responseMimeType"] = "application/json"
-        # thinkingConfig is supported on Gemini 2.5+, 3.x, and Gemma 4+.
-        # Sending it to older models (1.x, pre-2.5) is a hard 400, so we
-        # gate on known unsupported prefixes.
-        _NO_THINKING = ("1.0", "1.5", "gemini-1")
-        if thinking_budget is not None and not any(
-            p in self.model for p in _NO_THINKING
-        ):
-            generation_config["thinkingConfig"] = {"thinkingBudget": thinking_budget}
-        return {
-            "system_instruction": {"parts": [{"text": system}]},
-            "contents": [{"role": "user", "parts": [{"text": user}]}],
-            "generationConfig": generation_config,
-        }
-
-    async def complete(
-        self, system, user, json_mode=False, schema=None, thinking_budget=None
-    ):
-        """Send one prompt, return the model's text. Retries transient failures.
-
-        Raises :class:`LLMError` with a user-readable message on anything that
-        can't be retried away (bad key, quota exhausted, blocked content...).
-        """
+    async def complete(self, system, user, json_mode=False, schema=None, **kwargs):
         if not self.api_key:
             raise LLMError(
-                "No Gemini API key is configured. Add one in Settings "
-                "(get a free key at https://aistudio.google.com/app/api-keys).",
+                "OpenRouter API key is not configured. "
+                "Set OPENROUTER_API_KEY in the server environment.",
                 detail="empty api_key",
             )
-        body = self._build_body(system, user, json_mode, schema, thinking_budget)
-        url = f"{GEMINI_BASE_URL}/models/{self.model}:generateContent"
-        last_error = None
-        for attempt in range(_MAX_ATTEMPTS):
-            if attempt:
-                await asyncio.sleep(2 ** (attempt - 1))  # 1s, 2s
-            try:
-                async with httpx.AsyncClient(timeout=60) as client:
-                    r = await client.post(
-                        url,
-                        headers={
-                            "X-goog-api-key": self.api_key,
-                            "Content-Type": "application/json",
-                        },
-                        json=body,
-                    )
-            except httpx.HTTPError as e:
-                last_error = LLMError(
-                    "Could not reach the Gemini API — check your internet "
-                    "connection and try again.",
-                    detail=f"network error: {e}",
-                )
-                log.warning("Gemini network error (attempt %d): %s", attempt + 1, e)
-                continue
+        messages = []
+        if system:
+            messages.append({"role": "system", "content": system})
+        messages.append({"role": "user", "content": user})
 
-            if r.status_code in _RETRYABLE_STATUS:
-                last_error = LLMError(
-                    "The AI service is busy right now — please try again in a moment.",
-                    detail=f"HTTP {r.status_code}: {_redact_error_text(r.text)}",
-                )
-                log.warning(
-                    "Gemini transient HTTP %d (attempt %d)", r.status_code, attempt + 1
-                )
-                continue
+        completion_kwargs = {
+            "model": self.model,
+            "messages": messages,
+            "temperature": 0.1,
+            "max_tokens": 4096,
+        }
+        if json_mode and schema:
+            schema_copy = dict(schema)
+            name = schema_copy.pop("name", "response")
+            completion_kwargs["response_format"] = {
+                "type": "json_schema",
+                "json_schema": {
+                    "name": name,
+                    "strict": True,
+                    "schema": schema_copy["schema"],
+                },
+            }
+        elif json_mode:
+            completion_kwargs["response_format"] = {"type": "json_object"}
 
-            # Distinct messages per status. Note: Gemini returns 400 (not 401)
-            # for "API key not valid", so 400 mentions the key too.
-            if r.status_code == 400:
-                raise LLMError(
-                    "The Gemini API rejected the request as invalid — most "
-                    "often the API key is malformed or not valid. Check the "
-                    "key in Settings.",
-                    detail=f"HTTP 400: {_redact_error_text(r.text)}",
-                )
-            if r.status_code == 401:
-                raise LLMError(
-                    "The Gemini API key was not accepted — it may be invalid "
-                    "or expired. Check it in Settings.",
-                    detail=f"HTTP 401: {_redact_error_text(r.text)}",
-                )
-            if r.status_code == 403:
-                raise LLMError(
-                    "The Gemini API denied access — the API key may lack "
-                    "permission for this model, or the project/region may be "
-                    "restricted. Check the key in Google AI Studio.",
-                    detail=f"HTTP 403: {_redact_error_text(r.text)}",
-                )
-            if r.status_code == 404:
-                raise LLMError(
-                    f"The model '{self.model}' was not found — it may have been "
-                    "renamed or retired. Update the model in Settings.",
-                    detail=f"HTTP 404: {_redact_error_text(r.text)}",
-                )
-            if r.status_code >= 300:
-                raise LLMError(
-                    "The AI service returned an unexpected error.",
-                    detail=f"HTTP {r.status_code}: {_redact_error_text(r.text)}",
-                )
-            return self._extract_text(r.json())
-
-        raise last_error or LLMError("The AI service could not be reached.")
-
-    @staticmethod
-    def _extract_text(data):
-        """Pull the response text out of a generateContent payload."""
-        feedback = data.get("promptFeedback") or {}
-        if feedback.get("blockReason"):
+        try:
+            resp = await self._client.chat.completions.create(**completion_kwargs)
+        except openai.APIError as e:
             raise LLMError(
-                "The AI declined to answer this question. Try rephrasing it.",
-                detail=f"prompt blocked: {feedback.get('blockReason')}",
+                "The AI service returned an error. Please try again.",
+                detail=f"OpenRouter API error: {_redact_error_text(str(e))}",
             )
-        candidates = data.get("candidates") or []
-        if not candidates:
+        except Exception as e:
+            raise LLMError(
+                "Could not reach the AI service — check your internet connection.",
+                detail=f"OpenRouter error: {_redact_error_text(str(e))}",
+            )
+
+        choices = resp.choices if hasattr(resp, "choices") else []
+        if not choices:
             raise LLMError(
                 "The AI returned an empty answer — please try again.",
-                detail=f"no candidates in response: {_redact_error_text(json.dumps(data))}",
+                detail="no choices in response",
             )
-        parts = (candidates[0].get("content") or {}).get("parts") or []
-        text = "".join(p.get("text", "") for p in parts)
-        if not text.strip():
+        text = (choices[0].message.content or "").strip()
+        if not text:
             raise LLMError(
                 "The AI returned an empty answer — please try again.",
-                detail=f"finishReason: {candidates[0].get('finishReason')}",
+                detail="empty content",
             )
         return text
 
     async def health_check(self):
-        """Cheap liveness probe: list one model. Never raises."""
         if not self.api_key:
-            return {"ok": False, "error": "No Gemini API key configured", "models": []}
+            return {"ok": False, "error": "No OpenRouter API key configured"}
         try:
-            async with httpx.AsyncClient(timeout=10) as client:
-                r = await client.get(
-                    f"{GEMINI_BASE_URL}/models",
-                    params={"pageSize": 1},
-                    headers={"x-goog-api-key": self.api_key},
-                )
-                r.raise_for_status()
-            return {"ok": True, "models": [self.model]}
+            await self.complete("Respond with OK", "OK", json_mode=False)
+            return {"ok": True}
         except Exception as e:
-            return {"ok": False, "error": str(e), "models": []}
+            return {"ok": False, "error": str(e)}
 
 
-def create_provider(cfg, user_id):
-    """Build the configured AI provider for one user from a config dict.
-
-    Gemini is currently the only supported provider. To add another vendor
-    later: implement an :class:`LLMProvider` subclass above and add a branch
-    here keyed on ``cfg["provider"]``.
-    """
-    p = cfg.get("provider", "gemini")
-    if p == "gemini":
-        # The config carries the key encrypted at rest; it is decrypted only
-        # here, at the point of use, and scoped to this specific user.
-        return GeminiProvider(
-            api_key=get_api_key(cfg, user_id, "gemini"),
-            model=cfg.get("model", ""),
+def create_provider(cfg, user_id=None):
+    key = cfg.get("openrouter_key", "")
+    if not key:
+        raise LLMError(
+            "OpenRouter API key is not configured. "
+            "Set OPENROUTER_API_KEY in the server environment.",
+            detail="empty api_key in create_provider",
         )
-    raise ValueError(
-        f"Unknown provider: {p!r}. BoloDB currently supports only 'gemini'."
-    )
+    return OpenRouterProvider(api_key=key)
 
 
 class ProviderManager:
-    """Lazily builds and caches one provider per user, so no request can ever
-    be served with another user's API key."""
-
     def __init__(self, cfg):
         self.cfg = cfg
-        self._providers = {}
+        self._provider = None
 
-    def get(self, user_id):
-        if user_id not in self._providers:
-            self._providers[user_id] = create_provider(self.cfg, user_id)
-        return self._providers[user_id]
+    def get(self, user_id=None):
+        if self._provider is None:
+            self._provider = create_provider(self.cfg)
+        return self._provider
 
-    def invalidate(self, user_id):
-        """Drop the cached provider for one user (call after their config changes)."""
-        self._providers.pop(user_id, None)
+    def invalidate(self, user_id=None):
+        self._provider = None
 
     def reconfigure(self, cfg):
         self.cfg = cfg
-        self._providers.clear()
+        self._provider = None
 
 
-# --------------------------------------------------------------------------
-# Prompt building. Each block is a small pure function so tests can check the
-# exact text the model sees and docs can point at one place per concept.
-# --------------------------------------------------------------------------
-
-# Dialect-specific reminders that fix the most common cross-dialect mistakes.
 _DIALECT_HINTS = {
     "sqlite": "Dates: use date()/strftime(); string concat is ||; no ILIKE (use LIKE, it is case-insensitive for ASCII).",
     "postgresql": "Dates: use date_trunc()/interval arithmetic; ILIKE is available; quote mixed-case identifiers.",
@@ -543,8 +362,6 @@ _DIALECT_HINTS = {
 
 
 def _context_block(context):
-    """Render the last two conversation turns so follow-up questions
-    ("now only 2023") can be resolved against the previous query."""
     if not context:
         return ""
     items = ""
@@ -570,8 +387,6 @@ def _context_block(context):
 
 
 def _glossary_block(glossary):
-    """Render user-confirmed business-term meanings. These are ground truth —
-    the user explicitly told us what these words mean in THEIR database."""
     if not glossary:
         return ""
     lines = []
@@ -588,10 +403,6 @@ def _glossary_block(glossary):
 
 
 def _semantic_block(catalog):
-    """Render the curated semantic catalog (issue #90): metric definitions,
-    value meanings, synonyms, join paths and column notes. Like the glossary
-    this is user-curated ground truth for interpreting the question, and it is
-    stable per database so it sits next to the glossary (cache-friendly)."""
     if not catalog:
         return ""
     sections = []
@@ -660,9 +471,6 @@ def _semantic_block(catalog):
 
 
 def _examples_block(retrieved, max_examples):
-    """Render previously-verified Q→SQL pairs similar to this question.
-    Few-shot examples of the user's own verified answers are the single
-    strongest accuracy signal we have."""
     if not retrieved:
         return ""
     ex_lines = [
@@ -679,9 +487,9 @@ def _examples_block(retrieved, max_examples):
 def build_sql_system_prompt(
     schema_text, dialect, glossary, retrieved, max_examples, context, catalog=None
 ):
-    """Assemble the full system prompt for SQL generation."""
     hint = _DIALECT_HINTS.get(dialect, "")
     return (
+        "Answer in English\n"
         f"You are an expert {dialect} analyst. Convert the user's question into "
         "exactly one read-only SELECT query.\n\n"
         "Rules:\n"
@@ -722,13 +530,6 @@ async def generate_sql(
     feedback="",
     catalog=None,
 ):
-    """Question (+ optional repair feedback) → ``{sql, restatement, assumptions}``.
-
-    ``feedback`` is filled by the repair loop (backend/app/repair.py) when a
-    previous attempt failed validation or execution; it describes exactly what
-    was wrong so the model can correct itself. ``catalog`` is the curated
-    semantic catalog (issue #90) for the connected database.
-    """
     if context is None:
         context = []
     system = build_sql_system_prompt(
@@ -739,7 +540,6 @@ async def generate_sql(
         await provider.complete(system, user, json_mode=True, schema=SQL_SCHEMA)
     )
     if not result["sql"]:
-        # Retry once if the model returned nothing usable.
         result = parse_sql_output(
             await provider.complete(
                 system + "\nReturn ONLY valid JSON.",
@@ -752,18 +552,6 @@ async def generate_sql(
 
 
 async def shortlist_tables(provider, question, schema, max_columns=4):
-    """Stage one of two-stage schema linking for BIG databases.
-
-    Sends a compact catalog of every table name and its first few column
-    names (up to ``max_columns``), and asks which ones might matter for the
-    question. The result is used as a score boost in ``link_relevant_tables``
-    — never as a replacement for local scoring — so a flaky answer can only
-    help, not hurt. Thinking is off: this is a cheap recognition task.
-
-    Returns a set of validated table names (anything the model invents is
-    dropped). Raises LLMError like any other provider call — the caller treats
-    failure as "no boost" and falls back to local-only linking.
-    """
     start = time.monotonic()
     lines = []
     for t, info in schema.items():
@@ -783,7 +571,7 @@ async def shortlist_tables(provider, question, schema, max_columns=4):
         'Reply ONLY with JSON: {"tables":["name1","name2",...]}'
     )
     raw = await provider.complete(
-        system, question, json_mode=True, schema=SHORTLIST_SCHEMA, thinking_budget=0
+        system, question, json_mode=True, schema=SHORTLIST_SCHEMA
     )
     elapsed = time.monotonic() - start
     catalog_tokens = len(catalog) // 4
@@ -806,28 +594,22 @@ async def shortlist_tables(provider, question, schema, max_columns=4):
 
 
 async def explain_sql(provider, sql, dialect):
-    """SQL → plain English. The 'reverse text-to-SQL' trust feature: lets a
-    non-technical user sanity-check a query without reading SQL."""
     system = (
+        "Answer in English\n"
         f"You explain {dialect} SQL to non-technical business users.\n"
         "Describe what the query returns in 2-4 short plain sentences: which "
         "data it looks at, how it filters/groups, and how results are ordered "
         "or limited. No SQL keywords, no jargon.\n"
         'Reply ONLY with JSON: {"explanation":"..."}'
     )
-    raw = await provider.complete(
-        system, sql, json_mode=True, schema=EXPLAIN_SCHEMA, thinking_budget=0
-    )
+    raw = await provider.complete(system, sql, json_mode=True, schema=EXPLAIN_SCHEMA)
     obj = raw if isinstance(raw, dict) else parse_json(raw)
     return {"explanation": str(obj.get("explanation", "")).strip()}
 
 
 async def suggest_catalog(provider, schema_text):
-    """Suggest semantic-catalog entries (issue #90) for onboarding curation:
-    column descriptions, metric definitions, synonyms, and friendly labels for
-    the stored categorical values. Joins and value-map coverage are added
-    deterministically by the caller (backend/app/semantic.py)."""
     system = (
+        "Answer in English\n"
         "You are a data analyst documenting a database for non-technical users.\n"
         f"{schema_text}\n\n"
         "Produce a concise semantic catalog:\n"
@@ -847,7 +629,6 @@ async def suggest_catalog(provider, schema_text):
         "Produce the catalog.",
         json_mode=True,
         schema=CATALOG_SCHEMA,
-        thinking_budget=0,
     )
     obj = raw if isinstance(raw, dict) else parse_json(raw)
     return {
@@ -859,8 +640,8 @@ async def suggest_catalog(provider, schema_text):
 
 
 async def generate_glossary(provider, schema_text):
-    """Suggest the 3 most important business terms for this database (onboarding)."""
     system = (
+        "Answer in English\n"
         f"You are a database analyst.\n{schema_text}\n\n"
         "Identify the 3 most important BUSINESS TERMS a non-technical user of this database would say "
         "(e.g. revenue, active customer, best seller) and map each to plain language + a short SQL hint.\n"
@@ -871,15 +652,14 @@ async def generate_glossary(provider, schema_text):
         "Produce the glossary.",
         json_mode=True,
         schema=GLOSSARY_SCHEMA,
-        thinking_budget=0,
     )
     obj = raw if isinstance(raw, dict) else parse_json(raw)
     return obj.get("glossary", [])
 
 
 async def generate_starters(provider, schema_text, dialect):
-    """Suggest 3 example questions with SQL for the user to verify (onboarding)."""
     system = (
+        "Answer in English\n"
         f"You are a database analyst. {dialect} database.\n{schema_text}\n\n"
         "Generate 3 common useful questions a non-technical user would ask, each with the SQL and "
         "a one-sentence plain-English description.\n"
@@ -890,7 +670,6 @@ async def generate_starters(provider, schema_text, dialect):
         "Produce starter questions.",
         json_mode=True,
         schema=STARTERS_SCHEMA,
-        thinking_budget=0,
     )
     obj = raw if isinstance(raw, dict) else parse_json(raw)
     return obj.get("starters", [])

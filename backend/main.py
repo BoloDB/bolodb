@@ -1,7 +1,6 @@
 """BoloDB entry point."""
 
 import argparse
-import os
 import time
 
 import uvicorn
@@ -23,12 +22,10 @@ def main():
     from backend.app import config as cfgmod
 
     cfg = cfgmod.load_config()
-    has_any_key = any(keys.get("gemini") for keys in cfg.get("api_keys", {}).values())
-    if not has_any_key and not os.environ.get("GEMINI_API_KEY"):
+    if not cfg.get("openrouter_key"):
         print(
-            "  Note: no Gemini API key configured yet. Add one in Settings\n"
-            "  (free key: https://aistudio.google.com/app/api-keys) or set the\n"
-            "  GEMINI_API_KEY environment variable.\n"
+            "  Note: no OpenRouter API key configured. Set the\n"
+            "  OPENROUTER_API_KEY environment variable.\n"
         )
 
     app = create_app(initial_db_url=args.db, readonly=not args.allow_writes)

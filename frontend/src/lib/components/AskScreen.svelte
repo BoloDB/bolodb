@@ -24,10 +24,6 @@
   import posthog from "posthog-js";
 
   let {
-    engine,
-    modelName,
-    apiKeySet,
-    setModelName,
     verifiedCount,
     onVerify,
     onUpdateStarters,
@@ -36,14 +32,8 @@
     dbInfo,
     starters,
     onDisconnect,
-    setApiKeyStatus,
     onActiveConversationChange = (_id: string | null) => {},
   }: {
-    engine: string;
-    modelName: string;
-    apiKeySet: boolean;
-    setModelName: (m: string) => void;
-    setApiKeyStatus: (v: boolean) => void;
     verifiedCount: number;
     onVerify: (count?: number) => void;
     onUpdateStarters: (s: string[]) => void;
@@ -314,12 +304,11 @@
       (err: Error) => {
         const errMsg = err.message || "Request failed";
         const isApiKeyError =
-          errMsg.toLowerCase().includes("api key") ||
-          errMsg.toLowerCase().includes("no gemini");
+          errMsg.toLowerCase().includes("api key");
         onUpdateTurn(id, {
           thinking: false,
           restatement: isApiKeyError
-            ? "API key not configured — open Settings to add one."
+            ? "AI not ready — set OPENROUTER_API_KEY in the server environment."
             : "Something went wrong — please try again.",
           sql: "",
           columns: [],
@@ -489,9 +478,6 @@
 
 <div class="page" style="display:flex;height:100%">
   <Sidebar
-    {engine}
-    {modelName}
-    {apiKeySet}
     {verifiedCount}
     onSettings={() => (settingsOpen = true)}
     schema={realSchema}
@@ -578,7 +564,6 @@
               liveArtifacts={t.thinking ? currentArtifacts : undefined}
               onRegenerate={regenerate}
               onEditPrompt={editAndRequery}
-              modelName={t.thinking ? modelName : modelName}
             />
           {/each}
         {/if}
@@ -660,7 +645,7 @@
               stroke-width="1.8"
             /></svg
           >
-          Only the schema and your question are sent to Google Gemini to generate
+          Only the schema and your question are sent to generate
           SQL — never your row data.
         </div>
       </div>
@@ -671,12 +656,9 @@
 
   {#if settingsOpen}
     <Settings
-      {modelName}
-      {setModelName}
       onClose={() => { settingsOpen = false; openCatalogTrigger = 0; }}
       {onDisconnect}
       {openCatalogTrigger}
-      onApiKeySaved={setApiKeyStatus}
     />
   {/if}
 </div>

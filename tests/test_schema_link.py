@@ -79,24 +79,23 @@ def test_link_uses_verified_sql_as_boost(small_schema):
 @pytest.mark.parametrize(
     "model,expected_tier",
     [
-        ("gemini-2.5-flash-lite", "lite"),
+        ("gemini-2.5-flash-lite", "flash"),
         ("gemini-2.5-flash", "flash"),
-        ("gemini-2.5-pro", "pro"),
-        ("gemma-4-26b-a4b-it", "gemma"),
-        ("", "flash"),  # unset model gets the default (flash) budget
+        ("gemini-2.5-pro", "flash"),
+        ("gemma-4-26b-a4b-it", "flash"),
+        ("", "flash"),
     ],
 )
-def test_model_budget_tiering(model, expected_tier):
+def test_model_budget_always_flash(model, expected_tier):
     budget = model_budget(model)
     assert budget["tier"] == expected_tier
 
 
-def test_bigger_models_get_bigger_budgets():
-    lite = model_budget("gemini-2.5-flash-lite")
-    flash = model_budget("gemini-2.5-flash")
-    pro = model_budget("gemini-2.5-pro")
-    assert lite["max_tables"] < flash["max_tables"] < pro["max_tables"]
-    assert lite["max_examples"] <= flash["max_examples"] <= pro["max_examples"]
+def test_model_budget_is_constant():
+    budget = model_budget()
+    assert budget["tier"] == "flash"
+    assert budget["max_tables"] == 20
+    assert budget["max_examples"] == 5
 
 
 def test_link_matches_singular_question_to_plural_table(small_schema):

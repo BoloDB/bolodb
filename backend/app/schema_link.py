@@ -46,21 +46,8 @@ CONFIDENCE_HIGH_THRESHOLD = 0.78
 CONFIDENCE_MEDIUM_THRESHOLD = 0.50
 
 
-def model_budget(model):
-    """Prompt budget for the configured model.
-
-    All supported models have large context windows, so the limit here is not
-    what *fits* but what keeps cost low and accuracy high — more schema than
-    needed measurably degrades text-to-SQL quality. Bigger models get a bigger
-    budget because they are better at ignoring irrelevant tables.
-    """
-    m = (model or "").lower()
-    if "lite" in m:
-        return {"tier": "lite", "max_tables": 12, "samples": 1, "max_examples": 3}
-    if "pro" in m:
-        return {"tier": "pro", "max_tables": 25, "samples": 2, "max_examples": 5}
-    if "gemma" in m:
-        return {"tier": "gemma", "max_tables": 15, "samples": 1, "max_examples": 3}
+def model_budget(model=None):
+    """Prompt budget — hardcoded for deepseek-v4-flash."""
     return {"tier": "flash", "max_tables": 20, "samples": 2, "max_examples": 5}
 
 

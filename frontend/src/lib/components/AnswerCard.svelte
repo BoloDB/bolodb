@@ -11,7 +11,7 @@
   import Flywheel from '$lib/components/Flywheel.svelte';
   import { detectChartData } from '$lib/components/charts/chartUtils';
 
-  let { turn, onVerify, isLatest, liveArtifacts, onRegenerate, onEditPrompt, modelName = '' }:
+  let { turn, onVerify, isLatest, liveArtifacts, onRegenerate, onEditPrompt }:
     {
       turn: Turn;
       onVerify: (id: string, verdict: string, reason: string | null) => void;
@@ -19,7 +19,6 @@
       liveArtifacts?: ThinkingArtifact[];
       onRegenerate?: (id: string) => void;
       onEditPrompt?: (id: string, newQuestion: string) => void;
-      modelName?: string;
     } = $props();
 
   let showReasons = $state(false);
@@ -186,9 +185,7 @@
           {/if}
         </div>
         <div style="flex-shrink:0;display:flex;align-items:center;gap:8px">
-          {#if modelName}
-            <span style="font-size:10.5px;font-weight:600;color:var(--faint);letter-spacing:.02em;text-transform:uppercase">{modelName}</span>
-          {/if}
+
           <div data-tour="confidence">
             <ConfidenceBadge level={turn.confidence} reason={turn.reason} />
           </div>

@@ -1,19 +1,5 @@
 /** BoloDB — TypeScript interfaces */
 
-export interface Provider {
-  id: string;
-  name: string;
-  sub: string;
-  privacy: string;
-  cost: string;
-  accuracy: string;
-  badge: string;
-  model: string;
-  tier: string;
-  tone?: string;
-  note?: string;
-}
-
 export interface TrustLevel {
   key: "supervised" | "assisted" | "trusted";
   label: string;
