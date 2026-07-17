@@ -45,7 +45,7 @@ def test_complete_sends_correct_messages(mock_openai):
     assert out == "Hello"
     mock_client.chat.completions.create.assert_called_once()
     kwargs = mock_client.chat.completions.create.call_args[1]
-    assert kwargs["model"] == "openai/gpt-4o"
+    assert kwargs["model"] == "deepseek-v4-flash"
     assert kwargs["messages"][0]["role"] == "system"
     assert kwargs["messages"][0]["content"] == "system prompt"
     assert kwargs["messages"][1]["role"] == "user"
@@ -140,7 +140,7 @@ def test_provider_manager_reconfigure_clears():
 def test_create_provider_builds_openrouter():
     p = create_provider({"openrouter_key": "sk-test"}, "user-1")
     assert isinstance(p, OpenRouterProvider)
-    assert p.model == "openai/gpt-4o"
+    assert p.model == "deepseek-v4-flash"
 
 
 def test_create_provider_rejects_missing_key():

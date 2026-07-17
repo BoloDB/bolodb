@@ -1,4 +1,4 @@
-"""All AI operations for BoloDB, powered by OpenRouter (openai/gpt-4o).
+"""All AI operations for BoloDB, powered by OpenRouter (deepseek-v4-flash).
 
 This module is the ONLY place in the backend that talks to an AI model.
 """
@@ -14,7 +14,7 @@ import openai
 
 log = logging.getLogger(__name__)
 
-MODEL = "openai/gpt-4o"
+MODEL = "deepseek-v4-flash"
 
 
 def _redact_error_text(text, max_len=200):

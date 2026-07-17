@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Replace Google Gemini with OpenRouter as the sole AI provider, hardcoded to `openai/gpt-4o`, with API key read from `OPENROUTER_API_KEY` env var shared across all users.
+**Goal:** Replace Google Gemini with OpenRouter as the sole AI provider, hardcoded to `deepseek-v4-flash`, with API key read from `OPENROUTER_API_KEY` env var shared across all users.
 
 **Architecture:** Single `OpenRouterProvider` class replaces `GeminiProvider`. Config stripped of per-user key storage. Frontend removes model selector and API key UI. OpenAI SDK used for clean OpenRouter integration.
 
@@ -10,7 +10,7 @@
 
 ## Global Constraints
 
-- Model hardcoded to `openai/gpt-4o` — no model selection in UI, no model config field
+- Model hardcoded to `deepseek-v4-flash` — no model selection in UI, no model config field
 - API key read from `OPENROUTER_API_KEY` env var — no per-user key storage or encryption
 - No user-facing API key input or model selection in Settings
 - All users share the same OpenRouter key
@@ -27,7 +27,7 @@
 
 **Interfaces:**
 - Consumes: `LLMProvider` ABC (unchanged interface), config dict with `cfg["openrouter_key"]`
-- Produces: `OpenRouterProvider(api_key: str, model: str = "openai/gpt-4o")` with `complete()` and `health_check()` methods
+- Produces: `OpenRouterProvider(api_key: str, model: str = "deepseek-v4-flash")` with `complete()` and `health_check()` methods
 
 - [ ] **Step 1: Add `openai` to requirements.txt**
 
@@ -83,7 +83,7 @@ def test_complete_sends_correct_messages(mock_openai):
     assert out == "Hello"
     mock_client.chat.completions.create.assert_called_once()
     kwargs = mock_client.chat.completions.create.call_args[1]
-    assert kwargs["model"] == "openai/gpt-4o"
+    assert kwargs["model"] == "deepseek-v4-flash"
     assert kwargs["messages"][0]["role"] == "system"
     assert kwargs["messages"][0]["content"] == "system prompt"
     assert kwargs["messages"][1]["role"] == "user"
@@ -171,7 +171,7 @@ def test_provider_manager_reconfigure_clears():
 def test_create_provider_builds_openrouter():
     p = create_provider({"openrouter_key": "sk-test"}, "user-1")
     assert isinstance(p, OpenRouterProvider)
-    assert p.model == "openai/gpt-4o"
+    assert p.model == "deepseek-v4-flash"
 
 
 def test_create_provider_rejects_missing_key():
@@ -191,7 +191,7 @@ Expected: FAIL with various import/module errors
 Replace the entire file content. Key changes:
 
 ```python
-"""All AI operations for BoloDB, powered by OpenRouter (openai/gpt-4o).
+"""All AI operations for BoloDB, powered by OpenRouter (deepseek-v4-flash).
 
 This module is the ONLY place in the backend that talks to an AI model.
 """
@@ -208,7 +208,7 @@ import openai
 
 log = logging.getLogger(__name__)
 
-MODEL = "openai/gpt-4o"
+MODEL = "deepseek-v4-flash"
 
 
 def _redact_error_text(text, max_len=200):
@@ -445,7 +445,7 @@ class OpenRouterProvider(LLMProvider):
     """OpenRouter API via the OpenAI SDK.
 
     Uses the openai Python library pointed at OpenRouter's base URL.
-    All model calls go to ``openai/gpt-4o``.
+    All model calls go to ``deepseek-v4-flash``.
     """
 
     def __init__(self, api_key, model=None):
@@ -762,7 +762,7 @@ Replace the entire file:
 ```python
 """Local config + path constants.
 
-BoloDB uses OpenRouter (openai/gpt-4o) for every AI operation. The API key
+BoloDB uses OpenRouter (deepseek-v4-flash) for every AI operation. The API key
 is read from the OPENROUTER_API_KEY environment variable at startup and
 shared across all users — no per-user key storage or encryption is needed.
 
@@ -895,7 +895,7 @@ cd /home/somesh/Documents/bolodb && git add backend/app/config.py tests/test_con
 
 ```python
 def model_budget(model=None):
-    """Prompt budget — hardcoded for openai/gpt-4o."""
+    """Prompt budget — hardcoded for deepseek-v4-flash."""
     return {"tier": "flash", "max_tables": 20, "samples": 2, "max_examples": 5}
 ```
 
@@ -1282,7 +1282,7 @@ cd /home/somesh/Documents/bolodb && git add backend/app/controllers/system.py ba
           >
         </span>
         <div style="min-width:0">
-          <div style="font-weight:700;font-size:13.5px">OpenRouter (openai/gpt-4o)</div>
+          <div style="font-weight:700;font-size:13.5px">OpenRouter (deepseek-v4-flash)</div>
           <div style="font-size:11px;color:var(--faint);font-weight:600">
             Powers every AI feature in BoloDB
           </div>
@@ -1668,7 +1668,7 @@ with:
 ```
 # ── AI ──
 # OpenRouter API key (https://openrouter.ai/keys)
-# Used to generate SQL from natural-language questions via openai/gpt-4o.
+# Used to generate SQL from natural-language questions via deepseek-v4-flash.
 OPENROUTER_API_KEY=
 ```
 
@@ -1682,7 +1682,7 @@ Create a concise doc:
 ```markdown
 # AI Layer — OpenRouter
 
-BoloDB uses OpenRouter (openai/gpt-4o) for all AI operations:
+BoloDB uses OpenRouter (deepseek-v4-flash) for all AI operations:
 - SQL generation (question → SQL)
 - SQL explanation (SQL → plain English)
 - Glossary suggestion (onboarding)
@@ -1700,7 +1700,7 @@ users — there is no per-user API key storage.
 All AI operations funnel through `backend/app/llm.py`:
 
 - `OpenRouterProvider` — wraps the OpenAI SDK pointed at
-  `https://openrouter.ai/api/v1`. Uses `openai/gpt-4o` with
+  `https://openrouter.ai/api/v1`. Uses `deepseek-v4-flash` with
   `max_retries=2` and `temperature=0.1`.
 - `create_provider()` — factory function, called at startup.
 - `ProviderManager` — caches a single shared provider instance.
@@ -1772,7 +1772,7 @@ cd /home/somesh/Documents/bolodb && git add tests/ && git commit -m "test: updat
 |---|---|
 | Remove Gemini integration | Task 1 (new OpenRouterProvider), Task 2 (config cleanup) |
 | Add OpenRouter with OpenAI SDK | Task 1 |
-| Hardcode model to openai/gpt-4o | Task 1 (`MODEL = "openai/gpt-4o"`) |
+| Hardcode model to deepseek-v4-flash | Task 1 (`MODEL = "deepseek-v4-flash"`) |
 | Read shared key from env var | Task 2 (`OPENROUTER_API_KEY`) |
 | Strip per-user API key storage | Task 2, Task 4 (controllers) |
 | Strip model selector UI | Task 5 (Settings.svelte) |

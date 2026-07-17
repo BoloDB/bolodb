@@ -2,14 +2,13 @@
 
 **Date:** 2026-07-17
 **Status:** Approved
-**Context:** Replace Google Gemini with OpenRouter (`openai/gpt-4o` hardcoded), shared API key via env var, no per-user API key entry or model selection.
+**Context:** Replace Google Gemini with OpenRouter (`deepseek-v4-flash` hardcoded), shared API key via env var, no per-user API key entry or model selection.
 
 ## Goals
 
 - Remove all Gemini integration
 - Add OpenRouter as the sole AI provider
-- Hardcode model to `openai/gpt-4o` (users cannot select)
-- Read shared API key from `OPENROUTER_API_KEY` env var (users are not asked for a key)
+- Hardcode model to `deepseek-v4-flash` via OpenRouter (users cannot select)
 - Strip all per-user API key storage and encryption
 - Strip model selector and API key UI from Settings
 
