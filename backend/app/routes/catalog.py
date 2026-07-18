@@ -19,7 +19,7 @@ async def get_catalog(
 ):
     """Return the saved semantic catalog for the connected database."""
     try:
-        return ctrl.get_catalog(user_token["user_id"], db, kb)
+        return await ctrl.get_catalog(user_token["user_id"], db, kb)
     except HTTPException:
         raise
     except Exception:
@@ -36,7 +36,7 @@ async def save_catalog(
 ):
     """Replace the connected database's semantic catalog with ``payload``."""
     try:
-        return ctrl.save_catalog(user_token["user_id"], db, kb, payload)
+        return await ctrl.save_catalog(user_token["user_id"], db, kb, payload)
     except HTTPException:
         raise
     except Exception:

@@ -9,6 +9,13 @@ from backend.app.pgdatabase.models import (
     RecentConnection,
     PasswordResetToken,
     OtpCode,
+    VerifiedQA,
+    Glossary,
+    CatalogColumn,
+    CatalogMetric,
+    CatalogJoin,
+    CatalogSynonym,
+    CatalogValueMapping,
 )
 from backend.app.pgdatabase.users import (
     get_user_by_email,
@@ -43,6 +50,7 @@ from backend.app.pgdatabase.conversations import (
     clear_conversations,
 )
 from backend.app.pgdatabase.serialization import serialize_doc
+from backend.app.pgdatabase.knowledge import KnowledgeService
 
 __all__ = [
     "get_engine",
@@ -55,6 +63,13 @@ __all__ = [
     "RecentConnection",
     "PasswordResetToken",
     "OtpCode",
+    "VerifiedQA",
+    "Glossary",
+    "CatalogColumn",
+    "CatalogMetric",
+    "CatalogJoin",
+    "CatalogSynonym",
+    "CatalogValueMapping",
     "get_user_by_email",
     "get_user_by_google_id",
     "get_user_by_supabase_id",
@@ -80,4 +95,5 @@ __all__ = [
     "delete_conversation",
     "clear_conversations",
     "serialize_doc",
+    "KnowledgeService",
 ]

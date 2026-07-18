@@ -1,39 +1,67 @@
 import os
 import logging
 
+from fastapi import HTTPException
+
 from backend.app import config as cfgmod
 from backend.app.secrets import (
     get_jwt_secret,
     get_supabase_url,
     get_supabase_anon_key,
 )
+import backend.app.pgdatabase as mdb
 
 log = logging.getLogger(__name__)
 
 
 async def get_state(user_id, db, cfg, kb):
+    """
+    Assemble the user's connection, configuration, onboarding, and knowledge state.
+
+    Parameters:
+        user_id: Identifier of the user whose state is requested.
+        cfg: Application configuration used to build the public configuration view.
+
+    Returns:
+        A dictionary containing user configuration and status, with database and
+        knowledge metadata when the user has a connected database.
+    """
+    config = cfgmod.public_config(cfg)
+    config.pop("last_db_url", None)
+    user = await mdb.get_user_by_id(user_id)
     s = {
         "connected": db.connected(user_id),
-        "config": cfgmod.public_config(cfg),
+        "config": config,
         "openrouter_ready": bool(os.environ.get("OPENROUTER_API_KEY")),
+        "tour_completed": user.get("tour_completed", False) if user else False,
     }
     if db.connected(user_id):
+        dbid = db.get_db_id(user_id)
         s["database"] = {
             "url": db.get_info(user_id)["url"],
             "dialect": db.get_dialect(user_id),
             "db_id": db.get_info(user_id)["db_id"],
             "tables": db.get_info(user_id)["tables"],
-            "has_knowledge": kb.count_verified(db.get_db_id(user_id)) > 0,
+            "has_knowledge": (await kb.count_verified(user_id, dbid)) > 0,
         }
-        s["trust"] = kb.trust_level(db.get_db_id(user_id))
-        s["glossary"] = kb.get_glossary(db.get_db_id(user_id))
+        s["trust"] = await kb.trust_level(user_id, dbid)
+        s["glossary"] = await kb.get_glossary(user_id, dbid)
         s["starters"] = [
-            v["question"] for v in kb.get_verified(db.get_db_id(user_id))[:6]
+            v["question"] for v in (await kb.get_verified(user_id, dbid))[:6]
         ]
     return s
 
 
 async def get_health(pg_status="unknown"):
+    """
+    Build a health and diagnostics summary for PostgreSQL, environment configuration, and Supabase JWKS reachability.
+
+    Parameters:
+        pg_status (str): Current PostgreSQL connection status.
+
+    Returns:
+        dict: Health status, PostgreSQL status, environment checks, and Supabase JWKS reachability status.
+    """
     env_checks = {
         "JWT_SECRET": bool(get_jwt_secret()) if os.getenv("JWT_SECRET") else False,
         "SUPABASE_URL": bool(get_supabase_url()),
@@ -67,8 +95,34 @@ async def get_health(pg_status="unknown"):
     }
 
 
+async def set_tour_completed(user_id):
+    """Mark the user's tour as completed.
+
+    Parameters:
+        user_id: The identifier of the user whose tour is complete.
+
+    Returns:
+        dict: A confirmation payload indicating that the tour was completed.
+
+    Raises:
+        HTTPException: If the user was not found in the database.
+    """
+    ok = await mdb.update_user(user_id, tour_completed=True)
+    if not ok:
+        raise HTTPException(404, "User not found")
+    return {"ok": True, "tour_completed": True}
+
+
 async def update_config(user_id, cfg, providers, req_data):
-    """Update AI settings. The only settable field is last_db_url."""
+    """
+    Update the persisted configuration with the supported database URL setting.
+
+    Parameters:
+        req_data: Request data containing an optional ``last_db_url`` value.
+
+    Returns:
+        A dictionary containing the public configuration.
+    """
     if req_data.last_db_url is not None:
         cfg["last_db_url"] = req_data.last_db_url
     cfgmod.save_config(cfg)

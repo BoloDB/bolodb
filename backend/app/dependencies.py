@@ -23,10 +23,27 @@ def get_db(request: Request):
 
 
 def get_kb(request: Request):
-    return request.app.state.kb
+    """
+    Return the application's knowledge base collection.
+
+    Parameters:
+        request (Request): The current application request.
+
+    Returns:
+        The knowledge base collection stored in the application state.
+    """
+    return request.app.state.kbs
 
 
 def get_providers(request: Request):
+    """Return the providers stored in the application state.
+
+    Parameters:
+        request (Request): The incoming request containing the application state.
+
+    Returns:
+        The configured providers.
+    """
     return request.app.state.providers
 
 

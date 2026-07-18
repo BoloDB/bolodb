@@ -15,10 +15,11 @@ from starlette.responses import Response
 
 from backend.app import config as cfgmod
 from backend.app.database import DatabaseManager
-from backend.app.knowledge import KnowledgeBase
 from backend.app.logbook import SessionLog
 from backend.app.llm import ProviderManager
 from backend.app.ratelimit import limiter
+from backend.app.pgdatabase import KnowledgeService
+from backend.app.pgdatabase.engine import async_session
 
 from backend.app.routes.auth import router as auth_router
 from backend.app.routes.system import router as system_router
@@ -85,6 +86,16 @@ async def lifespan(app):
 
 
 def create_app(initial_db_url="", readonly=True):
+    """
+    Create and configure the FastAPI application and its backend services.
+
+    Parameters:
+        initial_db_url (str): Ignored legacy database URL; connections are established per authenticated user.
+        readonly (bool): Whether database access should be read-only.
+
+    Returns:
+        FastAPI: The configured application instance.
+    """
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s %(levelname)s %(name)s: %(message)s",
@@ -102,7 +113,7 @@ def create_app(initial_db_url="", readonly=True):
     cfg = cfgmod.load_config()
     providers = ProviderManager(cfg)
     db = DatabaseManager(readonly=readonly)
-    kb = KnowledgeBase(cfgmod.KB_FILE)
+    kbs = KnowledgeService(async_session)
     session_log = SessionLog(cfgmod.CONFIG_DIR)
 
     app = FastAPI(title="BoloDB", version="2.0.0", lifespan=lifespan)
@@ -124,7 +135,7 @@ def create_app(initial_db_url="", readonly=True):
     app.state.cfg = cfg
     app.state.providers = providers
     app.state.db = db
-    app.state.kb = kb
+    app.state.kbs = kbs
     app.state.session_log = session_log
 
     if initial_db_url:

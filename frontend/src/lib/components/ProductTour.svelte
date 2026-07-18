@@ -2,17 +2,13 @@
   import { onMount } from "svelte";
   import { browser } from "$app/environment";
   import posthog from "posthog-js";
+  import { apiCall } from "$lib/api";
+  import { appState } from "$lib/appState.svelte";
   import type { DriveStep, Driver } from "driver.js";
-
-  const STORAGE_KEY = "bolodb_tour_completed_v1";
 
   onMount(() => {
     if (!browser) return;
-    try {
-      if (localStorage.getItem(STORAGE_KEY) === "1") return;
-    } catch {
-      return;
-    }
+    if (appState.tourCompleted) return;
 
     let isMounted = true;
     let d: Driver | undefined;
@@ -179,9 +175,10 @@
     };
   });
 
-  function markDone() {
+  async function markDone() {
     try {
-      localStorage.setItem(STORAGE_KEY, "1");
+      await apiCall("/api/tour-complete", {});
+      appState.tourCompleted = true;
     } catch {}
     try {
       posthog.capture("product_tour_completed");

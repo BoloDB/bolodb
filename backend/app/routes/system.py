@@ -22,12 +22,33 @@ async def state(
     cfg=Depends(get_cfg),
     kb=Depends(get_kb),
 ):
+    """
+    Retrieve the application state for the authenticated user.
+
+    Returns:
+        The current application state.
+    """
     user_id = user_token["user_id"]
     return await ctrl.get_state(user_id, db, cfg, kb)
 
 
+@router.post("/api/tour-complete")
+async def tour_complete(
+    user_token=Depends(get_current_user),
+):
+    """Mark the authenticated user's tour as completed."""
+    user_id = user_token["user_id"]
+    return await ctrl.set_tour_completed(user_id)
+
+
 @router.get("/api/health")
 async def health():
+    """
+    Check PostgreSQL connectivity and provide application health information.
+
+    Returns:
+        JSONResponse: Health information with status code 503 when PostgreSQL is unavailable.
+    """
     pg_status = "connected"
     try:
         from backend.app.pgdatabase import get_engine

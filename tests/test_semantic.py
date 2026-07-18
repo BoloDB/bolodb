@@ -1,10 +1,6 @@
 """Tests for the semantic catalog (issue #90): KB CRUD, deterministic
 suggestions, prompt rendering, and schema-linking boosts."""
 
-import os
-import tempfile
-
-from backend.app.knowledge import KnowledgeBase
 from backend.app.llm import _semantic_block
 from backend.app.schema_link import link_relevant_tables
 from backend.app.semantic import (
@@ -74,36 +70,6 @@ LLM_ENRICHMENT = {
         }
     ],
 }
-
-
-def _kb():
-    """A fresh KnowledgeBase backed by a throwaway sqlite file."""
-    return KnowledgeBase(os.path.join(tempfile.mkdtemp(), "kb.sqlite"))
-
-
-def test_catalog_round_trip_and_partial_save():
-    """Saving and reading back a catalog works, and a partial save only
-    replaces the categories it includes."""
-    kb = _kb()
-    assert kb.catalog_is_empty("db1")
-    kb.set_catalog(
-        "db1",
-        {
-            "metrics": [{"name": "revenue", "sql_expression": "SUM(x)"}],
-            "synonyms": [
-                {"term": "clients", "entity_type": "table", "entity_name": "customers"}
-            ],
-        },
-    )
-    got = kb.get_catalog("db1")
-    assert got["metrics"][0]["name"] == "revenue"
-    assert got["synonyms"][0]["entity_name"] == "customers"
-    assert not kb.catalog_is_empty("db1")
-    # a partial save replaces only the provided categories
-    kb.set_catalog("db1", {"synonyms": []})
-    got2 = kb.get_catalog("db1")
-    assert got2["synonyms"] == []
-    assert got2["metrics"][0]["name"] == "revenue"
 
 
 def test_suggest_from_schema_joins_and_value_maps():

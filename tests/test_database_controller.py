@@ -6,17 +6,55 @@ import backend.app.routes.database as database_routes
 
 
 class DummyKB:
-    def trust_level(self, db_id):
+    async def trust_level(self, user_id, db_id):
+        """Return the trust level associated with a database.
+
+        Parameters:
+                user_id: The user requesting the trust level.
+                db_id: The database identifier.
+
+        Returns:
+                str: The database trust level.
+        """
         return f"trust:{db_id}"
 
-    def get_glossary(self, db_id):
+    async def get_glossary(self, user_id, db_id):
+        """Return glossary entries for a database.
+
+        Parameters:
+                user_id: The user requesting the glossary.
+                db_id: The database identifier.
+
+        Returns:
+                A list containing the database identifier.
+        """
         return [{"db_id": db_id}]
 
-    def count_verified(self, db_id):
+    async def count_verified(self, user_id, db_id):
+        """Count the verified entries for a database.
+
+        Parameters:
+            user_id: Identifier of the user requesting the count.
+            db_id: Identifier of the database.
+
+        Returns:
+            int: The number of verified entries.
+        """
         return 1
 
-    def get_verified(self, db_id):
+    async def get_verified(self, user_id, db_id):
+        """Return a verified starter question for the specified database.
+
+        Parameters:
+            db_id: Identifier of the database.
+
+        Returns:
+            A list containing the starter question for the database.
+        """
         return [{"question": f"starter:{db_id}"}]
+
+    async def seed_sample(self, user_id, db_id):
+        return
 
 
 def test_connect_uses_user_scoped_connect_and_result_metadata(monkeypatch):

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { apiCall } from "$lib/api";
+  import { apiCall, isExpectedClientError } from "$lib/api";
   import Logo from "$lib/components/ui/Logo.svelte";
   import Button from "$lib/components/ui/Button.svelte";
   import Spinner from "$lib/components/ui/Spinner.svelte";
@@ -37,7 +37,9 @@
       setTimeout(() => goto(`/verify-email?email=${encodeURIComponent(email)}`), 1500);
     } catch (err: any) {
       error = err.message || "Signup failed";
-      posthog.captureException(err);
+      // Validation errors like "email already taken" (a 4xx) are expected and
+      // already shown to the user — don't report them to error tracking.
+      if (!isExpectedClientError(err)) posthog.captureException(err);
     } finally {
       loading = false;
     }

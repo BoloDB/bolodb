@@ -51,13 +51,13 @@ class FakeKB:
     def __init__(self, catalog=None):
         self._catalog = catalog or {}
 
-    def get_glossary(self, db_id):
+    async def get_glossary(self, user_id, db_id):
         return []
 
-    def get_catalog(self, db_id):
+    async def get_catalog(self, user_id, db_id):
         return self._catalog
 
-    def retrieve_similar(self, db_id, q, k=3):
+    async def retrieve_similar(self, user_id, db_id, q, k=3):
         return []
 
 

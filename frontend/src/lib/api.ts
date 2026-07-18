@@ -25,6 +25,18 @@ export async function apiCall(
   return data;
 }
 
+/**
+ * Whether an error is an expected client error (a 4xx returned by `apiCall`),
+ * e.g. wrong password, email already taken, bad connection details. These are
+ * already surfaced to the user and should NOT be reported to error tracking as
+ * exceptions — doing so pollutes error tracking with expected auth/validation
+ * failures. Reserve `posthog.captureException` for unexpected errors.
+ */
+export function isExpectedClientError(err: unknown): boolean {
+  const status = (err as { status?: unknown } | null)?.status;
+  return typeof status === "number" && status >= 400 && status < 500;
+}
+
 export async function streamApiCall(
   path: string,
   body: unknown,

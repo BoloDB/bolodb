@@ -19,6 +19,16 @@ class UserAlreadyExistsError(Exception):
 
 
 def _user_to_dict(user) -> dict:
+    """
+    Serialize a user record into a dictionary containing its persisted fields.
+
+    Parameters:
+        user: The user record to serialize.
+
+    Returns:
+        dict: A serialized dictionary containing the user's identity, authentication,
+            role, verification, tour completion, and creation-time fields.
+    """
     return serialize_doc(
         {
             "id": user.id,
@@ -28,6 +38,7 @@ def _user_to_dict(user) -> dict:
             "google_id": user.google_id,
             "supabase_id": user.supabase_id,
             "email_verified": user.email_verified,
+            "tour_completed": user.tour_completed,
             "created_at": user.created_at,
         }
     )
@@ -98,7 +109,14 @@ async def get_user_by_id(user_id: str) -> Optional[dict]:
 
 
 _ALLOWED_USER_FIELDS = frozenset(
-    {"google_id", "supabase_id", "hashed_pass", "email_verified", "email"}
+    {
+        "google_id",
+        "supabase_id",
+        "hashed_pass",
+        "email_verified",
+        "email",
+        "tour_completed",
+    }
 )
 
 

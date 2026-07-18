@@ -7,6 +7,13 @@ const config = {
     paths: {
       relative: false,
     },
+    version: {
+      // Poll for new deploys so the `updated` store flips to true once the
+      // server ships a build with different content-hashed chunks. This lets
+      // us force a full-page reload before navigating into a route whose old
+      // lazily-loaded chunk no longer exists (stale-chunk-after-deploy).
+      pollInterval: 60000,
+    },
   },
 };
 

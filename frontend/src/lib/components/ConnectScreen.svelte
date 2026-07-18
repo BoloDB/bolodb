@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { apiCall } from "$lib/api";
+  import { apiCall, isExpectedClientError } from "$lib/api";
   import { humanError } from "$lib/data";
   import type { DbInfo } from "$lib/types";
   import { appState } from "$lib/appState.svelte";
@@ -43,6 +43,27 @@
   async function start() {
     if (choice === "sample") return go("sample");
     return go("url");
+
+
+
+  function buildUrl(): string {
+    if (dbType === "sqlite") return `sqlite:///${filePath.trim()}`;
+    if (dbType === "duckdb")
+      return filePath.trim() ? `duckdb:///${filePath.trim()}` : "duckdb://";
+    const u = encodeURIComponent(user);
+    const p = encodeURIComponent(password);
+    const dialect = dbType === "mssql" ? "mssql+pyodbc" : dbType;
+    const creds = u && p ? `${u}:${p}@` : u ? `${u}@` : "";
+    return `${dialect}://${creds}${host.trim()}:${port}/${dbName.trim()}`;
+  }
+
+  function canConnect(): boolean {
+    if (formMode) {
+      if (dbType === "duckdb") return true;
+      if (isFileBased) return filePath.trim().length > 0;
+      return !!(host.trim() && user.trim() && dbName.trim());
+    }
+    return dbUrl.trim().length > 0;
   }
 
   async function go(kind: string) {
@@ -74,7 +95,9 @@
       error =
         humanError(e.message) ||
         "Connection failed — check your details and try again.";
-      posthog.captureException(e);
+      // Bad connection details (a 4xx) are expected and already shown to the
+      // user — don't report them to error tracking.
+      if (!isExpectedClientError(e)) posthog.captureException(e);
       connecting = null;
     }
   }
@@ -93,7 +116,9 @@
       error =
         humanError(e.message) ||
         "Reconnection failed — the database may no longer be available.";
-      posthog.captureException(e);
+      // Expected client errors (4xx) are already shown to the user — don't
+      // report them to error tracking.
+      if (!isExpectedClientError(e)) posthog.captureException(e);
       reconnecting = null;
     }
   }
