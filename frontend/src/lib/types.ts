@@ -170,6 +170,7 @@ export interface ConversationTurn {
   question: string;
   sql: string;
   result: Record<string, unknown>[];
+  result_truncated?: boolean;
   confidence: "High" | "Medium" | "Low";
   restatement: string;
   timestamp: string;

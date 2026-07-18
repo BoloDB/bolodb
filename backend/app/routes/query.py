@@ -154,7 +154,28 @@ async def execute(
 ) -> dict:
     try:
         user_id = user_token["user_id"]
-        return await ctrl.execute(user_id, db, req)
+        out = await ctrl.execute(user_id, db, req)
+
+        conversation_id = req.conversation_id
+        if conversation_id and not await mdb.conversation_owned_by(
+            user_id, conversation_id
+        ):
+            conversation_id = None
+        try:
+            await mdb.save_query(
+                user_id=user_id,
+                question=req.sql,
+                sql=req.sql,
+                result=out.get("rows", []),
+                confidence="High",
+                conversation_id=conversation_id,
+                restatement="Direct SQL execution",
+            )
+            if conversation_id:
+                await mdb.touch_conversation(conversation_id)
+        except Exception:
+            log.warning("Failed to persist direct SQL history", exc_info=True)
+        return out
     except HTTPException:
         raise
     except Exception:

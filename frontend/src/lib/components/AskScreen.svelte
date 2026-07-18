@@ -194,6 +194,7 @@
     const title = (firstQuestion || "").slice(0, 80);
     try {
       const conv = await createConversation(title, dbInfo?.db_id);
+      activeConversationId = conv._id;
       onActiveConversationChange(conv._id);
       conversationTrigger++;
       return conv._id;
@@ -219,7 +220,7 @@
       onAddTurn({ id, question: rawSql, thinking: true, isDirect: true, timestamp: ts } as Turn);
       const convId = await ensureConversation(rawSql);
       try {
-        const data = await apiCall("/api/execute", { sql: rawSql });
+        const data = await apiCall("/api/execute", { sql: rawSql, conversation_id: convId || undefined });
         const rows2d = rowsToArrays(data.columns || [], data.rows || []);
         onUpdateTurn(id, {
           thinking: false,
@@ -300,6 +301,7 @@
           thinkingArtifacts: [...artifacts],
           timestamp: ts,
         });
+        conversationTrigger++;
       },
       (err: Error) => {
         const errMsg = err.message || "Request failed";
@@ -429,7 +431,35 @@
 
   async function handleNewConversation() {
     turns = [];
+    activeConversationId = null;
     onActiveConversationChange(null);
+  }
+
+  function turnFromHistory(t: ConversationTurn): Turn {
+    const result = Array.isArray(t.result) ? t.result : [];
+    const cols = result.length > 0 && result[0] && typeof result[0] === 'object'
+      ? Object.keys(result[0])
+      : [];
+    return {
+      id: t._id,
+      question: t.question,
+      thinking: false,
+      timestamp: t.timestamp,
+      restatement: t.restatement || '',
+      sql: t.sql || '',
+      columns: cols,
+      rows: result.map((row: Record<string, unknown>) => cols.map(c => {
+        const v = row?.[c];
+        return v === null || v === undefined ? '' : String(v);
+      })),
+      confidence: (t.confidence || 'medium').toLowerCase() as "high" | "medium" | "low",
+      reason: '',
+      basedOn: false,
+      query_id: t._id,
+      executionError: null,
+      verdict: null,
+      reasonChosen: null,
+    } as Turn;
   }
 
   async function handleConversationSelect(convId: string) {
@@ -437,34 +467,19 @@
     loading = true;
     try {
       const conv = await getConversation(convId);
+      activeConversationId = conv._id;
       onActiveConversationChange(conv._id);
-      turns = (conv.turns || []).map((t: ConversationTurn) => ({
-        id: t._id,
-        question: t.question,
-        thinking: false,
-        timestamp: t.timestamp,
-        restatement: t.restatement || '',
-        sql: t.sql || '',
-        columns: t.result && t.result.length > 0 ? Object.keys(t.result[0]) : [],
-        rows: t.result ? (() => {
-          const cols = t.result.length > 0 ? Object.keys(t.result[0]) : [];
-          return t.result.map((row: Record<string, unknown>) => cols.map(c => {
-            const v = row[c];
-            return v === null || v === undefined ? '' : String(v);
-          }));
-        })() : [],
-        confidence: (t.confidence || 'medium').toLowerCase() as "high" | "medium" | "low",
-        reason: '',
-        basedOn: false,
-        query_id: t._id,
-        executionError: null,
-        verdict: null,
-        reasonChosen: null,
-      }));
-      conversationTrigger++;
+      const loaded: Turn[] = [];
+      for (const t of conv.turns || []) {
+        try {
+          loaded.push(turnFromHistory(t));
+        } catch (e) {
+          console.error('Skipping malformed turn', t?._id, e);
+        }
+      }
+      turns = loaded;
     } catch (e) {
       console.error('Failed to load conversation', e);
-      turns = [];
     } finally {
       loading = false;
     }

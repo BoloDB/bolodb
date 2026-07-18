@@ -38,6 +38,7 @@ class FeedbackReq(BaseModel):
 
 class RawSQLReq(BaseModel):
     sql: str
+    conversation_id: str | None = None
 
 
 class GlossaryItem(BaseModel):

@@ -9,6 +9,9 @@ from backend.app.pgdatabase.engine import async_session
 from backend.app.pgdatabase.models import Conversation, QueryHistory, _utcnow
 from backend.app.pgdatabase.serialization import _to_uuid, serialize_doc
 
+# Max result rows returned per turn when restoring a conversation.
+MAX_RESTORED_ROWS = 100
+
 
 async def create_conversation(user_id, title="", database_id=None):
     uid = _to_uuid(user_id)
@@ -145,12 +148,18 @@ async def get_conversation(user_id: str, conversation_id: str):
         )
         turns = []
         for turn in turns_result.scalars().all():
+            # Cap restored result payloads: a turn can hold up to 500 rows of
+            # JSONB, and shipping every row of every turn made opening long
+            # conversations slow. The UI table previews 8 rows.
+            result = turn.result if isinstance(turn.result, list) else []
+            truncated = len(result) > MAX_RESTORED_ROWS
             td = {
                 "id": turn.id,
                 "user_id": turn.user_id,
                 "question": turn.question,
                 "sql": turn.sql,
-                "result": turn.result,
+                "result": result[:MAX_RESTORED_ROWS],
+                "result_truncated": truncated,
                 "confidence": turn.confidence,
                 "restatement": turn.restatement,
                 "conversation_id": turn.conversation_id,

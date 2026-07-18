@@ -149,7 +149,7 @@
           {#each conversations as conv (conv._id)}
             <div class="group" style="position:relative;margin-bottom:2px">
               <button onclick={() => onConversationSelect && onConversationSelect(conv._id)}
-                style="width:100%;text-align:left;background:{activeConversationId === conv._id ? 'var(--surface-3)' : 'transparent'};border:none;padding:5px 0;cursor:pointer;display:flex;align-items:center;gap:8px;border-radius:var(--radius-xs);transition:background .12s">
+                style="width:100%;text-align:left;background:{activeConversationId === conv._id ? 'var(--surface-3)' : 'transparent'};border:none;padding:5px 44px 5px 0;cursor:pointer;display:flex;align-items:center;gap:8px;border-radius:var(--radius-xs);transition:background .12s">
                 <span style="width:4px;height:4px;border-radius:99px;background:{conv.turn_count > 0 ? 'var(--brand)' : 'var(--border-2)'};flex-shrink:0"></span>
                 <div style="flex:1;min-width:0">
                   {#if editingId === conv._id}
@@ -162,7 +162,7 @@
                       autofocus
                     />
                   {:else}
-                    <div onclick={(e) => { e.stopPropagation(); startRename(conv, e); }} style="font-size:12px;color:{activeConversationId === conv._id ? 'var(--ink)' : 'var(--muted)'};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:{activeConversationId === conv._id ? '600' : '400'};cursor:text">
+                    <div style="font-size:12px;color:{activeConversationId === conv._id ? 'var(--ink)' : 'var(--muted)'};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:{activeConversationId === conv._id ? '600' : '400'}">
                       {conv.title || conv.last_question || 'New conversation'}
                     </div>
                     <div style="font-size:10px;color:var(--faint);margin-top:1px">
@@ -171,7 +171,12 @@
                   {/if}
                 </div>
               </button>
-              <button onclick={(e) => handleDelete(conv._id, e)} aria-label="Delete conversation" class="opacity-0 group-hover:opacity-100 focus:opacity-100 focus-visible:opacity-100 transition-opacity" style="position:absolute;right:8px;top:50%;transform:translateY(-50%);background:var(--surface);border:none;color:var(--faint);cursor:pointer;padding:4px;font-size:10px;border-radius:4px;display:flex;align-items:center;justify-content:center" title="Delete">✕</button>
+              {#if editingId !== conv._id}
+                <button onclick={(e) => startRename(conv, e)} aria-label="Rename conversation" class="opacity-0 group-hover:opacity-100 focus:opacity-100 focus-visible:opacity-100 transition-opacity" style="position:absolute;right:28px;top:50%;transform:translateY(-50%);background:var(--surface);border:none;color:var(--faint);cursor:pointer;padding:4px;border-radius:4px;display:flex;align-items:center;justify-content:center" title="Rename">
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none"><path d="M17 3a2.85 2.85 0 114 4L7.5 20.5 2 22l1.5-5.5L17 3z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </button>
+                <button onclick={(e) => handleDelete(conv._id, e)} aria-label="Delete conversation" class="opacity-0 group-hover:opacity-100 focus:opacity-100 focus-visible:opacity-100 transition-opacity" style="position:absolute;right:8px;top:50%;transform:translateY(-50%);background:var(--surface);border:none;color:var(--faint);cursor:pointer;padding:4px;font-size:10px;border-radius:4px;display:flex;align-items:center;justify-content:center" title="Delete">✕</button>
+              {/if}
             </div>
           {/each}
         {/if}
