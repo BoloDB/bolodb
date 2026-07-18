@@ -1,6 +1,8 @@
 import os
 import logging
 
+from fastapi import HTTPException
+
 from backend.app import config as cfgmod
 from backend.app.secrets import (
     get_jwt_secret,
