@@ -296,7 +296,11 @@ class OpenRouterProvider(LLMProvider):
 
         try:
             resp = await self._client.chat.completions.create(**completion_kwargs)
-        except (openai.RateLimitError, openai.APITimeoutError, openai.APIConnectionError) as e:
+        except (
+            openai.RateLimitError,
+            openai.APITimeoutError,
+            openai.APIConnectionError,
+        ) as e:
             # The AI service is rate-limiting us, timing out, or unreachable —
             # from the user's perspective the AI is not responding.
             raise LLMError(
