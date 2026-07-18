@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import { apiCall } from "$lib/api";
+  import { apiCall, isExpectedClientError } from "$lib/api";
   import posthog from "posthog-js";
 
   let {
@@ -31,7 +31,9 @@
       window.location.href = supabaseAuthUrl;
     } catch (err: any) {
       error = err.message || "Google sign-in failed";
-      posthog.captureException(err);
+      // Expected client errors (4xx) are already shown to the user — don't
+      // report them to error tracking.
+      if (!isExpectedClientError(err)) posthog.captureException(err);
       loading = false;
     }
   }

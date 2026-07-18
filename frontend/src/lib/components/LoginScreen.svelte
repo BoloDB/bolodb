@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { apiCall } from "$lib/api";
+  import { apiCall, isExpectedClientError } from "$lib/api";
   import Logo from "$lib/components/ui/Logo.svelte";
   import Button from "$lib/components/ui/Button.svelte";
   import Spinner from "$lib/components/ui/Spinner.svelte";
@@ -34,7 +34,9 @@
       onLogin();
     } catch (err: any) {
       error = err.message || "Login failed";
-      posthog.captureException(err);
+      // Wrong credentials (a 4xx) are expected and already shown to the user —
+      // don't report them to error tracking.
+      if (!isExpectedClientError(err)) posthog.captureException(err);
     } finally {
       loading = false;
     }
