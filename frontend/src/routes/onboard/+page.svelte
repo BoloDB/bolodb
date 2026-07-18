@@ -17,7 +17,10 @@
       if (!appState.dbInfo && !redirected) {
         redirected = true;
         goto('/connect');
-      } else if (appState.dbInfo?.has_knowledge) {
+      } else if (appState.dbInfo?.has_knowledge && !appState.onboardingActive) {
+        // Only bounce users who *land* here with existing knowledge — an
+        // active onboarding run (incl. sample DBs, which ship pre-seeded)
+        // stays on this page until it completes.
         goto('/chat');
       }
     }

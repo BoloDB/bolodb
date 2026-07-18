@@ -47,6 +47,14 @@
   </button>
 {:else}
   <div style="display:flex;flex-direction:column;gap:2px;padding:0;margin-bottom:12px">
+    {#if artifacts.length === 0}
+      <!-- Before the first stream event arrives the card would otherwise be
+           an empty box — show an explicit working state instead. -->
+      <div style="display:flex;align-items:center;gap:10px;padding:8px 14px;color:var(--muted);font-size:13px;font-weight:500">
+        <Spinner />
+        <span>Analyzing your question…</span>
+      </div>
+    {/if}
     {#each artifacts as artifact, i}
       {@const d = artifact.data}
       {#if artifact.kind === "schema"}

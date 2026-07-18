@@ -15,6 +15,11 @@ class AppState {
   openrouterReady = $state(false);
   activeConversationId = $state<string | null>(null);
   tourCompleted = $state(false);
+  // True while a freshly connected user is walking the onboarding flow —
+  // stops /onboard's has_knowledge redirect from kicking them out (sample
+  // databases ship with seeded knowledge, so has_knowledge alone can't
+  // distinguish "already onboarded" from "just connected").
+  onboardingActive = $state(false);
 
   constructor() {
     if (typeof window !== "undefined") {
@@ -122,11 +127,15 @@ class AppState {
       } catch (e) {
         console.error("Failed to load schema:", e);
       }
-      if (res.has_knowledge) {
+      // Sample databases always walk through onboarding (they ship with
+      // seeded knowledge, so has_knowledge can't mean "already onboarded").
+      // Own databases with existing knowledge (reconnects) skip straight in.
+      if (!isSample && res.has_knowledge) {
         goto("/chat");
         return;
       }
     }
+    this.onboardingActive = true;
     goto("/onboard");
   }
 
@@ -147,8 +156,8 @@ class AppState {
         dialect: this.dbInfo?.dialect,
       });
     }
-    // Redirect is handled by the $effect in onboard/+page.svelte
-    // when dbInfo.has_knowledge becomes true
+    this.onboardingActive = false;
+    goto("/chat");
   }
 
   verify(apiCount?: number) {
