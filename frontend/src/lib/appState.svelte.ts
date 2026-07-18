@@ -18,19 +18,22 @@ class AppState {
   constructor() {
     if (typeof window !== "undefined") {
       const stored = localStorage.getItem("bolodb_theme");
-      if (stored) {
-        this.theme = stored;
-      }
+      // Normalize legacy theme names to the two-theme system (dark / light)
+      this.theme = stored === "dark" ? "dark" : stored ? "light" : "dark";
+    }
+  }
+
+  applyTheme(theme: string) {
+    const next = theme === "dark" ? "dark" : "light";
+    this.theme = next;
+    if (typeof window !== "undefined") {
+      localStorage.setItem("bolodb_theme", next);
+      document.documentElement.setAttribute("data-theme", next);
     }
   }
 
   toggleTheme() {
-    const nextTheme = this.theme === "dark" ? "crisp" : "dark";
-    this.theme = nextTheme;
-    if (typeof window !== "undefined") {
-      localStorage.setItem("bolodb_theme", nextTheme);
-      document.documentElement.setAttribute("data-theme", nextTheme);
-    }
+    this.applyTheme(this.theme === "dark" ? "light" : "dark");
   }
 
   get prevLevel() {

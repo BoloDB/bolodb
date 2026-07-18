@@ -163,6 +163,97 @@
   --c-low-tint: rgba(199, 93, 78, 0.15);
 }
 
+/* ============================================================
+   Design tokens — App revamp (BoloDB App.dc.html)
+   Adds the "light" theme (green palette) + shared card/accent tokens.
+   "crisp"/"soft" are kept as aliases so existing screens still work.
+   ============================================================ */
+:root {
+  --accent: var(--brand);
+  --on-brand: #fff;
+  --card: var(--surface);
+  --card-2: var(--surface-2);
+  --card-hover: var(--surface-3);
+  --code-bg: var(--surface-2);
+  --link: var(--brand-ink);
+  --glow-rgb: 27, 158, 107;
+  --contrast-bg: #16201b;
+  --contrast-ink: #ffffff;
+  --low: var(--c-low-ink);
+  --med-ink: var(--c-med-ink);
+  --ok-ink: var(--c-high-ink);
+}
+
+[data-theme="dark"] {
+  --card: #101114;
+  --card-2: #0d0e11;
+  --card-hover: #15171b;
+  --code-bg: #131417;
+  --accent: #62e0b0;
+  --ok-ink: #65d6a2;
+  --on-brand: #04121f;
+  --low: #f38f81;
+  --med-ink: #f5cf7b;
+  --link: #80bfff;
+  --contrast-bg: #f0f0f0;
+  --contrast-ink: #0a0a0a;
+  --glow-rgb: 77, 166, 255;
+}
+
+[data-theme="light"] {
+  color-scheme: light;
+  --bg: #eef1f0;
+  --bg-grad-a: #eff2f1;
+  --bg-grad-b: #e7ecea;
+  --surface: #ffffff;
+  --surface-2: #f0f3f2;
+  --surface-3: #e7ecea;
+  --ink: #16201b;
+  --ink-2: #2c3a33;
+  --muted: #5c6b63;
+  --faint: #8b978f;
+  --border: #e3e8e5;
+  --border-2: #d5dcd8;
+  --brand: #1b9e6b;
+  --brand-ink: #0f6e48;
+  --brand-2: #17875b;
+  --brand-tint: #e7f5ee;
+  --brand-tint-2: #d6eee0;
+  --card: #ffffff;
+  --card-2: #f7f9f8;
+  --card-hover: #f7f9f8;
+  --code-bg: #f0f3f2;
+  --accent: #17875b;
+  --ok-ink: #0f6e48;
+  --on-brand: #ffffff;
+  --low: #9a4337;
+  --med-ink: #8a6210;
+  --link: #0f6e48;
+  --contrast-bg: #16201b;
+  --contrast-ink: #ffffff;
+  --glow-rgb: 27, 158, 107;
+  --radius-xs: 8px;
+  --radius-sm: 11px;
+  --radius: 14px;
+  --radius-lg: 20px;
+  --radius-xl: 26px;
+  --shadow-sm: 0 1px 2px rgba(20, 40, 30, 0.06),
+    0 1px 1px rgba(20, 40, 30, 0.04);
+  --shadow: 0 1px 2px rgba(20, 40, 30, 0.05),
+    0 6px 18px -6px rgba(20, 40, 30, 0.14);
+  --shadow-lg: 0 2px 4px rgba(20, 40, 30, 0.05),
+    0 24px 48px -16px rgba(20, 40, 30, 0.22);
+  --shadow-brand: 0 8px 22px -8px rgba(27, 158, 107, 0.5);
+  --ring: rgba(27, 158, 107, 0.16);
+  --nav-bg: rgba(255, 255, 255, 0.7);
+  --c-high-ink: #0f6e48;
+  --c-high-tint: #e7f5ee;
+  --c-med-ink: #8a6210;
+  --c-med-tint: #faf1da;
+  --c-low-ink: #9a4337;
+  --c-low-tint: #f8e9e5;
+}
+
 * {
   box-sizing: border-box;
 }
