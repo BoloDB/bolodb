@@ -101,8 +101,13 @@ async def set_tour_completed(user_id):
 
     Returns:
         dict: A confirmation payload indicating that the tour was completed.
+
+    Raises:
+        HTTPException: If the user was not found in the database.
     """
-    await mdb.update_user(user_id, tour_completed=True)
+    ok = await mdb.update_user(user_id, tour_completed=True)
+    if not ok:
+        raise HTTPException(404, "User not found")
     return {"ok": True, "tour_completed": True}
 
 

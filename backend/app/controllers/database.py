@@ -64,49 +64,7 @@ async def connect_sample(db, kb, cfg, user_id=None):
         raise HTTPException(500, result["error"])
 
     dbid = db.get_db_id(user_id)
-    if (await kb.count_verified(user_id, dbid)) == 0:
-        await kb.set_glossary(
-            user_id,
-            dbid,
-            [
-                {
-                    "term": "Revenue",
-                    "maps_to": "orders.total_amount",
-                    "sql_hint": "Sum of total_amount on orders with status = completed",
-                },
-                {
-                    "term": "Active customer",
-                    "maps_to": "orders.created_at",
-                    "sql_hint": "A customer with at least one order in the last 90 days",
-                },
-                {
-                    "term": "Top product",
-                    "maps_to": "order_items.quantity",
-                    "sql_hint": "Product ranked by units sold (sum of quantity)",
-                },
-            ],
-        )
-        await kb.add_verified(
-            user_id,
-            dbid,
-            "How many orders were completed last month?",
-            "SELECT COUNT(*) AS completed_orders\nFROM orders\nWHERE status = 'completed'\n  AND created_at >= date('now','start of month','-1 month')\n  AND created_at <  date('now','start of month');",
-            "Count of orders with status 'completed' created in the previous calendar month",
-        )
-        await kb.add_verified(
-            user_id,
-            dbid,
-            "Which product category brings in the most revenue?",
-            "SELECT p.category, ROUND(SUM(oi.quantity*oi.unit_price)) AS revenue\nFROM order_items oi\nJOIN products p ON p.id = oi.product_id\nJOIN orders   o ON o.id = oi.order_id\nWHERE o.status = 'completed'\nGROUP BY p.category\nORDER BY revenue DESC;",
-            "Total revenue per product category, highest first",
-        )
-        await kb.add_verified(
-            user_id,
-            dbid,
-            "How many customers do we have in each segment?",
-            "SELECT segment, COUNT(*) AS customers\nFROM customers\nGROUP BY segment\nORDER BY customers DESC;",
-            "Count of customers grouped by segment",
-        )
+    await kb.seed_sample(user_id, dbid)
 
     result["trust"] = await kb.trust_level(user_id, dbid)
     result["glossary"] = await kb.get_glossary(user_id, dbid)

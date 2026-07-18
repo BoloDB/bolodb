@@ -42,9 +42,9 @@ class AppState {
     try {
       const s = await apiCall("/api/state");
       this.openrouterReady = s.openrouter_ready ?? false;
+      this.tourCompleted = s.tour_completed ?? false;
       if (s.connected) {
         this.verifiedCount = s.trust?.verified || 0;
-        this.tourCompleted = s.tour_completed || false;
         this.dbInfo = s.database || null;
         this.starters = s.starters || [];
         try {
@@ -103,6 +103,7 @@ class AppState {
     this.realSchema = null;
     this.verifiedCount = 0;
     this.starters = [];
+    this.tourCompleted = false;
     this.activeConversationId = null;
     goto("/login");
   }

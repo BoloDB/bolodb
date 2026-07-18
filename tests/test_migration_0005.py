@@ -116,4 +116,5 @@ def test_downgrade_drops_column_after_all_tables(fake_op, migration):
     # automatically recorded on fake_op.mock_calls in chronological order.
     call_names = [c[0] for c in fake_op.mock_calls]
     assert call_names[-1] == "drop_column"
-    assert call_names[:-1] == ["drop_table"] * len(NEW_TABLES)
+    assert call_names[0] == "drop_constraint"
+    assert call_names[1:-1] == ["drop_table"] * len(NEW_TABLES)

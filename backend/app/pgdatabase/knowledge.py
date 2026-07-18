@@ -1,9 +1,12 @@
 """Async PostgreSQL knowledge service — per-(user, database) storage for
 verified Q&As, glossary, and semantic catalog."""
 
+import logging
+
 from difflib import SequenceMatcher
 
 from sqlalchemy import select, delete, func
+from sqlalchemy.exc import IntegrityError
 
 from backend.app.pgdatabase.models import (
     VerifiedQA,
@@ -17,6 +20,8 @@ from backend.app.pgdatabase.models import (
 from backend.app.utils import _tokens
 
 DUPLICATE_THRESHOLD = 0.92
+
+logger = logging.getLogger(__name__)
 
 
 def _similarity(a, b, tb=None, b_lower=None):
@@ -64,14 +69,14 @@ class KnowledgeService:
 
         """
         async with self._session_factory() as session:
-            existing = await self.get_verified(user_id, db_id)
+            result = await session.execute(
+                select(VerifiedQA)
+                .where(VerifiedQA.user_id == user_id, VerifiedQA.db_id == db_id)
+            )
             tb = _tokens(question)
             b_lower = question.lower()
-            for e in existing:
-                if (
-                    _similarity(e["question"], question, tb, b_lower)
-                    > DUPLICATE_THRESHOLD
-                ):
+            for r in result.scalars().all():
+                if _similarity(r.question, question, tb, b_lower) > DUPLICATE_THRESHOLD:
                     return
             session.add(
                 VerifiedQA(
@@ -82,7 +87,14 @@ class KnowledgeService:
                     restatement=restatement,
                 )
             )
-            await session.commit()
+            try:
+                await session.commit()
+            except IntegrityError:
+                await session.rollback()
+                logger.warning(
+                    "Duplicate verified QA skipped (user=%s db=%s question=%s)",
+                    user_id, db_id, question,
+                )
 
     async def get_verified(self, user_id, db_id):
         """
@@ -284,6 +296,51 @@ class KnowledgeService:
         """
         catalog = await self.get_catalog(user_id, db_id)
         return not any(catalog.values())
+
+    async def seed_sample(self, user_id, db_id):
+        """Seed sample knowledge for a new sample-database connection.
+
+        All operations run in one transaction so partial failures roll back
+        cleanly and the guard (count_verified == 0) remains accurate.
+        """
+        async with self._session_factory() as session:
+            count = await session.execute(
+                select(func.count()).where(
+                    VerifiedQA.user_id == user_id, VerifiedQA.db_id == db_id
+                )
+            )
+            if count.scalar() or 0 > 0:
+                return
+            await session.execute(
+                delete(Glossary).where(
+                    Glossary.user_id == user_id, Glossary.db_id == db_id
+                )
+            )
+            for t in [
+                {"term": "Revenue", "maps_to": "orders.total_amount", "sql_hint": "Sum of total_amount on orders with status = completed"},
+                {"term": "Active customer", "maps_to": "orders.created_at", "sql_hint": "A customer with at least one order in the last 90 days"},
+                {"term": "Top product", "maps_to": "order_items.quantity", "sql_hint": "Product ranked by units sold (sum of quantity)"},
+            ]:
+                session.add(Glossary(user_id=user_id, db_id=db_id, **t))
+            for q, s, r in [
+                (
+                    "How many orders were completed last month?",
+                    "SELECT COUNT(*) AS completed_orders\nFROM orders\nWHERE status = 'completed'\n  AND created_at >= date('now','start of month','-1 month')\n  AND created_at <  date('now','start of month');",
+                    "Count of orders with status 'completed' created in the previous calendar month",
+                ),
+                (
+                    "Which product category brings in the most revenue?",
+                    "SELECT p.category, ROUND(SUM(oi.quantity*oi.unit_price)) AS revenue\nFROM order_items oi\nJOIN products p ON p.id = oi.product_id\nJOIN orders   o ON o.id = oi.order_id\nWHERE o.status = 'completed'\nGROUP BY p.category\nORDER BY revenue DESC;",
+                    "Total revenue per product category, highest first",
+                ),
+                (
+                    "How many customers do we have in each segment?",
+                    "SELECT segment, COUNT(*) AS customers\nFROM customers\nGROUP BY segment\nORDER BY customers DESC;",
+                    "Count of customers grouped by segment",
+                ),
+            ]:
+                session.add(VerifiedQA(user_id=user_id, db_id=db_id, question=q, sql=s, restatement=r))
+            await session.commit()
 
     async def trust_level(self, user_id, db_id):
         """

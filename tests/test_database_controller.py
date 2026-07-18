@@ -53,6 +53,9 @@ class DummyKB:
         """
         return [{"question": f"starter:{db_id}"}]
 
+    async def seed_sample(self, user_id, db_id):
+        return
+
 
 def test_connect_uses_user_scoped_connect_and_result_metadata(monkeypatch):
     class DummyDB:

@@ -52,6 +52,9 @@ def upgrade() -> None:
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
     )
     op.create_index("ix_verified_qa_user_db", "verified_qas", ["user_id", "db_id"])
+    op.create_unique_constraint(
+        "uq_verified_qa_user_db_question", "verified_qas", ["user_id", "db_id", "question"]
+    )
 
     op.create_table(
         "glossary_terms",
@@ -157,6 +160,7 @@ def downgrade() -> None:
     """
     Revert the schema changes introduced by this migration.
     """
+    op.drop_constraint("uq_verified_qa_user_db_question", "verified_qas", type_="unique")
     op.drop_table("catalog_value_mappings")
     op.drop_table("catalog_synonyms")
     op.drop_table("catalog_joins")
