@@ -2,6 +2,7 @@
   import { schema as defaultSchema, trustFor, formatTime } from '$lib/data';
   import type { SchemaTable, DbInfo, Conversation } from '$lib/types';
   import { getConversations, deleteConversation, clearConversations, renameConversation } from '$lib/api';
+  import { appState } from '$lib/appState.svelte';
 
   type Tab = 'ask' | 'dash' | 'settings';
 
@@ -75,6 +76,7 @@
       conversations = [];
     } catch (e) {
       console.error(e);
+      appState.showError("Couldn't clear conversations — please try again.");
     }
   }
 
@@ -85,6 +87,7 @@
       conversations = conversations.filter((c) => c._id !== id);
     } catch (e) {
       console.error(e);
+      appState.showError("Couldn't delete that conversation — please try again.");
     }
   }
 
@@ -105,6 +108,7 @@
         conversations = conversations.map((c) => (c._id === id ? { ...c, title } : c));
       } catch (e) {
         console.error(e);
+        appState.showError("Couldn't rename that conversation — please try again.");
       }
     }
     editingId = null;

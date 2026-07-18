@@ -121,6 +121,7 @@ export type StreamEvent =
 export interface Toast {
   title: string;
   body: string;
+  kind?: "success" | "error";
 }
 
 export interface WrongReason {

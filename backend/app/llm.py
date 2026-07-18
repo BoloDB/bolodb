@@ -15,6 +15,14 @@ log = logging.getLogger(__name__)
 
 MODEL = "deepseek/deepseek-v4-flash"
 
+# Shown when the AI service is rate-limiting, timing out, erroring server-side,
+# or unreachable — i.e. whenever the LLM is not responding.
+HIGH_TRAFFIC_MESSAGE = (
+    "We're experiencing high traffic right now, so answers may be delayed. "
+    "Switch to a paid plan for priority access, or come back and try again "
+    "in a few minutes."
+)
+
 
 def _redact_error_text(text, max_len=200):
     s = text[:max_len]
@@ -288,6 +296,29 @@ class OpenRouterProvider(LLMProvider):
 
         try:
             resp = await self._client.chat.completions.create(**completion_kwargs)
+        except (openai.RateLimitError, openai.APITimeoutError, openai.APIConnectionError) as e:
+            # The AI service is rate-limiting us, timing out, or unreachable —
+            # from the user's perspective the AI is not responding.
+            raise LLMError(
+                HIGH_TRAFFIC_MESSAGE,
+                detail=f"OpenRouter unavailable ({type(e).__name__}): {_redact_error_text(str(e))}",
+            )
+        except (openai.AuthenticationError, openai.PermissionDeniedError) as e:
+            raise LLMError(
+                "The AI service rejected the configured API key. "
+                "Check OPENROUTER_API_KEY in the server environment.",
+                detail=f"OpenRouter auth error: {_redact_error_text(str(e))}",
+            )
+        except openai.APIStatusError as e:
+            if e.status_code >= 500:
+                raise LLMError(
+                    HIGH_TRAFFIC_MESSAGE,
+                    detail=f"OpenRouter {e.status_code}: {_redact_error_text(str(e))}",
+                )
+            raise LLMError(
+                "The AI service returned an error. Please try again.",
+                detail=f"OpenRouter API error: {_redact_error_text(str(e))}",
+            )
         except openai.APIError as e:
             raise LLMError(
                 "The AI service returned an error. Please try again.",

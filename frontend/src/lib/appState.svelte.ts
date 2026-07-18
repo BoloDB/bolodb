@@ -186,9 +186,21 @@ class AppState {
               title: "Fully calibrated",
               body: "All answers appear directly now. Reasoning is always one tap away.",
             };
-      this.toast = msg;
-      setTimeout(() => (this.toast = null), 4200);
+      this.showToast(msg);
     }
+  }
+
+  private toastTimer: ReturnType<typeof setTimeout> | undefined;
+
+  showToast(toast: Toast, duration = 4200) {
+    this.toast = toast;
+    clearTimeout(this.toastTimer);
+    this.toastTimer = setTimeout(() => (this.toast = null), duration);
+  }
+
+  /** Surface a failed action to the user as an error toast. */
+  showError(body: string, title = "Something went wrong") {
+    this.showToast({ title, body, kind: "error" }, 5200);
   }
 
   async disconnect() {

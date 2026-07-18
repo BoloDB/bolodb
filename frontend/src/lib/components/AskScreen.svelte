@@ -228,6 +228,7 @@
       return conv._id;
     } catch (e) {
       console.error("Failed to create conversation", e);
+      appState.showError("Couldn't start a new conversation — your question will still run, but it won't be saved to history.");
       return null;
     }
   }
@@ -335,16 +336,25 @@
         const errMsg = err.message || "Request failed";
         const isApiKeyError =
           errMsg.toLowerCase().includes("api key");
+        // Transport-level failures carry technical text; anything else came
+        // from a backend error event and is already written for the user
+        // (e.g. the high-traffic notice) — show it verbatim.
+        const isTechnical =
+          /^(request failed|stream ended|failed to fetch|networkerror|load failed|streaming not supported)/i.test(
+            errMsg,
+          );
         onUpdateTurn(id, {
           thinking: false,
           restatement: isApiKeyError
             ? "AI not ready — set OPENROUTER_API_KEY in the server environment."
-            : "Something went wrong — please try again.",
+            : isTechnical
+              ? "Something went wrong — please check your connection and try again."
+              : errMsg,
           sql: "",
           columns: [],
           rows: [],
           confidence: "low" as const,
-          reason: errMsg,
+          reason: isTechnical ? errMsg : "",
           basedOn: false,
           query_id: id,
           verdict: null,
@@ -522,6 +532,7 @@
       turns = loaded;
     } catch (e) {
       console.error('Failed to load conversation', e);
+      appState.showError("Couldn't open that conversation — please try again.");
     } finally {
       if (seq === convLoadSeq) loading = false;
     }
