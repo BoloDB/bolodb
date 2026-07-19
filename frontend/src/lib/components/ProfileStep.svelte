@@ -1,8 +1,6 @@
 <script lang="ts">
   import { schema as defaultSchema } from '$lib/data';
   import type { SchemaTable } from '$lib/types';
-  import Spinner from '$lib/components/ui/Spinner.svelte';
-  import Button from '$lib/components/ui/Button.svelte';
 
   let { onNext, schema }: { onNext: () => void; schema: SchemaTable[] | null } = $props();
 
@@ -12,53 +10,114 @@
 
   $effect(() => {
     if (done < tableList.length) {
-      const t = setTimeout(() => done++, 360 + Math.random() * 220);
+      const t = setTimeout(() => done++, 360 + Math.random() * 200);
       return () => clearTimeout(t);
     }
   });
 </script>
 
-<div class="rise card" style="padding:26px">
-  <h2 style="margin:0 0 5px;font-size:21px;font-weight:700;letter-spacing:-.02em">Getting to know your database</h2>
-  <p style="margin:0 0 20px;color:var(--muted);font-size:14.5px">
-    BoloDB is reading your table structure — column names, relationships, and what categories your data uses. Nothing is uploaded or sent anywhere.
-  </p>
-  <div style="display:flex;flex-direction:column;gap:9px">
-    {#each tableList as t, i}
-      {@const state = i < done ? 'done' : i === done ? 'active' : 'wait'}
-      <div style="display:flex;align-items:center;gap:13px;padding:12px 15px;border-radius:var(--radius-sm);border:1px solid var(--border);background:{state==='active'?'var(--brand-tint)':'var(--surface-2)'};opacity:{state==='wait'?0.5:1};transition:all .3s var(--ease)">
-        <span style="width:26px;height:26px;border-radius:8px;display:grid;place-items:center;flex-shrink:0;background:{state==='done'?'var(--brand)':state==='active'?'var(--surface)':'var(--surface-3)'};color:{state==='done'?'#fff':'var(--brand)'};border:{state==='active'?'1px solid var(--brand-tint-2)':'none'}">
-          {#if state === 'done'}
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M5 12.5l4.2 4.2L19 7" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"/></svg>
-          {:else if state === 'active'}
-            <Spinner />
-          {:else}
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><rect x="3.5" y="4.5" width="17" height="15" rx="2.2" stroke="currentColor" stroke-width="1.8"/><path d="M3.5 9.5h17M9 9.5v10M3.5 14.5h17" stroke="currentColor" stroke-width="1.6"/></svg>
-          {/if}
+<div class="step">
+  <h1 class="title">Reading your schema…</h1>
+  <p class="sub">Table structures only — your rows stay put.</p>
+
+  <div class="rows">
+    {#each tableList.slice(0, done) as t}
+      <div class="row">
+        <span class="mono name">{t.name}</span>
+        <span class="right">
+          <span class="mono rows-count">{t.rows} rows</span>
+          <span class="check">✓</span>
         </span>
-        <div style="flex:1;min-width:0">
-          <div style="display:flex;align-items:baseline;gap:8px">
-            <span class="mono" style="font-weight:700;font-size:14px;color:var(--ink)">{t.name}</span>
-            <span class="tnum" style="font-size:12px;color:var(--faint);font-weight:600">{t.rows} rows</span>
-          </div>
-          <div class="mono" style="font-size:11.5px;color:var(--faint);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{t.cols.join(', ')}</div>
-        </div>
-        {#if state === 'done'}
-          <span style="font-size:12px;font-weight:700;color:var(--brand-ink)">linked</span>
-        {/if}
       </div>
     {/each}
-  </div>
-  <div style="display:flex;justify-content:flex-end;margin-top:20px">
-    {#if allDone}
-      <Button kind="primary" size="lg" onclick={onNext} data-testid="profile-continue-button">
-        {#snippet iconRight()}<svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M5 12h14M13 6l6 6-6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>{/snippet}
-        Looks good — continue
-      </Button>
-    {:else}
-      <span style="font-size:13px;color:var(--faint);font-weight:550;display:flex;align-items:center;gap:7px">
-        <Spinner /> Reading your database…
-      </span>
+    {#if !allDone}
+      <div class="profiling"><span class="spinner"></span>profiling…</div>
     {/if}
   </div>
+
+  {#if allDone}
+    <button class="cta" onclick={onNext} data-testid="profile-continue-button">Looks good — continue →</button>
+  {/if}
 </div>
+
+<style>
+  .step {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    max-width: 480px;
+    width: 100%;
+    animation: riseIn 0.5s var(--ease) both;
+  }
+  @keyframes riseIn {
+    from { opacity: 0; transform: translateY(14px); }
+    to { opacity: 1; transform: none; }
+  }
+  .title {
+    margin: 0 0 4px;
+    font-size: clamp(1.8rem, 3.4vw, 2.6rem);
+    font-weight: 800;
+    letter-spacing: -0.03em;
+    text-align: center;
+    color: var(--ink);
+  }
+  .sub {
+    margin: 0 0 20px;
+    font-size: 15px;
+    color: var(--muted);
+    text-align: center;
+    line-height: 1.6;
+  }
+  .rows {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 13px 18px;
+    animation: riseIn 0.35s var(--ease) both;
+  }
+  .name { font-size: 13px; color: var(--ink-2); }
+  .right { display: flex; align-items: center; gap: 10px; }
+  .rows-count { font-size: 11px; color: var(--faint); }
+  .check { color: var(--ok-ink); font-size: 13px; }
+  .profiling {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 13px 18px;
+    color: var(--muted);
+    font-size: 13.5px;
+  }
+  .spinner {
+    display: inline-block;
+    width: 13px;
+    height: 13px;
+    border-radius: 50%;
+    border: 2px solid var(--brand);
+    border-top-color: transparent;
+    animation: spin 0.8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .cta {
+    margin-top: 18px;
+    background: var(--brand);
+    color: var(--on-brand);
+    border: none;
+    font-weight: 700;
+    font-size: 15px;
+    padding: 14px 30px;
+    border-radius: 99px;
+    cursor: pointer;
+    transition: all 0.18s;
+  }
+  .cta:hover { background: var(--brand-2); transform: translateY(-1px); }
+</style>

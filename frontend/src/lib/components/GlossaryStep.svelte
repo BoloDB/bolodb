@@ -1,71 +1,185 @@
 <script lang="ts">
   import { glossary as defaultGlossary } from '$lib/data';
   import type { GlossaryItem } from '$lib/types';
-  import Button from '$lib/components/ui/Button.svelte';
 
-  let { onNext, onBack, glossaryItems }: { onNext: (g: any[]) => void; onBack?: () => void; glossaryItems: GlossaryItem[] | null } = $props();
+  let { onNext, onBack, glossaryItems }:
+    { onNext: (g: any[]) => void; onBack?: () => void; glossaryItems: GlossaryItem[] | null } = $props();
 
   const items = $derived(glossaryItems && glossaryItems.length ? glossaryItems : defaultGlossary);
-  const glossList = $derived(items.map(g => g.def !== undefined ? g : { term: g.term, def: g.maps_to || g.def || '', maps_to: g.maps_to || '', alt: g.alt || [], sql_hint: g.sql_hint || '' }));
-  let choices = $state<number[]>([]);
+  const glossList = $derived(
+    items.map((g) => ({
+      term: g.term,
+      def: g.def || g.maps_to || '',
+      maps_to: g.maps_to || g.def || '',
+      sql_hint: g.sql_hint || '',
+    })),
+  );
+  let confirmed = $state<boolean[]>([]);
 
   $effect(() => {
-    if (choices.length !== items.length) {
-      const next = items.map((_, i) => choices[i] ?? 0);
-      choices = next;
+    if (confirmed.length !== items.length) {
+      confirmed = items.map((_, i) => confirmed[i] ?? false);
     }
   });
 
-  function next() {
-    const confirmed = glossList.map((g, gi) => {
-      const opts = [g.def || g.maps_to || '', ...(g.alt || [])];
-      return { term: g.term, maps_to: opts[choices[gi]] ?? opts[0], sql_hint: g.sql_hint || '' };
-    });
-    onNext(confirmed);
+  const okCount = $derived(confirmed.filter(Boolean).length);
+  const cta = $derived(okCount === glossList.length && glossList.length > 0 ? 'Start asking →' : 'Confirm all & start →');
+
+  function build() {
+    return glossList.map((g) => ({ term: g.term, maps_to: g.def, sql_hint: g.sql_hint }));
+  }
+  function confirmAll() {
+    confirmed = items.map(() => true);
+    onNext(build());
+  }
+  function skip() {
+    onNext(build());
+  }
+  function toggle(i: number) {
+    confirmed = confirmed.map((v, j) => (j === i ? !v : v));
   }
 </script>
 
-<div class="rise">
-  <div class="card" style="padding:26px;margin-bottom:16px">
-    <h2 style="margin:0 0 5px;font-size:21px;font-weight:700;letter-spacing:-.02em">Confirm what your terms mean</h2>
-    <p style="margin:0 0 4px;color:var(--muted);font-size:14.5px">
-      BoloDB guessed how a few business words map to your data. Confirm or correct them — this is what keeps answers in your language.
-    </p>
-  </div>
-  <div style="display:flex;flex-direction:column;gap:13px">
-    {#each glossList as g, gi}
-      <div class="card rise" style="padding:20px;animation-delay:{gi * 70}ms">
-        <div style="display:flex;align-items:baseline;gap:9px;margin-bottom:13px">
-          <span style="font-weight:800;font-size:16px;letter-spacing:-.01em;white-space:nowrap">{g.term}</span>
-          <span style="font-size:11.5px;color:var(--faint);font-weight:600">means…</span>
+<div class="step">
+  {#if onBack}
+    <button class="back" onclick={onBack} aria-label="Back">← Back</button>
+  {/if}
+  <h1 class="title">Do these sound right?</h1>
+  <p class="sub">BoloDB guessed what your key business terms mean. Confirming them keeps every future answer honest.</p>
+
+  <div class="cards">
+    {#each glossList as g, i}
+      <div class="term-card" style="border-color:{confirmed[i] ? 'var(--ok-ink)' : 'var(--border)'}">
+        <div class="term-info">
+          <span class="term">{g.term}</span>
+          <span class="def">{g.def}</span>
         </div>
-        <div style="display:flex;flex-direction:column;gap:8px">
-          {#each [g.def || g.maps_to || '', ...(g.alt || [])] as opt, oi}
-            {@const on = choices[gi] === oi}
-            <button onclick={() => choices = choices.map((v, i) => i === gi ? oi : v)} class="focusable"
-              style="display:flex;align-items:center;gap:11px;text-align:left;padding:11px 14px;border-radius:var(--radius-sm);cursor:pointer;background:{on?'var(--brand-tint)':'var(--surface-2)'};border:{on?'1.5px solid var(--brand)':'1.5px solid var(--border)'};transition:all .15s var(--ease)">
-              <span style="width:18px;height:18px;border-radius:99px;flex-shrink:0;display:grid;place-items:center;border:{on?'none':'2px solid var(--border-2)'};background:{on?'var(--brand)':'transparent'}">
-                {#if on}<svg width="11" height="11" viewBox="0 0 24 24" fill="none"><path d="M5 12.5l4.2 4.2L19 7" stroke="#fff" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"/></svg>{/if}
-              </span>
-              <span style="flex:1;font-size:14px;font-weight:{on?600:500};color:{on?'var(--ink)':'var(--ink-2)'}">{opt}</span>
-              {#if oi === 0}
-                <span style="font-size:10.5px;font-weight:800;padding:2px 7px;border-radius:99px;background:var(--surface-3);color:var(--faint);letter-spacing:.03em">SUGGESTED</span>
-              {/if}
-            </button>
-          {/each}
-        </div>
+        <button
+          class="confirm-btn"
+          class:on={confirmed[i]}
+          onclick={() => toggle(i)}
+        >{confirmed[i] ? '✓ Confirmed' : 'Looks right'}</button>
       </div>
     {/each}
   </div>
-  <div style="display:flex;justify-content:space-between;margin-top:20px">
-    {#if onBack}
-      <Button kind="ghost" onclick={onBack}>
-        ← Back
-      </Button>
-    {/if}
-    <Button kind="primary" size="lg" onclick={next} data-testid="glossary-continue-button">
-      {#snippet iconRight()}<svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M5 12h14M13 6l6 6-6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>{/snippet}
-      Save terms &amp; verify answers
-    </Button>
+
+  <div class="actions">
+    <button class="cta" onclick={confirmAll} data-testid="glossary-continue-button">{cta}</button>
+    <button class="skip" onclick={skip}>Skip for now</button>
   </div>
 </div>
+
+<style>
+  .step {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    max-width: 560px;
+    width: 100%;
+    position: relative;
+    animation: riseIn 0.5s var(--ease) both;
+  }
+  @keyframes riseIn {
+    from { opacity: 0; transform: translateY(14px); }
+    to { opacity: 1; transform: none; }
+  }
+  .back {
+    align-self: flex-start;
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    background: transparent;
+    border: none;
+    color: var(--faint);
+    font-size: 13.5px;
+    font-weight: 600;
+    cursor: pointer;
+    padding: 0 0 6px;
+  }
+  .back:hover { color: var(--ink); }
+  .title {
+    margin: 0 0 4px;
+    font-size: clamp(1.8rem, 3.4vw, 2.6rem);
+    font-weight: 800;
+    letter-spacing: -0.03em;
+    text-align: center;
+    color: var(--ink);
+  }
+  .sub {
+    margin: 0 0 20px;
+    font-size: 15px;
+    color: var(--muted);
+    text-align: center;
+    line-height: 1.6;
+    max-width: 420px;
+  }
+  .cards {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .term-card {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 16px 20px;
+    transition: border-color 0.25s;
+  }
+  .term-info {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+  }
+  .term { font-size: 15.5px; font-weight: 700; color: var(--ink); }
+  .def { font-size: 13.5px; color: var(--muted); line-height: 1.5; }
+  .confirm-btn {
+    background: transparent;
+    color: var(--muted);
+    border: 1px solid var(--border-2);
+    font-size: 13px;
+    font-weight: 600;
+    padding: 8px 16px;
+    border-radius: 99px;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: all 0.18s;
+  }
+  .confirm-btn.on {
+    background: var(--c-high-tint);
+    color: var(--ok-ink);
+    border-color: var(--ok-ink);
+  }
+  .actions {
+    display: flex;
+    align-items: center;
+    gap: 18px;
+    margin-top: 18px;
+  }
+  .cta {
+    background: var(--brand);
+    color: var(--on-brand);
+    border: none;
+    font-weight: 700;
+    font-size: 15px;
+    padding: 14px 30px;
+    border-radius: 99px;
+    cursor: pointer;
+    transition: all 0.18s;
+  }
+  .cta:hover { background: var(--brand-2); transform: translateY(-1px); }
+  .skip {
+    background: transparent;
+    border: none;
+    color: var(--faint);
+    font-size: 14px;
+    cursor: pointer;
+  }
+  .skip:hover { color: var(--muted); }
+</style>

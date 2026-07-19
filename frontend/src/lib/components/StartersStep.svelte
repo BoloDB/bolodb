@@ -40,13 +40,11 @@
   }
 </script>
 
-<div class="rise">
-  <div class="card" style="padding:26px;margin-bottom:16px">
-    <h2 style="margin:0 0 5px;font-size:21px;font-weight:700;letter-spacing:-.02em">Check a few answers before you start</h2>
-    <p style="margin:0;color:var(--muted);font-size:14.5px">
-      BoloDB ran these questions against your database. Confirm the ones that look right — each one you approve becomes a reference answer that keeps future results accurate.
-    </p>
-  </div>
+<div class="step">
+  <h1 class="title">Check a few answers</h1>
+  <p class="sub">
+    BoloDB ran these against your database. Confirm the ones that look right — each approval becomes a reference answer that keeps future results accurate.
+  </p>
 
   {#if !ready}
     <div style="display:flex;flex-direction:column;gap:13px">
@@ -96,3 +94,34 @@
     </div>
   {/if}
 </div>
+
+<style>
+  .step {
+    display: flex;
+    flex-direction: column;
+    max-width: 620px;
+    width: 100%;
+    margin: 0 auto;
+    animation: riseIn 0.5s var(--ease) both;
+  }
+  @keyframes riseIn {
+    from { opacity: 0; transform: translateY(14px); }
+    to { opacity: 1; transform: none; }
+  }
+  .title {
+    margin: 0 0 6px;
+    font-size: clamp(1.8rem, 3.4vw, 2.6rem);
+    font-weight: 800;
+    letter-spacing: -0.03em;
+    text-align: center;
+    color: var(--ink);
+  }
+  .sub {
+    margin: 0 auto 22px;
+    font-size: 15px;
+    color: var(--muted);
+    text-align: center;
+    line-height: 1.6;
+    max-width: 460px;
+  }
+</style>

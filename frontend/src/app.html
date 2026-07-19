@@ -5,7 +5,7 @@
       (function () {
         try {
           var stored = localStorage.getItem("bolodb_theme");
-          var theme = stored ? stored : "dark";
+          var theme = stored === "dark" ? "dark" : stored ? "light" : "dark";
           document.documentElement.setAttribute("data-theme", theme);
         } catch (e) {}
       })();

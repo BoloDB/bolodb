@@ -1,42 +1,73 @@
 <script lang="ts">
   import { schema as defaultSchema, trustFor, formatTime } from '$lib/data';
   import type { SchemaTable, DbInfo, Conversation } from '$lib/types';
-  import Logo from '$lib/components/ui/Logo.svelte';
-  import TrustMeter from '$lib/components/ui/TrustMeter.svelte';
-  import { getConversations, deleteConversation, clearConversations, renameConversation } from '$lib/api';
+  import { getConversations, deleteConversation, clearConversations } from '$lib/api';
 
-  let { verifiedCount, onSettings, schema, dbInfo, onConversationSelect, activeConversationId, conversationTrigger = 0 }:
-    { verifiedCount: number; onSettings: () => void; schema: SchemaTable[] | null; dbInfo: DbInfo | null; onConversationSelect?: (id: string) => void; activeConversationId?: string | null; conversationTrigger?: number } = $props();
+  type Tab = 'ask' | 'dash' | 'settings';
 
-  const trust = $derived(trustFor(verifiedCount));
+  let {
+    activeTab,
+    onTab,
+    verifiedCount,
+    schema,
+    dbInfo,
+    onConversationSelect,
+    onNewChat,
+    activeConversationId,
+    conversationTrigger = 0,
+    userEmail = '',
+    theme = 'dark',
+    onToggleTheme,
+    onLogout,
+  }: {
+    activeTab: Tab;
+    onTab: (t: Tab) => void;
+    verifiedCount: number;
+    schema: SchemaTable[] | null;
+    dbInfo: DbInfo | null;
+    onConversationSelect?: (id: string) => void;
+    onNewChat?: () => void;
+    activeConversationId?: string | null;
+    conversationTrigger?: number;
+    userEmail?: string;
+    theme?: string;
+    onToggleTheme?: () => void;
+    onLogout?: () => void;
+  } = $props();
+
+  let sidePanel: 'chats' | 'schema' = $state('chats');
   let openTable: string | null = $state(null);
+  let profileOpen = $state(false);
   let conversations: Conversation[] = $state([]);
-  let openConversations: boolean = $state(true);
-  let editingId: string | null = $state(null);
-  let editTitle: string = $state('');
-  let sidebarOpen = $state(true);
 
-  const schemaData = $derived(schema || defaultSchema);
-  const dbLabel = $derived(dbInfo ? (dbInfo.url || '').split('/').pop() || dbInfo.dialect || 'your database' : 'your database');
+  const schemaData = $derived(schema && schema.length ? schema : defaultSchema);
+  const trust = $derived(trustFor(verifiedCount));
+  const trustPct = $derived(
+    verifiedCount >= 7 ? '100%' : verifiedCount >= 3 ? '66%' : Math.max(8, verifiedCount * 11) + '%',
+  );
+  const trustInk = $derived(
+    verifiedCount >= 7 ? 'var(--ok-ink)' : verifiedCount >= 3 ? 'var(--accent)' : 'var(--muted)',
+  );
+
+  const name = $derived(userEmail ? userEmail.split('@')[0] : 'Signed in');
+  const initials = $derived(
+    (userEmail ? userEmail.slice(0, 2) : 'BD').toUpperCase(),
+  );
+
+  const navItems: { label: string; icon: string; key: Tab }[] = [
+    { label: 'Ask', icon: '?', key: 'ask' },
+    { label: 'Dashboard', icon: '▦', key: 'dash' },
+    { label: 'Settings', icon: '⚙', key: 'settings' },
+  ];
 
   $effect(() => {
     conversationTrigger;
-    getConversations().then(res => {
-      if (res && res.conversations) {
-        conversations = res.conversations;
-      }
-    }).catch(e => console.error(e));
+    getConversations()
+      .then((res) => {
+        if (res && res.conversations) conversations = res.conversations;
+      })
+      .catch((e) => console.error(e));
   });
-
-  async function handleDelete(id: string, e: Event) {
-    e.stopPropagation();
-    try {
-      await deleteConversation(id);
-      conversations = conversations.filter(c => c._id !== id);
-    } catch (e) {
-      console.error(e);
-    }
-  }
 
   async function handleClearConvs() {
     try {
@@ -47,166 +78,420 @@
     }
   }
 
-  function startRename(conv: Conversation, e: Event) {
+  async function handleDelete(id: string, e: Event) {
     e.stopPropagation();
-    editingId = conv._id;
-    editTitle = conv.title || conv.last_question || '';
-  }
-
-  async function finishRename(id: string) {
-    const title = editTitle.trim();
-    if (title && title !== (conversations.find(c => c._id === id)?.title || '')) {
-      try {
-        await renameConversation(id, title);
-        conversations = conversations.map(c => c._id === id ? { ...c, title } : c);
-      } catch (e) {
-        console.error(e);
-      }
-    }
-    editingId = null;
-    editTitle = '';
-  }
-
-  function handleRenameKeydown(e: KeyboardEvent, id: string) {
-    if (e.key === 'Enter') {
-      e.preventDefault();
-      (e.target as HTMLInputElement).blur();
-    } else if (e.key === 'Escape') {
-      editingId = null;
-      editTitle = '';
+    try {
+      await deleteConversation(id);
+      conversations = conversations.filter((c) => c._id !== id);
+    } catch (e) {
+      console.error(e);
     }
   }
-
 </script>
 
-<div style="display:flex;flex-shrink:0;height:100%;position:relative">
-<div style="width:{sidebarOpen ? '286px' : '0'};overflow:hidden;flex-shrink:0;background:var(--surface);display:flex;flex-direction:column;height:100%;transition:width .2s;position:relative">
-
-  <!-- trust panel -->
-  <div style="margin:16px 16px 14px;padding:16px;border-radius:var(--radius);background:linear-gradient(165deg, var(--brand-tint), var(--surface-2));border:1px solid var(--border)">
-    <div style="display:flex;align-items:center;gap:7px;margin-bottom:11px">
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" style="color:var(--brand)"><path d="M12 3l7 3v5c0 4.4-3 8-7 10-4-2-7-5.6-7-10V6l7-3z" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round"/><path d="M9 12l2 2 4-4" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></svg>
-      <span style="font-size:12px;font-weight:800;letter-spacing:.04em;color:var(--brand-ink);text-transform:uppercase;white-space:nowrap">Accuracy</span>
-      <span style="margin-left:auto;font-size:11px;font-weight:700;color:var(--faint)">{verifiedCount} verified</span>
-    </div>
-    <TrustMeter count={verifiedCount} />
-    <p style="font-size:12.5px;color:var(--muted);line-height:1.5;margin:11px 0 0">{trust.behaviour}</p>
-    {#if trust.next}
-      <div style="margin-top:10px;padding:9px 11px;background:var(--surface);border-radius:var(--radius-sm);font-size:12px;color:var(--brand-ink);font-weight:600;line-height:1.5">
-        Verify {trust.next - verifiedCount} more correct answer{trust.next - verifiedCount === 1 ? '' : 's'} and BoloDB will
-        {trust.key === 'supervised' ? 'start showing confident answers directly without waiting.' : 'answer all questions directly — reasoning one tap away.'}
-      </div>
-    {:else}
-      <div style="margin-top:10px;padding:9px 11px;background:var(--surface);border-radius:var(--radius-sm);font-size:12px;color:var(--brand-ink);font-weight:600">
-        ✓ BoloDB is fully calibrated for this database.
-      </div>
-    {/if}
+<aside class="sidebar">
+  <!-- brand -->
+  <div class="brand">
+    <svg width="22" height="22" viewBox="0 0 256 256" fill="none">
+      <path d="M 52 44 Q 52 30 66 30 L 190 30 Q 204 30 204 44 L 204 138 Q 204 152 190 152 L 116 152 L 88 176 L 92 152 L 66 152 Q 52 152 52 138 Z" stroke="var(--brand)" stroke-width="6" fill="none" />
+      <g stroke="var(--brand)" stroke-width="6" stroke-linecap="round" fill="none">
+        <ellipse cx="128" cy="66" rx="34" ry="11" />
+        <path d="M 94 66 L 94 108 Q 94 119 128 119 Q 162 119 162 108 L 162 66" />
+        <path d="M 94 87 Q 94 98 128 98 Q 162 98 162 87" />
+      </g>
+    </svg>
+    <span class="brand-name">Bolo<span style="color:var(--brand)">DB</span></span>
   </div>
 
-  <!-- schema + conversations -->
-  <div style="flex:1;overflow-y:auto;padding:2px 16px 10px">
-    <div style="font-size:11px;font-weight:800;letter-spacing:.06em;color:var(--faint);margin:6px 6px 9px;text-transform:uppercase;display:flex;align-items:center;gap:6px">
-      <svg width="13" height="13" viewBox="0 0 24 24" fill="none"><rect x="3.5" y="4.5" width="17" height="15" rx="2.2" stroke="currentColor" stroke-width="1.8"/><path d="M3.5 9.5h17M9 9.5v10M3.5 14.5h17" stroke="currentColor" stroke-width="1.6"/></svg>
-      Schema
-    </div>
-    {#each schemaData as t}
-      <div style="margin-bottom:3px">
-        <button onclick={() => openTable = openTable === t.name ? null : t.name}
-          style="width:100%;display:flex;align-items:center;gap:8px;padding:8px 9px;border-radius:var(--radius-xs);border:none;background:{openTable===t.name?'var(--surface-3)':'transparent'};cursor:pointer;text-align:left;transition:background .12s">
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" style="color:var(--faint);transform:{openTable===t.name?'none':'rotate(-90deg)'};transition:transform .15s;flex-shrink:0"><path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"/></svg>
-          <span class="mono" style="font-size:13px;font-weight:650;color:var(--ink);flex:1">{t.name}</span>
-          <span class="tnum" style="font-size:10.5px;color:var(--faint);font-weight:600">{t.rows}</span>
-        </button>
-        {#if openTable === t.name}
-          <div class="rise" style="padding:2px 0 6px 27px">
-            {#each t.cols as c}
-              <div class="mono" style="font-size:11.5px;color:var(--muted);padding:3px 0;display:flex;align-items:center;gap:6px">
-                <span style="width:4px;height:4px;border-radius:99px;background:{c.includes('PK')?'var(--brand)':c.includes('→')?'var(--c-med)':'var(--border-2)'}"></span>
-                {c}
-              </div>
-            {/each}
-          </div>
-        {/if}
-      </div>
-    {/each}
+  <!-- nav -->
+  {#each navItems as n}
+    <button
+      class="nav-item"
+      class:active={activeTab === n.key}
+      onclick={() => onTab(n.key)}
+      data-testid="app-nav-{n.key}"
+    >
+      <span class="nav-icon">{n.icon}</span>{n.label}
+    </button>
+  {/each}
 
-    <!-- conversations -->
-    <div style="margin:24px 6px 9px;display:flex;align-items:center;gap:6px">
-      <button onclick={() => openConversations = !openConversations} style="display:flex;align-items:center;gap:6px;background:none;border:none;cursor:pointer;padding:0;font-size:11px;font-weight:800;letter-spacing:.06em;color:var(--faint);text-transform:uppercase;">
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" style="transform:{openConversations?'none':'rotate(-90deg)'};transition:transform .15s;flex-shrink:0"><path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"/></svg>
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2v10z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
-        Conversations
-      </button>
-      {#if conversations.length > 0}
-        <button onclick={handleClearConvs} style="margin-left:auto;font-size:10px;color:var(--faint);background:none;border:none;cursor:pointer;text-transform:none;font-weight:700;padding:0">Clear all</button>
-      {/if}
+  <!-- chats/schema toggle -->
+  <div class="panel-toggle">
+    <div class="seg">
+      <button class:on={sidePanel === 'chats'} onclick={() => (sidePanel = 'chats')}>Chats</button>
+      <button class:on={sidePanel === 'schema'} onclick={() => (sidePanel = 'schema')}>Schema</button>
     </div>
-    {#if openConversations}
-      <div class="rise" style="padding:2px 0 6px 27px">
-        {#if conversations.length === 0}
-          <div class="mono" style="font-size:11.5px;color:var(--faint);padding:3px 0;font-style:italic">No conversations yet</div>
-        {:else}
-          {#each conversations as conv (conv._id)}
-            <div class="group" style="position:relative;margin-bottom:2px">
-              <button onclick={() => onConversationSelect && onConversationSelect(conv._id)}
-                style="width:100%;text-align:left;background:{activeConversationId === conv._id ? 'var(--surface-3)' : 'transparent'};border:none;padding:5px 0;cursor:pointer;display:flex;align-items:center;gap:8px;border-radius:var(--radius-xs);transition:background .12s">
-                <span style="width:4px;height:4px;border-radius:99px;background:{conv.turn_count > 0 ? 'var(--brand)' : 'var(--border-2)'};flex-shrink:0"></span>
-                <div style="flex:1;min-width:0">
-                  {#if editingId === conv._id}
-                    <input
-                      bind:value={editTitle}
-                      onblur={() => finishRename(conv._id)}
-                      onkeydown={(e) => handleRenameKeydown(e, conv._id)}
-                      onclick={(e) => e.stopPropagation()}
-                      style="width:100%;font-size:12px;color:var(--ink);background:var(--surface);border:1px solid var(--brand);border-radius:3px;padding:1px 4px;outline:none"
-                      autofocus
-                    />
-                  {:else}
-                    <div onclick={(e) => { e.stopPropagation(); startRename(conv, e); }} style="font-size:12px;color:{activeConversationId === conv._id ? 'var(--ink)' : 'var(--muted)'};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:{activeConversationId === conv._id ? '600' : '400'};cursor:text">
-                      {conv.title || conv.last_question || 'New conversation'}
-                    </div>
-                    <div style="font-size:10px;color:var(--faint);margin-top:1px">
-                      {conv.turn_count} turn{conv.turn_count === 1 ? '' : 's'} · {formatTime(conv.updated_at)}
-                    </div>
-                  {/if}
-                </div>
+    <button class="new-chat" aria-label="New chat" title="New chat" onclick={() => { onNewChat?.(); onTab('ask'); sidePanel = 'chats'; }}>+</button>
+  </div>
+
+  <!-- panel body -->
+  <div class="panel-body">
+    {#if sidePanel === 'chats'}
+      {#if conversations.length > 0}
+        <div style="display:flex;flex-direction:column;gap:3px">
+          {#each conversations as cv (cv._id)}
+            <div class="convo-row group">
+              <button class="convo" class:active={activeConversationId === cv._id} onclick={() => { onConversationSelect?.(cv._id); onTab('ask'); }}>
+                <span class="convo-title">{cv.title || cv.last_question || 'New conversation'}</span>
+                <span class="convo-meta">{cv.turn_count} turn{cv.turn_count === 1 ? '' : 's'} · {formatTime(cv.updated_at)}</span>
               </button>
-              <button onclick={(e) => handleDelete(conv._id, e)} aria-label="Delete conversation" class="opacity-0 group-hover:opacity-100 focus:opacity-100 focus-visible:opacity-100 transition-opacity" style="position:absolute;right:8px;top:50%;transform:translateY(-50%);background:var(--surface);border:none;color:var(--faint);cursor:pointer;padding:4px;font-size:10px;border-radius:4px;display:flex;align-items:center;justify-content:center" title="Delete">✕</button>
+              <button class="convo-del opacity-0 group-hover:opacity-100" aria-label="Delete" title="Delete" onclick={(e) => handleDelete(cv._id, e)}>✕</button>
             </div>
           {/each}
-        {/if}
-      </div>
-    {/if}
-
-  </div>
-
-  <!-- settings -->
-  <div style="padding:12px 16px 16px;border-top:1px solid var(--border)">
-    <button onclick={onSettings} class="focusable"
-      style="width:100%;display:flex;align-items:center;gap:11px;padding:11px 12px;border-radius:var(--radius-sm);border:1px solid var(--border);background:var(--surface-2);cursor:pointer;transition:all .15s;text-align:left">
-      <span style="width:30px;height:30px;border-radius:8px;flex-shrink:0;display:grid;place-items:center;background:var(--surface-3);color:var(--brand)">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M13 2L4 14h7l-1 8 9-12h-7l1-8z" fill="currentColor"/></svg>
-      </span>
-      <div style="flex:1;min-width:0">
-        <div style="font-weight:700;font-size:13px;display:flex;align-items:center;gap:6px">
-          Settings
+          <button class="clear-all" onclick={handleClearConvs}>Clear all</button>
         </div>
-      </div>
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" style="color:var(--faint);flex-shrink:0"><circle cx="12" cy="12" r="3.2" stroke="currentColor" stroke-width="1.9"/><path d="M12 2.5v2.3M12 19.2v2.3M21.5 12h-2.3M4.8 12H2.5M18.7 5.3l-1.6 1.6M6.9 17.1l-1.6 1.6M18.7 18.7l-1.6-1.6M6.9 6.9L5.3 5.3" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/></svg>
-    </button>
-  </div>
-<div style="position:absolute;right:0;top:0;bottom:0;width:1px;pointer-events:none;background:linear-gradient(to bottom,var(--border) 0%,var(--border) calc(50% - 24px),transparent calc(50% - 24px),transparent calc(50% + 24px),var(--border) calc(50% + 24px),var(--border) 100%)"></div>
-</div>
-<button onclick={() => sidebarOpen = !sidebarOpen} aria-label="Toggle sidebar"
-  style="position:absolute;top:50%;left:{sidebarOpen ? '277px' : '0px'};width:18px;height:48px;cursor:pointer;background:var(--surface);border:none;border-radius:0 8px 8px 0;display:flex;align-items:center;justify-content:center;transition:background .15s,color .15s,left .2s;color:var(--faint);z-index:2;border-right:1px solid var(--border);border-top:1px solid var(--border);border-bottom:1px solid var(--border);transform:translateY(-50%)"
-  onmouseenter={(e) => { (e.currentTarget as HTMLElement).style.background = 'var(--surface-2)'; (e.currentTarget as HTMLElement).style.color = 'var(--muted)' }}
-  onmouseleave={(e) => { (e.currentTarget as HTMLElement).style.background = 'var(--surface)'; (e.currentTarget as HTMLElement).style.color = 'var(--faint)' }}>
-  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" style="color:var(--muted)">
-    {#if sidebarOpen}
-      <path d="M15 18l-6-6 6-6" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+      {:else}
+        <span class="empty-hint">No chats yet.<br />Press + to start one.</span>
+      {/if}
     {:else}
-      <path d="M9 18l6-6-6-6" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+      <div style="display:flex;flex-direction:column;gap:2px">
+        {#each schemaData as t}
+          <div>
+            <button class="tbl" onclick={() => (openTable = openTable === t.name ? null : t.name)}>
+              <span><span class="chev" style="transform:{openTable === t.name ? 'rotate(90deg)' : 'rotate(0deg)'}">›</span>{t.name}</span>
+              <span class="tbl-count">{t.cols.length}</span>
+            </button>
+            {#if openTable === t.name}
+              <div class="cols">
+                {#each t.cols as c}
+                  <span class="col">{c}</span>
+                {/each}
+              </div>
+            {/if}
+          </div>
+        {/each}
+      </div>
     {/if}
-  </svg>
-</button>
-</div>
+  </div>
+
+  <!-- trust meter -->
+  <div class="footer">
+    <div class="trust" title={trust.behaviour}>
+      <div class="trust-row">
+        <span class="trust-name" style="color:{trustInk}">{trust.label}</span>
+        <span class="trust-count">{verifiedCount} verified</span>
+      </div>
+      <div class="trust-track"><div class="trust-fill" style="width:{trustPct}"></div></div>
+    </div>
+
+    <!-- profile -->
+    <div style="position:relative">
+      {#if profileOpen}
+        <div class="pmenu">
+          <div class="pmenu-head">
+            <span class="pmenu-name">{name}</span>
+            <span class="pmenu-email">{userEmail || '—'}</span>
+            <span class="pmenu-plan">FREE PLAN</span>
+          </div>
+          <button class="pmenu-item" onclick={() => { profileOpen = false; onTab('settings'); }}>⚙ Settings</button>
+          <button class="pmenu-item" onclick={() => { profileOpen = false; onToggleTheme?.(); }}>{theme === 'dark' ? '☀' : '☾'} {theme === 'dark' ? 'Light mode' : 'Dark mode'}</button>
+          <button class="pmenu-item danger" onclick={() => { profileOpen = false; onLogout?.(); }}>↪ Log out</button>
+        </div>
+      {/if}
+      <button class="profile-btn" data-testid="profile-menu-button" onclick={() => (profileOpen = !profileOpen)}>
+        <span class="pleft">
+          <span class="avatar">{initials}</span>
+          <span class="pinfo">
+            <span class="pname">{name}</span>
+            <span class="pplan">Free plan</span>
+          </span>
+        </span>
+        <span class="pchev" style="transform:{profileOpen ? 'rotate(180deg)' : 'rotate(0deg)'}">▲</span>
+      </button>
+    </div>
+  </div>
+</aside>
+
+<style>
+  .sidebar {
+    width: 232px;
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 20px 14px;
+    border-right: 1px solid var(--border);
+    background: var(--card-2);
+    height: 100%;
+    box-sizing: border-box;
+  }
+  .brand {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    padding: 4px 10px 18px;
+  }
+  .brand-name {
+    font-weight: 800;
+    font-size: 15px;
+    letter-spacing: -0.02em;
+    color: var(--ink);
+  }
+  .nav-item {
+    display: flex;
+    align-items: center;
+    gap: 11px;
+    background: transparent;
+    color: var(--muted);
+    border: none;
+    font-size: 14px;
+    font-weight: 600;
+    padding: 10px 12px;
+    border-radius: 10px;
+    cursor: pointer;
+    text-align: left;
+    transition: all 0.15s;
+  }
+  .nav-item:hover { color: var(--ink); }
+  .nav-item.active { background: var(--surface-3); color: var(--ink); }
+  .nav-icon {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    opacity: 0.7;
+    width: 14px;
+    text-align: center;
+  }
+  .panel-toggle {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 16px;
+    padding: 0 2px;
+  }
+  .seg {
+    flex: 1;
+    display: flex;
+    background: var(--surface-2);
+    border-radius: 9px;
+    padding: 3px;
+  }
+  .seg button {
+    flex: 1;
+    background: transparent;
+    color: var(--faint);
+    border: none;
+    font-size: 12px;
+    font-weight: 700;
+    padding: 6px 0;
+    border-radius: 7px;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .seg button.on { background: var(--card); color: var(--ink); }
+  .new-chat {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    background: transparent;
+    border: 1px solid var(--border-2);
+    color: var(--muted);
+    font-size: 15px;
+    line-height: 1;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .new-chat:hover { color: var(--brand); border-color: var(--brand); }
+  .panel-body {
+    flex: 1;
+    overflow-y: auto;
+    overflow-x: hidden;
+    scrollbar-width: thin;
+    margin-top: 10px;
+    min-height: 140px;
+  }
+  .empty-hint {
+    font-size: 11.5px;
+    color: var(--faint);
+    line-height: 1.55;
+    padding: 6px 10px;
+    display: block;
+  }
+  .convo-row { position: relative; }
+  .convo {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    width: 100%;
+    background: transparent;
+    border: none;
+    font-size: 12.5px;
+    font-weight: 600;
+    color: var(--ink-2);
+    padding: 9px 10px;
+    border-radius: 9px;
+    cursor: pointer;
+    text-align: left;
+    overflow: hidden;
+    transition: all 0.15s;
+  }
+  .convo:hover { background: var(--surface-2); color: var(--ink); }
+  .convo.active { background: var(--surface-2); color: var(--ink); }
+  .convo-title { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+  .convo-meta { font-size: 10.5px; color: var(--faint); font-weight: 400; }
+  .convo-del {
+    position: absolute;
+    right: 6px;
+    top: 8px;
+    background: var(--surface-2);
+    border: none;
+    color: var(--faint);
+    cursor: pointer;
+    padding: 3px 5px;
+    font-size: 10px;
+    border-radius: 5px;
+    transition: opacity 0.12s, color 0.12s;
+  }
+  .convo-del:hover { color: var(--low); }
+  .clear-all {
+    align-self: flex-start;
+    background: transparent;
+    border: none;
+    color: var(--faint);
+    font-size: 11px;
+    cursor: pointer;
+    padding: 6px 10px;
+  }
+  .clear-all:hover { color: var(--low); }
+  .tbl {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    width: 100%;
+    background: transparent;
+    border: none;
+    color: var(--ink-2);
+    font-family: var(--font-mono);
+    font-size: 12px;
+    padding: 7px 10px;
+    border-radius: 8px;
+    cursor: pointer;
+    text-align: left;
+    transition: all 0.15s;
+  }
+  .tbl:hover { background: var(--surface-2); color: var(--ink); }
+  .chev {
+    display: inline-block;
+    width: 12px;
+    color: var(--faint);
+    transition: transform 0.15s;
+  }
+  .tbl-count { color: var(--faint); font-size: 10.5px; }
+  .cols {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    padding: 2px 0 6px 30px;
+  }
+  .col { font-family: var(--font-mono); font-size: 11px; color: var(--faint); padding: 2px 0; }
+  .footer {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding-top: 12px;
+  }
+  .trust {
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+    padding: 0 4px;
+  }
+  .trust-row { display: flex; justify-content: space-between; align-items: center; }
+  .trust-name { font-size: 12px; font-weight: 700; }
+  .trust-count { font-size: 11px; color: var(--faint); }
+  .trust-track { height: 4px; border-radius: 99px; background: var(--surface-3); overflow: hidden; }
+  .trust-fill {
+    height: 100%;
+    border-radius: 99px;
+    background: linear-gradient(90deg, var(--brand), var(--accent));
+    transition: width 0.6s var(--ease);
+  }
+  .profile-btn {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    gap: 9px;
+    background: transparent;
+    border: none;
+    border-top: 1px solid var(--border);
+    cursor: pointer;
+    padding: 12px 8px 6px;
+    text-align: left;
+  }
+  .profile-btn:hover { opacity: 0.85; }
+  .pleft { display: flex; align-items: center; gap: 9px; }
+  .avatar {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    background: var(--brand);
+    color: var(--on-brand);
+    font-size: 11.5px;
+    font-weight: 800;
+  }
+  .pinfo { display: flex; flex-direction: column; }
+  .pname { font-size: 12.5px; font-weight: 700; color: var(--ink); max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .pplan { font-size: 10.5px; color: var(--faint); }
+  .pchev { color: var(--faint); font-size: 11px; transition: transform 0.15s; }
+  .pmenu {
+    position: absolute;
+    bottom: 52px;
+    left: 0;
+    right: 0;
+    background: var(--card);
+    border: 1px solid var(--border-2);
+    border-radius: 14px;
+    padding: 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    box-shadow: 0 16px 40px -12px rgba(0, 0, 0, 0.4);
+    animation: rise 0.2s var(--ease) both;
+    z-index: 30;
+  }
+  .pmenu-head {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 8px 10px;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 4px;
+  }
+  .pmenu-name { font-size: 13px; font-weight: 700; color: var(--ink); }
+  .pmenu-email { font-size: 11.5px; color: var(--faint); overflow: hidden; text-overflow: ellipsis; }
+  .pmenu-plan {
+    align-self: flex-start;
+    margin-top: 4px;
+    font-family: var(--font-mono);
+    font-size: 9.5px;
+    letter-spacing: 0.1em;
+    color: var(--accent);
+    border: 1px solid var(--accent);
+    border-radius: 99px;
+    padding: 2px 8px;
+  }
+  .pmenu-item {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    background: transparent;
+    border: none;
+    color: var(--ink-2);
+    font-size: 13px;
+    font-weight: 600;
+    padding: 8px 10px;
+    border-radius: 8px;
+    cursor: pointer;
+    text-align: left;
+  }
+  .pmenu-item:hover { background: var(--surface-2); color: var(--ink); }
+  .pmenu-item.danger { color: var(--muted); }
+  .pmenu-item.danger:hover { color: var(--low); }
+</style>

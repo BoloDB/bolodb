@@ -28,7 +28,7 @@
   <title>Onboarding — BoloDB</title>
 </svelte:head>
 
-<div class="app-shell">
+<div class="onboard-scroll">
   {#if appState.isLoaded && appState.dbInfo}
     <OnboardScreen
       onDone={(seedCount) => appState.setOnboardDone(seedCount)}
@@ -46,6 +46,13 @@
 </div>
 
 <style>
+  .onboard-scroll {
+    height: 100%;
+    width: 100%;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+  }
   .spinner-large {
     width: 36px;
     height: 36px;

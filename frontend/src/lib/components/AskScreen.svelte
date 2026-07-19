@@ -13,14 +13,14 @@
   } from "$lib/types";
   import Sidebar from "$lib/components/Sidebar.svelte";
   import AnswerCard from "$lib/components/AnswerCard.svelte";
-  import Empty from "$lib/components/Empty.svelte";
-  import Settings from "$lib/components/Settings.svelte";
+  import DashboardTab from "$lib/components/DashboardTab.svelte";
+  import SettingsTab from "$lib/components/SettingsTab.svelte";
   import TrustToast from "$lib/components/TrustToast.svelte";
-  import TrustPill from "$lib/components/ui/TrustPill.svelte";
-  import Button from "$lib/components/ui/Button.svelte";
   import Spinner from "$lib/components/ui/Spinner.svelte";
   import SlashCommandMenu from "$lib/components/ui/SlashCommandMenu.svelte";
   import type { SlashCommand } from "$lib/components/ui/SlashCommandMenu.svelte";
+  import { appState } from "$lib/appState.svelte";
+  import { onMount } from "svelte";
   import posthog from "posthog-js";
 
   let {
@@ -53,8 +53,26 @@
   const tableCount = $derived(dbInfo ? dbInfo.tables || 0 : 0);
   let turns: Turn[] = $state([]);
   let input = $state("");
-  let settingsOpen = $state(false);
+  let tab = $state<"ask" | "dash" | "settings">("ask");
+  let userEmail = $state("");
   let openCatalogTrigger = $state(0);
+
+  onMount(async () => {
+    try {
+      const res = await apiCall("/api/auth/me");
+      userEmail = res?.content?.email || "";
+    } catch {}
+  });
+
+  const suggestionChips = $derived(
+    starters && starters.length
+      ? starters.slice(0, 3)
+      : [
+          "Top 5 products by revenue",
+          "How many active customers do we have?",
+          "Compare sales this month vs last",
+        ],
+  );
   let loading = $state(false);
   let feedRef: HTMLDivElement | undefined = $state(undefined);
   let currentArtifacts: ThinkingArtifact[] = $state([]);
@@ -322,7 +340,7 @@
           timestamp: ts,
         });
         if (isApiKeyError) {
-          settingsOpen = true;
+          tab = "settings";
         }
       },
       signal,
@@ -476,200 +494,302 @@
   }
 </script>
 
-<div class="page" style="display:flex;height:100%">
+<div class="app-root">
   <Sidebar
+    activeTab={tab}
+    onTab={(t) => (tab = t)}
     {verifiedCount}
-    onSettings={() => (settingsOpen = true)}
     schema={realSchema}
     {dbInfo}
     {conversationTrigger}
     {activeConversationId}
     onConversationSelect={handleConversationSelect}
+    onNewChat={handleNewConversation}
+    {userEmail}
+    theme={appState.theme}
+    onToggleTheme={() => appState.toggleTheme()}
+    onLogout={() => appState.logout()}
   />
 
-  <div
-    style="flex:1;display:flex;flex-direction:column;min-width:0;position:relative"
-  >
-    <!-- top bar -->
-    <div
-      style="display:flex;align-items:center;justify-content:space-between;padding:15px 28px;border-bottom:1px solid var(--border);background:color-mix(in srgb, var(--surface) 70%, transparent);backdrop-filter:blur(8px)"
-    >
-      <div style="display:flex;align-items:center;gap:10px">
-        <span
-          style="width:30px;height:30px;border-radius:9px;background:var(--brand-tint);color:var(--brand);display:grid;place-items:center"
-        >
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none"
-            ><ellipse
-              cx="12"
-              cy="6"
-              rx="7"
-              ry="3"
-              stroke="currentColor"
-              stroke-width="1.9"
-            /><path
-              d="M5 6v6c0 1.66 3.13 3 7 3s7-1.34 7-3V6M5 12v6c0 1.66 3.13 3 7 3s7-1.34 7-3v-6"
-              stroke="currentColor"
-              stroke-width="1.9"
-            /></svg
-          >
-        </span>
-        <div>
-          <div style="font-weight:700;font-size:14.5px;line-height:1.1">
-            {dbLabel}
-          </div>
-          <div style="font-size:11.5px;color:var(--faint);font-weight:600">
-            {tableCount > 0
-              ? `${tableCount} table${tableCount === 1 ? "" : "s"} · `
-              : ""}view only
+  <main class="main">
+    {#if tab === "ask"}
+      <!-- db header -->
+      <div class="db-header">
+        <div class="db-info">
+          <span class="db-icon">🗄</span>
+          <div style="display:flex;flex-direction:column">
+            <span class="db-name mono">{dbLabel}</span>
+            <span class="db-sub">{tableCount > 0 ? `${tableCount} table${tableCount === 1 ? "" : "s"} · ` : ""}read-only</span>
           </div>
         </div>
+        <button class="switch-db" onclick={onDisconnect}>⇄ Switch DB</button>
       </div>
-      <div style="display:flex;align-items:center;gap:10px">
-        <TrustPill level={trust} count={verifiedCount} />
-        {#if turns.length > 0}
-          <Button kind="quiet" size="sm" onclick={handleNewConversation}>
-            {#snippet icon()}<svg
-                width="16"
-                height="16"
-                viewBox="0 0 24 24"
-                fill="none"
-                ><path
-                  d="M12 5v14M5 12h14"
-                  stroke="currentColor"
-                  stroke-width="2.1"
-                  stroke-linecap="round"
-                /></svg
-              >{/snippet}
-            New conversation
-          </Button>
+
+      <!-- feed -->
+      <div bind:this={feedRef} onscroll={onFeedScroll} class="feed">
+        <div class="feed-inner">
+          {#if turns.length === 0}
+            <div class="empty rise">
+              <h1 class="empty-title">What do you want to know?</h1>
+              <p class="empty-sub">Ask the way you'd ask a colleague. No SQL needed.</p>
+              <span class="empty-badge">✓ QUESTIONS VERIFIED FOR THIS DATABASE</span>
+              <div class="chips" data-tour="starters" data-testid="chat-starters">
+                {#each suggestionChips as sg}
+                  <button class="sg-chip" onclick={() => ask(sg)}>{sg}</button>
+                {/each}
+              </div>
+              <button class="catalog-card" onclick={() => { openCatalogTrigger++; tab = "settings"; }}>
+                <span style="display:flex;flex-direction:column;gap:3px">
+                  <span class="cc-title">Want better answers?</span>
+                  <span class="cc-sub">Review your business terms — confirmed definitions keep every answer honest.</span>
+                </span>
+                <span class="cc-chev">›</span>
+              </button>
+            </div>
+          {:else}
+            {#each turns as t, i (t.id)}
+              <AnswerCard
+                turn={t}
+                isLatest={i === turns.length - 1}
+                onVerify={handleVerify}
+                liveArtifacts={t.thinking ? currentArtifacts : undefined}
+                onRegenerate={regenerate}
+                onEditPrompt={editAndRequery}
+              />
+            {/each}
+          {/if}
+        </div>
+        {#if showScrollBtn}
+          <button onclick={scrollToBottom} aria-label="Scroll to latest" class="scroll-btn">↓</button>
         {/if}
       </div>
-    </div>
 
-    <!-- feed -->
-    <div
-      bind:this={feedRef}
-      onscroll={onFeedScroll}
-      style="flex:1;overflow-y:auto;padding:28px 28px 8px"
-    >
-      <div style="max-width:720px;margin:0 auto">
-        {#if turns.length === 0}
-          <Empty {trust} onPick={ask} {starters} onOpenCatalog={() => { openCatalogTrigger++; settingsOpen = true; }} />
-        {:else}
-          {#each turns as t, i (t.id)}
-            <AnswerCard
-              turn={t}
-              isLatest={i === turns.length - 1}
-              onVerify={handleVerify}
-              liveArtifacts={t.thinking ? currentArtifacts : undefined}
-              onRegenerate={regenerate}
-              onEditPrompt={editAndRequery}
+      <!-- input -->
+      <div class="input-zone">
+        <div class="input-wrap">
+          {#if showSlashMenu}
+            <SlashCommandMenu
+              commands={slashCommands}
+              onSelect={handleSlashCommandSelect}
+              onClose={handleSlashMenuClose}
+              filter={slashFilter}
+              {inputRef}
             />
-          {/each}
-        {/if}
-      </div>
-      {#if showScrollBtn}
-        <button onclick={scrollToBottom} aria-label="Scroll to latest"
-          style="position:sticky;bottom:16px;left:100%;width:38px;height:38px;border-radius:99px;border:1px solid var(--border);background:var(--surface);color:var(--muted);box-shadow:var(--shadow-md);cursor:pointer;display:grid;place-items:center;font-size:18px;font-weight:700;transition:opacity .2s;z-index:10"
-        >↓</button>
-      {/if}
-    </div>
-
-    <!-- input -->
-    <div
-      style="padding:14px 28px 20px;border-top:1px solid var(--border);background:var(--surface)"
-    >
-      <div style="max-width:720px;margin:0 auto;position:relative">
-        {#if showSlashMenu}
-          <SlashCommandMenu
-            commands={slashCommands}
-            onSelect={handleSlashCommandSelect}
-            onClose={handleSlashMenuClose}
-            filter={slashFilter}
-            {inputRef}
-          />
-        {/if}
-        <form
-          onsubmit={handleSubmit}
-          data-tour="ask-input"
-          data-testid="chat-ask-form"
-          style="display:flex;align-items:center;gap:10px;padding:7px 7px 7px 18px;border:1.5px solid var(--border-2);border-radius:var(--radius-lg);background:var(--surface);box-shadow:var(--shadow-sm);transition:border-color .15s, box-shadow .15s"
-        >
-          <textarea
-            bind:value={input}
-            oninput={(e) => { handleInput(e); handleTextareaResize(e); }}
-            bind:this={inputRef}
-            placeholder="Ask anything about your data…"
-            aria-label="Ask a question about your data"
-            autofocus
-            class="chat-input"
-            rows={1}
-            style="flex:1;border:none;outline:none;background:transparent;font-size:15.5px;color:var(--ink);resize:none;overflow-y:auto;max-height:140px;line-height:1.45;padding:6px 0"
-          ></textarea>
-          <Button
-            kind="primary"
-            type="submit"
-            disabled={!input.trim() || loading}
-          >
-            {#snippet icon()}{#if loading}<Spinner />{:else}<svg
-                  width="18"
-                  height="18"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  ><path
-                    d="M5 12h13M13 6l6 6-6 6"
-                    stroke="currentColor"
-                    stroke-width="2.1"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                  /></svg
-                >{/if}{/snippet}
-            Ask
-          </Button>
-        </form>
-        <div
-          style="display:flex;align-items:center;justify-content:center;gap:7px;margin-top:10px;font-size:12px;color:var(--faint)"
-        >
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none"
-            ><rect
-              x="5"
-              y="10.5"
-              width="14"
-              height="9.5"
-              rx="2.4"
-              stroke="currentColor"
-              stroke-width="1.8"
-            /><path
-              d="M8 10.5V8a4 4 0 018 0v2.5"
-              stroke="currentColor"
-              stroke-width="1.8"
-            /></svg
-          >
-          Only the schema and your question are sent to generate
-          SQL — never your row data.
+          {/if}
+          <form onsubmit={handleSubmit} data-tour="ask-input" data-testid="chat-ask-form" class="ask-form">
+            <textarea
+              bind:value={input}
+              oninput={(e) => { handleInput(e); handleTextareaResize(e); }}
+              bind:this={inputRef}
+              onkeydown={(e) => { if (e.key === "Enter" && !e.shiftKey && !showSlashMenu) { e.preventDefault(); ask(); } }}
+              placeholder="Ask anything about your data…"
+              aria-label="Ask a question about your data"
+              class="chat-input"
+              rows={1}
+            ></textarea>
+            <button class="send-btn" type="submit" aria-label="Send" disabled={!input.trim() || loading}>
+              {#if loading}<Spinner />{:else}↑{/if}
+            </button>
+          </form>
+          <div class="input-hint">
+            Read-only · every answer shows its SQL · Power user? Type
+            <span class="mono" style="color:var(--muted)">/sql SELECT …</span> to run SQL directly
+          </div>
         </div>
       </div>
-    </div>
 
-    {#if toast}<TrustToast {toast} />{/if}
-  </div>
-
-  {#if settingsOpen}
-    <Settings
-      onClose={() => { settingsOpen = false; openCatalogTrigger = 0; }}
-      {onDisconnect}
-      {openCatalogTrigger}
-    />
-  {/if}
+      {#if toast}<TrustToast {toast} />{/if}
+    {:else if tab === "dash"}
+      <DashboardTab {verifiedCount} {dbInfo} />
+    {:else}
+      <SettingsTab
+        {dbInfo}
+        {onDisconnect}
+        theme={appState.theme}
+        onToggleTheme={() => appState.toggleTheme()}
+        {openCatalogTrigger}
+      />
+    {/if}
+  </main>
 </div>
 
 <style>
-  .chat-input:focus {
-    outline: none;
-    box-shadow: none;
+  .app-root {
+    display: flex;
+    height: 100%;
+    overflow: hidden;
   }
-  .chat-input:focus-visible {
+  .main {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    position: relative;
+    min-width: 0;
+  }
+  .db-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+    padding: 12px 24px;
+    border-bottom: 1px solid var(--border);
+    background: var(--card-2);
+  }
+  .db-info { display: flex; align-items: center; gap: 10px; }
+  .db-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 30px;
+    height: 30px;
+    border-radius: 9px;
+    background: var(--surface-2);
+    font-size: 13px;
+  }
+  .db-name { font-size: 12.5px; font-weight: 600; color: var(--ink); }
+  .db-sub { font-size: 11px; color: var(--faint); }
+  .switch-db {
+    background: transparent;
+    border: 1px solid var(--border-2);
+    color: var(--muted);
+    font-size: 12px;
+    font-weight: 600;
+    padding: 6px 13px;
+    border-radius: 99px;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .switch-db:hover { color: var(--ink); border-color: var(--muted); }
+  .feed { flex: 1; overflow-y: auto; padding: 36px 32px 20px; }
+  .feed-inner { max-width: 760px; margin: 0 auto; }
+  .empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 16px;
+    padding-top: 11vh;
+    text-align: center;
+  }
+  .empty-title {
+    margin: 0;
+    font-size: clamp(1.7rem, 3vw, 2.4rem);
+    font-weight: 800;
+    letter-spacing: -0.03em;
+    color: var(--ink);
+  }
+  .empty-sub { margin: 0; font-size: 15px; color: var(--muted); }
+  .empty-badge {
+    margin-top: 6px;
+    font-family: var(--font-mono);
+    font-size: 10.5px;
+    letter-spacing: 0.12em;
+    color: var(--accent);
+  }
+  .chips { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+  .sg-chip {
+    background: var(--card);
+    border: 1px solid var(--border-2);
+    color: var(--ink-2);
+    font-size: 13.5px;
+    font-weight: 600;
+    padding: 10px 18px;
+    border-radius: 99px;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .sg-chip:hover { border-color: var(--brand); color: var(--brand); }
+  .catalog-card {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    margin-top: 14px;
+    width: 100%;
+    max-width: 520px;
+    text-align: left;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 16px 20px;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .catalog-card:hover { border-color: var(--brand); }
+  .cc-title { font-size: 14px; font-weight: 700; color: var(--ink); }
+  .cc-sub { font-size: 12.5px; color: var(--muted); line-height: 1.5; }
+  .cc-chev { color: var(--faint); font-size: 16px; }
+  .scroll-btn {
+    position: sticky;
+    bottom: 16px;
+    left: 100%;
+    width: 38px;
+    height: 38px;
+    border-radius: 99px;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--muted);
+    box-shadow: var(--shadow-md, var(--shadow));
+    cursor: pointer;
+    display: grid;
+    place-items: center;
+    font-size: 18px;
+    font-weight: 700;
+    z-index: 10;
+  }
+  .input-zone {
+    padding: 14px 32px 26px;
+    border-top: 1px solid var(--border);
+    background: var(--bg);
+  }
+  .input-wrap { max-width: 760px; margin: 0 auto; position: relative; }
+  .ask-form {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    background: var(--card);
+    border: 1.5px solid var(--border-2);
+    border-radius: 99px;
+    padding: 6px 8px 6px 22px;
+    transition: border-color 0.2s;
+  }
+  .ask-form:focus-within { border-color: var(--brand); }
+  .chat-input {
+    flex: 1;
+    background: transparent;
+    border: none;
     outline: none;
-    box-shadow: none;
+    font-size: 15px;
+    color: var(--ink);
+    padding: 10px 0;
+    resize: none;
+    overflow-y: auto;
+    max-height: 120px;
+    line-height: 1.45;
+  }
+  .chat-input:focus, .chat-input:focus-visible { outline: none; box-shadow: none; }
+  .send-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: var(--brand);
+    color: var(--on-brand);
+    border: none;
+    cursor: pointer;
+    font-size: 16px;
+    flex-shrink: 0;
+    transition: all 0.15s;
+  }
+  .send-btn:hover:not(:disabled) { background: var(--brand-2); }
+  .send-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+  .input-hint {
+    max-width: 760px;
+    margin: 8px auto 0;
+    text-align: center;
+    font-size: 11.5px;
+    color: var(--faint);
   }
 </style>

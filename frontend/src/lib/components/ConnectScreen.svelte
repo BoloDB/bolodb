@@ -4,10 +4,6 @@
   import type { DbInfo } from "$lib/types";
   import { appState } from "$lib/appState.svelte";
   import posthog from "posthog-js";
-  import Logo from "$lib/components/ui/Logo.svelte";
-  import Button from "$lib/components/ui/Button.svelte";
-  import Spinner from "$lib/components/ui/Spinner.svelte";
-  import Section from "$lib/components/ui/Section.svelte";
   import { onMount } from "svelte";
 
   let {
@@ -16,13 +12,6 @@
     onConnect: (isSample: boolean, res: DbInfo) => void;
   } = $props();
 
-  const DB_TYPES = [
-    { id: "postgresql", label: "PostgreSQL", port: "5432" },
-    { id: "mysql", label: "MySQL", port: "3306" },
-    { id: "sqlite", label: "SQLite", port: null },
-    { id: "mssql", label: "SQL Server", port: "1433" },
-    { id: "duckdb", label: "DuckDB", port: null },
-  ];
   const DIALECT_LABELS: Record<string, string> = {
     postgresql: "PostgreSQL",
     mysql: "MySQL",
@@ -31,23 +20,16 @@
     duckdb: "DuckDB",
   };
 
-  let dbType = $state("postgresql");
-  let formMode = $state(true);
-  let host = $state("localhost");
-  let port = $state("5432");
-  let user = $state("");
-  let password = $state("");
-  let dbName = $state("");
-  let filePath = $state("");
+  let choice = $state<"own" | "sample">("own");
   let dbUrl = $state("");
   let connecting: string | null = $state(null);
   let error = $state("");
   let recentConnections: any[] = $state([]);
   let reconnecting: string | null = $state(null);
 
-
-
-  const isFileBased = $derived(dbType === "sqlite" || dbType === "duckdb");
+  const startLabel = $derived(
+    choice === "sample" ? "Explore the sample store →" : "Connect read-only →",
+  );
 
   onMount(async () => {
     try {
@@ -56,33 +38,18 @@
     } catch (e) {
       console.error("Failed to load recent connections:", e);
     }
-
   });
 
-
-
-
-  function buildUrl(): string {
-    if (dbType === "sqlite") return `sqlite:///${filePath.trim()}`;
-    if (dbType === "duckdb")
-      return filePath.trim() ? `duckdb:///${filePath.trim()}` : "duckdb://";
-    const u = encodeURIComponent(user);
-    const p = encodeURIComponent(password);
-    const dialect = dbType === "mssql" ? "mssql+pyodbc" : dbType;
-    const creds = u && p ? `${u}:${p}@` : u ? `${u}@` : "";
-    return `${dialect}://${creds}${host.trim()}:${port}/${dbName.trim()}`;
-  }
-
-  function canConnect(): boolean {
-    if (formMode) {
-      if (dbType === "duckdb") return true;
-      if (isFileBased) return filePath.trim().length > 0;
-      return !!(host.trim() && user.trim() && dbName.trim());
-    }
-    return dbUrl.trim().length > 0;
+  async function start() {
+    if (choice === "sample") return go("sample");
+    return go("url");
   }
 
   async function go(kind: string) {
+    if (kind === "url" && !dbUrl.trim()) {
+      error = "Paste a read-only connection string to continue.";
+      return;
+    }
     connecting = kind;
     error = "";
     try {
@@ -95,13 +62,7 @@
           table_count: res.tables,
         });
       } else {
-        const url = formMode ? buildUrl() : dbUrl.trim();
-        if (!url) {
-          error = "Please fill in all required fields.";
-          connecting = null;
-          return;
-        }
-        res = await apiCall("/api/connect", { db_url: url });
+        res = await apiCall("/api/connect", { db_url: dbUrl.trim() });
         posthog.capture("database_connected", {
           is_sample: false,
           dialect: res.dialect,
@@ -124,9 +85,7 @@
     reconnecting = conn.db_id;
     error = "";
     try {
-      const res: DbInfo = await apiCall("/api/reconnect", {
-        db_id: conn.db_id,
-      });
+      const res: DbInfo = await apiCall("/api/reconnect", { db_id: conn.db_id });
       posthog.capture("database_reconnected", {
         dialect: conn.dialect,
         table_count: conn.table_count,
@@ -164,562 +123,301 @@
   }
 </script>
 
-<div class="page" style="overflow-y:auto">
-  <div style="max-width:980px;margin:0 auto;padding:46px 32px 60px">
-    <!-- header -->
-    <div
-      style="display:flex;align-items:center;justify-content:space-between;margin-bottom:42px"
+<div class="ob">
+  <div class="ob-logo">
+    <svg width="26" height="26" viewBox="0 0 256 256" fill="none">
+      <path d="M 52 44 Q 52 30 66 30 L 190 30 Q 204 30 204 44 L 204 138 Q 204 152 190 152 L 116 152 L 88 176 L 92 152 L 66 152 Q 52 152 52 138 Z" stroke="var(--brand)" stroke-width="6" fill="none" />
+      <g stroke="var(--brand)" stroke-width="6" stroke-linecap="round" fill="none">
+        <ellipse cx="128" cy="66" rx="34" ry="11" />
+        <path d="M 94 66 L 94 108 Q 94 119 128 119 Q 162 119 162 108 L 162 66" />
+        <path d="M 94 87 Q 94 98 128 98 Q 162 98 162 87" />
+      </g>
+      <circle cx="182" cy="46" r="3.5" fill="var(--brand)" />
+    </svg>
+    <span class="ob-name">Bolo<span style="color:var(--brand)">DB</span></span>
+  </div>
+
+  <div class="step">
+    <h1 class="title">Let's meet your data.</h1>
+    <p class="sub">
+      One click to explore, or connect your own database. Everything runs
+      read-only — nothing can be changed.
+    </p>
+
+    <div class="cards">
+      <button
+        class="choice"
+        class:on={choice === "own"}
+        onclick={() => (choice = "own")}
+        data-testid="connect-own-card"
+      >
+        <span class="c-title">Connect my database</span>
+        <span class="c-desc">PostgreSQL, MySQL or SQL Server. One connection string, read-only.</span>
+        <span class="c-tag accent">RECOMMENDED · ~1 MINUTE</span>
+      </button>
+      <button
+        class="choice"
+        class:on={choice === "sample"}
+        onclick={() => (choice = "sample")}
+        data-testid="connect-sample-card"
+      >
+        <span class="c-title">Try the sample store</span>
+        <span class="c-desc">No database handy? Explore a realistic demo shop — zero setup.</span>
+        <span class="c-tag faint">INSTANT · NO SIGNUP DATA</span>
+      </button>
+    </div>
+
+    {#if choice === "own"}
+      <input
+        class="conn-input mono"
+        bind:value={dbUrl}
+        onkeydown={(e) => { if (e.key === "Enter") start(); }}
+        placeholder="postgresql://readonly_user:pass@host:5432/dbname"
+        data-testid="connect-url-input"
+        aria-label="Database connection string"
+      />
+    {/if}
+
+    {#if error}
+      <div class="err" role="alert" aria-live="polite" data-testid="connect-error-message">
+        <b>Couldn't connect —</b> {error}
+      </div>
+    {/if}
+
+    {#if choice === "own" && !appState.openrouterReady}
+      <div class="ai-note">AI not yet ready — set <b>OPENROUTER_API_KEY</b> in the server environment.</div>
+    {/if}
+
+    <button
+      class="cta"
+      onclick={start}
+      disabled={!!connecting || (choice === "own" && !dbUrl.trim())}
+      data-testid="connect-start-button"
     >
-      <Logo size={30} sub />
-    </div>
+      {#if connecting}
+        {choice === "sample" ? "Building sample data…" : "Connecting…"}
+      {:else}
+        {startLabel}
+      {/if}
+    </button>
 
-    <!-- hero -->
-    <div class="rise" style="margin-bottom:34px">
-      <h1
-        style="font-size:38px;line-height:1.08;letter-spacing:-.03em;margin:0 0 12px;font-weight:800;max-width:600px;text-wrap:balance"
-      >
-        Ask your data in plain English.<br /><span style="color:var(--brand)"
-          >Trust</span
-        > the answer you get back.
-      </h1>
-      <p
-        style="font-size:16.5px;color:var(--muted);margin:0;max-width:560px;line-height:1.55"
-      >
-        Pick where the AI runs, connect your database, and start asking
-        questions — no SQL knowledge needed.
-      </p>
-    </div>
-
-    <!-- recent databases -->
     {#if recentConnections.length > 0}
-      <div class="rise" style="margin-bottom:30px">
-        <div style="display:flex;align-items:center;gap:9px;margin-bottom:14px">
-          <svg
-            width="18"
-            height="18"
-            viewBox="0 0 24 24"
-            fill="none"
-            style="color:var(--brand)"
-            ><path
-              d="M4 12a8 8 0 1 0 2.5-5.8M4 4v4h4"
-              stroke="currentColor"
-              stroke-width="1.8"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-            /><path
-              d="M12 8v4l3 2"
-              stroke="currentColor"
-              stroke-width="1.8"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-            /></svg
-          >
-          <span style="font-weight:700;font-size:15px">Recent databases</span>
-          <span style="font-size:12.5px;color:var(--faint);font-weight:550"
-            >Pick up where you left off</span
-          >
-        </div>
-        <div style="display:flex;flex-wrap:wrap;gap:10px">
+      <div class="recent">
+        <div class="recent-head">Recent databases · reconnect in one click</div>
+        <div class="recent-list">
           {#each recentConnections as conn}
-            <div
-              class="card"
-              style="padding:14px 18px;display:flex;align-items:center;gap:14px;min-width:280px;flex:1;max-width:460px;transition:border-color .15s;border-color:{reconnecting ===
-              conn.db_id
-                ? 'var(--brand)'
-                : 'var(--border)'}"
-            >
-              <div
-                style="width:36px;height:36px;border-radius:10px;background:var(--brand-tint);color:var(--brand);display:grid;place-items:center;flex-shrink:0"
-              >
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none"
-                  ><ellipse
-                    cx="12"
-                    cy="6"
-                    rx="7"
-                    ry="3"
-                    stroke="currentColor"
-                    stroke-width="1.9"
-                  /><path
-                    d="M5 6v6c0 1.66 3.13 3 7 3s7-1.34 7-3V6M5 12v6c0 1.66 3.13 3 7 3s7-1.34 7-3v-6"
-                    stroke="currentColor"
-                    stroke-width="1.9"
-                  /></svg
-                >
+            <div class="recent-row">
+              <span class="rr-icon">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><ellipse cx="12" cy="6" rx="7" ry="3" stroke="currentColor" stroke-width="1.9" /><path d="M5 6v6c0 1.66 3.13 3 7 3s7-1.34 7-3V6M5 12v6c0 1.66 3.13 3 7 3s7-1.34 7-3v-6" stroke="currentColor" stroke-width="1.9" /></svg>
+              </span>
+              <div class="rr-info">
+                <span class="rr-name">{conn.display_url?.split("/").pop() || conn.dialect || "Database"}</span>
+                <span class="rr-meta">{DIALECT_LABELS[conn.dialect] || conn.dialect} · {conn.table_count || 0} table{conn.table_count === 1 ? "" : "s"}{conn.connected_at ? ` · ${timeAgo(conn.connected_at)}` : ""}</span>
               </div>
-              <div style="flex:1;min-width:0">
-                <div
-                  style="display:flex;align-items:center;gap:7px;margin-bottom:3px"
-                >
-                  <span
-                    style="font-weight:700;font-size:13.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis"
-                    >{conn.display_url?.split("/").pop() ||
-                      conn.dialect ||
-                      "Database"}</span
-                  >
-                  <span
-                    style="padding:2px 8px;border-radius:99px;background:var(--surface-3);font-size:11px;font-weight:700;color:var(--muted);flex-shrink:0"
-                    >{DIALECT_LABELS[conn.dialect] || conn.dialect}</span
-                  >
-                </div>
-                <div
-                  style="font-size:12px;color:var(--faint);font-weight:550;display:flex;align-items:center;gap:8px"
-                >
-                  <span
-                    >{conn.table_count || 0} table{conn.table_count === 1
-                      ? ""
-                      : "s"}</span
-                  >
-                  <span>·</span>
-                  <span
-                    >{conn.connected_at ? timeAgo(conn.connected_at) : ""}</span
-                  >
-                </div>
-              </div>
-              <button
-                onclick={() => reconnect(conn)}
-                disabled={!!reconnecting || !!connecting}
-                style="padding:7px 14px;border-radius:var(--radius-sm);background:var(--brand);color:#fff;border:none;font-weight:700;font-size:12.5px;cursor:pointer;white-space:nowrap;display:flex;align-items:center;gap:6px;transition:opacity .15s;opacity:{reconnecting ||
-                connecting
-                  ? '0.6'
-                  : '1'}"
-              >
-                {#if reconnecting === conn.db_id}<Spinner light />{:else}<svg
-                    width="14"
-                    height="14"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    ><path
-                      d="M5 12h14M13 6l6 6-6 6"
-                      stroke="currentColor"
-                      stroke-width="2"
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                    /></svg
-                  >{/if}
+              <button class="rr-connect" onclick={() => reconnect(conn)} disabled={!!reconnecting || !!connecting}>
                 {reconnecting === conn.db_id ? "Connecting…" : "Connect"}
               </button>
-              <button
-                onclick={() => removeRecent(conn)}
-                aria-label="Remove"
-                title="Remove from recent"
-                style="padding:5px;border-radius:var(--radius-sm);background:none;border:none;cursor:pointer;color:var(--faint);transition:color .15s"
-                onmouseenter={(e) =>
-                  ((e.currentTarget as HTMLElement).style.color =
-                    "var(--c-low-ink)")}
-                onmouseleave={(e) =>
-                  ((e.currentTarget as HTMLElement).style.color =
-                    "var(--faint)")}
-              >
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
-                  ><path
-                    d="M6 6l12 12M18 6L6 18"
-                    stroke="currentColor"
-                    stroke-width="2.2"
-                    stroke-linecap="round"
-                  /></svg
-                >
-              </button>
+              <button class="rr-remove" aria-label="Remove from recent" title="Remove" onclick={() => removeRecent(conn)}>✕</button>
             </div>
           {/each}
         </div>
       </div>
     {/if}
-
-    <!-- AI info -->
-    <div
-      style="display:flex;align-items:center;gap:9px;padding:11px 15px;background:var(--brand-tint);border:1px solid var(--brand-tint-2);border-radius:var(--radius-sm);color:var(--brand-ink);font-size:13.5px;font-weight:500;margin-bottom:20px"
-    >
-      <svg
-        width="18"
-        height="18"
-        viewBox="0 0 24 24"
-        fill="none"
-        style="flex-shrink:0"
-        ><rect
-          x="5"
-          y="10.5"
-          width="14"
-          height="9.5"
-          rx="2.4"
-          stroke="currentColor"
-          stroke-width="1.8"
-        /><path
-          d="M8 10.5V8a4 4 0 018 0v2.5"
-          stroke="currentColor"
-          stroke-width="1.8"
-        /></svg
-      >
-      {#if appState.openrouterReady}
-        AI ready. Only your
-        <b>database structure and your question</b> are sent — never your actual data.
-      {:else}
-        AI not yet ready — set <b>OPENROUTER_API_KEY</b> in the server environment.
-      {/if}
-    </div>
-
-    <!-- step 1 — connect -->
-    <Section
-      num="1"
-      title="Connect your database"
-      hint="Don't have one yet? Use the sample data to see how it works first."
-    >
-      {#snippet children()}
-        <div class="connect-grid">
-          <!-- connection form card -->
-          <div class="card" style="padding:22px">
-            <div
-              style="display:flex;align-items:center;gap:9px;margin-bottom:16px;font-weight:700;font-size:15px"
-            >
-              <svg
-                width="18"
-                height="18"
-                viewBox="0 0 24 24"
-                fill="none"
-                style="color:var(--brand)"
-                ><ellipse
-                  cx="12"
-                  cy="6"
-                  rx="7"
-                  ry="3"
-                  stroke="currentColor"
-                  stroke-width="1.9"
-                /><path
-                  d="M5 6v6c0 1.66 3.13 3 7 3s7-1.34 7-3V6M5 12v6c0 1.66 3.13 3 7 3s7-1.34 7-3v-6"
-                  stroke="currentColor"
-                  stroke-width="1.9"
-                /></svg
-              >
-              Your database
-            </div>
-
-            <!-- DB type selector -->
-            <div style="margin-bottom:16px">
-              <div
-                style="font-size:11.5px;font-weight:700;color:var(--faint);margin-bottom:8px;letter-spacing:.05em;text-transform:uppercase"
-              >
-                What type of database?
-              </div>
-              <div style="display:flex;flex-wrap:wrap;gap:7px" data-testid="db-type-selector">
-                {#each DB_TYPES as dt}
-                  <button
-                    onclick={() => {
-                      dbType = dt.id;
-                      if (dt.port) port = dt.port;
-                      error = "";
-                    }}
-                    class="focusable"
-                    data-testid="db-type-{dt.id}"
-                    aria-pressed={dbType === dt.id}
-                    style="padding:6px 14px;border-radius:99px;cursor:pointer;font-size:13px;font-weight:650;transition:all .15s;background:{dbType ===
-                    dt.id
-                      ? 'var(--brand)'
-                      : 'var(--surface-2)'};color:{dbType === dt.id
-                      ? '#fff'
-                      : 'var(--ink-2)'};border:{dbType === dt.id
-                      ? '1.5px solid var(--brand)'
-                      : '1.5px solid var(--border)'}"
-                  >
-                    {dt.label}
-                  </button>
-                {/each}
-              </div>
-            </div>
-
-            <!-- Fields -->
-            {#if formMode}
-              {#if isFileBased}
-                <div style="margin-bottom:14px">
-                  <label
-                    for="db_filepath"
-                    style="display:block;font-size:11.5px;font-weight:700;color:var(--faint);margin-bottom:6px;letter-spacing:.05em;text-transform:uppercase"
-                    >File path</label
-                  >
-                  <input
-                    id="db_filepath"
-                    class="field mono"
-                    bind:value={filePath}
-                    placeholder={dbType === "sqlite"
-                      ? "/Users/you/data/mydb.db"
-                      : "/Users/you/data/mydb.duckdb"}
-                    style="font-size:13.5px;margin-bottom:6px"
-                  />
-                  <div
-                    style="font-size:12px;color:var(--faint);font-weight:550;line-height:1.45"
-                  >
-                    The absolute path to your {dbType === "sqlite"
-                      ? ".db or .sqlite"
-                      : "DuckDB"} file. If using Docker, drop the file in the project's
-                    <code
-                      style="background:var(--surface);padding:2px 4px;border-radius:3px"
-                      >data</code
-                    >
-                    folder and use
-                    <code
-                      style="background:var(--surface);padding:2px 4px;border-radius:3px"
-                      >/app/data/filename.db</code
-                    >.
-                    {#if dbType === "duckdb"}
-                      <br />Leave empty to use an in-memory database.{/if}
-                  </div>
-                </div>
-              {:else}
-                <div
-                  style="display:flex;flex-direction:column;gap:12px;margin-bottom:14px"
-                >
-                  <div
-                    style="display:grid;grid-template-columns:1fr 90px;gap:10px"
-                  >
-                    <div>
-                      <label
-                        for="db_host"
-                        style="display:block;font-size:11.5px;font-weight:700;color:var(--faint);margin-bottom:6px;letter-spacing:.05em;text-transform:uppercase"
-                        >Host</label
-                      >
-                      <input
-                        id="db_host"
-                        class="field"
-                        bind:value={host}
-                        placeholder="localhost or db.company.com"
-                        style="font-size:14px"
-                      />
-                    </div>
-                    <div>
-                      <label
-                        for="db_port"
-                        style="display:block;font-size:11.5px;font-weight:700;color:var(--faint);margin-bottom:6px;letter-spacing:.05em;text-transform:uppercase"
-                        >Port</label
-                      >
-                      <input
-                        id="db_port"
-                        class="field"
-                        bind:value={port}
-                        placeholder={port}
-                        style="font-size:14px"
-                      />
-                    </div>
-                  </div>
-                  <div
-                    style="display:grid;grid-template-columns:1fr 1fr;gap:10px"
-                  >
-                    <div>
-                      <label
-                        for="db_username"
-                        style="display:block;font-size:11.5px;font-weight:700;color:var(--faint);margin-bottom:6px;letter-spacing:.05em;text-transform:uppercase"
-                        >Username</label
-                      >
-                      <input
-                        id="db_username"
-                        class="field"
-                        bind:value={user}
-                        placeholder="your_username"
-                        style="font-size:14px"
-                        autocomplete="username"
-                      />
-                    </div>
-                    <div>
-                      <label
-                        for="db_password"
-                        style="display:block;font-size:11.5px;font-weight:700;color:var(--faint);margin-bottom:6px;letter-spacing:.05em;text-transform:uppercase"
-                        >Password</label
-                      >
-                      <input
-                        id="db_password"
-                        class="field"
-                        type="password"
-                        bind:value={password}
-                        placeholder="••••••••"
-                        style="font-size:14px"
-                        autocomplete="current-password"
-                      />
-                    </div>
-                  </div>
-                  <div>
-                    <label
-                      for="db_name"
-                      style="display:block;font-size:11.5px;font-weight:700;color:var(--faint);margin-bottom:6px;letter-spacing:.05em;text-transform:uppercase"
-                      >Database name</label
-                    >
-                    <input
-                      id="db_name"
-                      class="field"
-                      bind:value={dbName}
-                      placeholder="my_database"
-                      style="font-size:14px"
-                    />
-                  </div>
-                </div>
-              {/if}
-            {:else}
-              <div style="margin-bottom:14px">
-                <label
-                  for="db_url"
-                  style="display:block;font-size:11.5px;font-weight:700;color:var(--faint);margin-bottom:6px;letter-spacing:.05em;text-transform:uppercase"
-                  >Connection URL</label
-                >
-                <input
-                  id="db_url"
-                  class="field mono"
-                  bind:value={dbUrl}
-                  placeholder={dbType === "sqlite"
-                    ? "sqlite:///path/to/file.db"
-                    : dbType === "mysql"
-                      ? "mysql://user:pass@localhost:3306/db"
-                      : "postgresql://user:pass@localhost:5432/db"}
-                  style="font-size:13px;margin-bottom:8px"
-                />
-                <button
-                  onclick={() => (formMode = true)}
-                  style="font-size:12.5px;color:var(--brand-ink);background:none;border:none;cursor:pointer;font-weight:650;padding:0"
-                  >← Back to the simple form</button
-                >
-              </div>
-            {/if}
-
-            {#if formMode}
-              <button
-                onclick={() => (formMode = false)}
-                style="font-size:12.5px;color:var(--faint);background:none;border:none;cursor:pointer;font-weight:600;padding:0 0 16px 0;display:block"
-              >
-                Have a full connection URL? Use that instead →
-              </button>
-            {/if}
-
-            <Button
-              kind={canConnect() ? "primary" : "ghost"}
-              class="btn-block"
-              disabled={!canConnect() || !!connecting}
-              onclick={() => go("url")}
-              data-testid="connect-database-button"
-            >
-              {#snippet icon()}
-                {#if connecting === "url"}<Spinner />{:else}<svg
-                    width="18"
-                    height="18"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    ><ellipse
-                      cx="12"
-                      cy="6"
-                      rx="7"
-                      ry="3"
-                      stroke="currentColor"
-                      stroke-width="1.9"
-                    /><path
-                      d="M5 6v6c0 1.66 3.13 3 7 3s7-1.34 7-3V6M5 12v6c0 1.66 3.13 3 7 3s7-1.34 7-3v-6"
-                      stroke="currentColor"
-                      stroke-width="1.9"
-                    /></svg
-                  >{/if}
-              {/snippet}
-              {connecting === "url" ? "Connecting…" : "Connect database"}
-            </Button>
-            <div
-              style="display:flex;align-items:center;gap:7px;margin-top:11px;color:var(--faint);font-size:12.5px"
-            >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
-                ><path
-                  d="M12 3l7 3v5c0 4.4-3 8-7 10-4-2-7-5.6-7-10V6l7-3z"
-                  stroke="currentColor"
-                  stroke-width="1.9"
-                  stroke-linejoin="round"
-                /><path
-                  d="M9 12l2 2 4-4"
-                  stroke="currentColor"
-                  stroke-width="1.9"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                /></svg
-              >
-              Tip: use a view-only database account — BoloDB never writes to your
-              data.
-            </div>
-          </div>
-
-          <!-- sample data card -->
-          <button
-            onclick={() => go("sample")}
-            disabled={!!connecting}
-            class="card focusable"
-            data-testid="connect-sample-database-button"
-            style="padding:22px;text-align:left;cursor:{connecting
-              ? 'wait'
-              : 'pointer'};border:1.5px dashed var(--brand);background:var(--brand-tint);display:flex;flex-direction:column;justify-content:space-between;transition:transform .15s var(--ease)"
-          >
-            <div>
-              <div
-                style="width:40px;height:40px;border-radius:12px;background:var(--brand);color:#fff;display:grid;place-items:center;margin-bottom:14px;box-shadow:var(--shadow-brand)"
-              >
-                {#if connecting === "sample"}<Spinner light />{:else}<svg
-                    width="18"
-                    height="18"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    ><path
-                      d="M12 3l1.7 5.1L19 10l-5.3 1.9L12 17l-1.7-5.1L5 10l5.3-1.9L12 3z"
-                      fill="currentColor"
-                    /></svg
-                  >{/if}
-              </div>
-              <div
-                style="font-weight:700;font-size:16px;color:var(--brand-ink);margin-bottom:5px"
-              >
-                {connecting === "sample"
-                  ? "Building sample data…"
-                  : "Try with sample data"}
-              </div>
-              <div
-                style="font-size:13.5px;color:var(--brand-ink);opacity:.85;line-height:1.55"
-              >
-                A realistic TechStore e-commerce database, built locally for
-                you. No setup, no credentials, ready in seconds.
-              </div>
-            </div>
-            <div
-              style="display:flex;align-items:center;gap:6px;margin-top:18px;font-weight:700;font-size:13.5px;color:var(--brand-ink)"
-            >
-              Start in seconds <svg
-                width="16"
-                height="16"
-                viewBox="0 0 24 24"
-                fill="none"
-                ><path
-                  d="M5 12h14M13 6l6 6-6 6"
-                  stroke="currentColor"
-                  stroke-width="2"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                /></svg
-              >
-            </div>
-          </button>
-        </div>
-
-        {#if error}
-          <div
-            role="alert"
-            aria-live="polite"
-            data-testid="connect-error-message"
-            style="margin-top:12px;padding:13px 17px;background:var(--c-low-tint);border:1px solid #EBC6BD;border-radius:var(--radius);color:var(--c-low-ink);font-size:13.5px;font-weight:550;line-height:1.55"
-          >
-            <b>Couldn't connect —</b>
-            {error}
-          </div>
-        {/if}
-      {/snippet}
-    </Section>
   </div>
+
+  <div class="ob-footer">READ-ONLY · NO TELEMETRY · YOUR ROWS NEVER LEAVE</div>
 </div>
 
 <style>
-  .connect-grid {
-    display: grid;
-    grid-template-columns: 1.4fr 1fr;
-    gap: 16px;
+  .ob {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 48px 24px 40px;
+    min-height: 100vh;
+    box-sizing: border-box;
+    background: radial-gradient(1000px 600px at 50% -10%, rgba(var(--glow-rgb), 0.1) 0%, transparent 60%), var(--bg);
   }
-
-  @media (max-width: 780px) {
-    .connect-grid {
-      grid-template-columns: 1fr;
-    }
+  .ob-logo { display: flex; align-items: center; gap: 10px; margin-bottom: 44px; }
+  .ob-name { font-weight: 800; font-size: 17px; letter-spacing: -0.02em; color: var(--ink); }
+  .step {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 14px;
+    max-width: 660px;
+    width: 100%;
+    animation: riseIn 0.5s var(--ease) both;
+  }
+  @keyframes riseIn {
+    from { opacity: 0; transform: translateY(14px); }
+    to { opacity: 1; transform: none; }
+  }
+  .title {
+    margin: 0;
+    font-size: clamp(2rem, 4vw, 3rem);
+    font-weight: 800;
+    letter-spacing: -0.03em;
+    text-align: center;
+    color: var(--ink);
+  }
+  .sub {
+    margin: 0 0 22px;
+    font-size: 16px;
+    color: var(--muted);
+    text-align: center;
+    max-width: 440px;
+    line-height: 1.6;
+  }
+  .cards {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    width: 100%;
+  }
+  .choice {
+    text-align: left;
+    background: var(--card);
+    border: 1.5px solid var(--border);
+    border-radius: 18px;
+    padding: 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 9px;
+    cursor: pointer;
+    transition: all 0.18s;
+  }
+  .choice:hover { border-color: var(--brand); }
+  .choice.on { background: var(--card-hover); border-color: var(--brand); }
+  .c-title { font-size: 22px; font-weight: 700; letter-spacing: -0.015em; color: var(--ink); }
+  .c-desc { font-size: 13.5px; line-height: 1.55; color: var(--muted); }
+  .c-tag { font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.1em; }
+  .c-tag.accent { color: var(--accent); }
+  .c-tag.faint { color: var(--faint); }
+  .conn-input {
+    width: 100%;
+    box-sizing: border-box;
+    margin-top: 4px;
+    background: var(--card);
+    border: 1.5px solid var(--border-2);
+    border-radius: 13px;
+    padding: 15px 18px;
+    font-size: 13.5px;
+    color: var(--ink);
+    outline: none;
+    transition: border-color 0.15s;
+    animation: riseIn 0.3s both;
+  }
+  .conn-input:focus { border-color: var(--brand); }
+  .conn-input::placeholder { color: var(--faint); }
+  .err {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 12px 16px;
+    background: var(--c-low-tint);
+    border: 1px solid #EBC6BD;
+    border-radius: 12px;
+    color: var(--c-low-ink);
+    font-size: 13.5px;
+    font-weight: 550;
+    line-height: 1.5;
+  }
+  .ai-note {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 10px 14px;
+    background: var(--c-med-tint);
+    border: 1px solid var(--border-2);
+    border-radius: 12px;
+    color: var(--med-ink);
+    font-size: 12.5px;
+    font-weight: 550;
+  }
+  .cta {
+    margin-top: 18px;
+    background: var(--brand);
+    color: var(--on-brand);
+    border: none;
+    font-weight: 700;
+    font-size: 16px;
+    padding: 15px 34px;
+    border-radius: 99px;
+    cursor: pointer;
+    transition: all 0.18s;
+  }
+  .cta:hover:not(:disabled) { background: var(--brand-2); transform: translateY(-1px); }
+  .cta:disabled { opacity: 0.55; cursor: not-allowed; }
+  .recent {
+    width: 100%;
+    margin-top: 26px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .recent-head {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    letter-spacing: 0.1em;
+    color: var(--faint);
+    text-align: center;
+  }
+  .recent-list { display: flex; flex-direction: column; gap: 8px; }
+  .recent-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 11px 14px;
+  }
+  .rr-icon {
+    width: 32px;
+    height: 32px;
+    border-radius: 9px;
+    flex-shrink: 0;
+    display: grid;
+    place-items: center;
+    background: var(--surface-2);
+    color: var(--brand);
+  }
+  .rr-info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+  .rr-name { font-size: 13px; font-weight: 700; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .rr-meta { font-size: 11px; color: var(--faint); }
+  .rr-connect {
+    background: var(--brand);
+    color: var(--on-brand);
+    border: none;
+    font-weight: 700;
+    font-size: 12.5px;
+    padding: 7px 14px;
+    border-radius: 99px;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background 0.15s;
+  }
+  .rr-connect:hover:not(:disabled) { background: var(--brand-2); }
+  .rr-connect:disabled { opacity: 0.6; cursor: wait; }
+  .rr-remove {
+    background: transparent;
+    border: none;
+    color: var(--faint);
+    cursor: pointer;
+    padding: 4px 6px;
+    font-size: 12px;
+    border-radius: 6px;
+  }
+  .rr-remove:hover { color: var(--low); }
+  .ob-footer {
+    margin-top: auto;
+    padding-top: 40px;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    letter-spacing: 0.1em;
+    color: var(--faint);
+  }
+  @media (max-width: 620px) {
+    .cards { grid-template-columns: 1fr; }
   }
 </style>

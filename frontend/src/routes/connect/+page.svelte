@@ -24,7 +24,7 @@
   <title>{isConnected ? 'Switch Database' : 'Connect'} — BoloDB</title>
 </svelte:head>
 
-<div class="app-shell">
+<div class="connect-scroll">
   {#if isConnected}
     <div class="connected-banner">
       <div class="connected-banner-inner">
@@ -66,6 +66,13 @@
 </div>
 
 <style>
+  .connect-scroll {
+    height: 100%;
+    width: 100%;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+  }
   .connected-banner {
     background: var(--brand-tint);
     border-bottom: 1px solid var(--brand-tint-2);
