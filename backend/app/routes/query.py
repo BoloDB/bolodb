@@ -14,6 +14,7 @@ from backend.app.models.api import QueryReq, FeedbackReq, VerifyReq, RawSQLReq
 from backend.app.ratelimit import limiter
 import backend.app.controllers.query as ctrl
 import backend.app.pgdatabase as mdb
+from backend.app.pgdatabase.conversations import MAX_RESTORED_ROWS
 
 log = logging.getLogger(__name__)
 router = APIRouter()
