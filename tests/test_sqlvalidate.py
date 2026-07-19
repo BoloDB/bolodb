@@ -245,16 +245,19 @@ def test_unrelated_cte_does_not_mask_invalid_where_alias():
 
 
 def test_correlated_subquery_column_from_outer_opaque_not_flagged():
-    # The subquery selects from an aliased derived table (opaque); an unresolved
-    # column there could come from that source, so it must not be flagged.
+    # The subquery correlates through an outer derived-table alias; a column
+    # qualified by that opaque alias cannot be checked and must not be flagged.
     sql = (
-        "SELECT c.name FROM customers c WHERE c.id IN ("
-        "SELECT d.customer_id FROM (SELECT customer_id, mystery FROM orders) d "
-        "WHERE d.mystery > 0)"
+        "SELECT d.id FROM ("
+        "SELECT c.id, c.name FROM customers c"
+        ") d WHERE d.id IN ("
+        "SELECT o.customer_id FROM orders o "
+        "WHERE o.total_amount > d.mystery"
+        ")"
     )
     res = validate_sql(sql, SCHEMA)
-    # `mystery` is qualified by the derived-table alias `d`, so it's left
-    # unchecked; the query must validate cleanly.
+    # `d.mystery` is qualified by the derived-table alias `d` (opaque), so it
+    # is left unchecked; the query must validate cleanly.
     assert res["ok"] is True, res["errors"]
 
 
