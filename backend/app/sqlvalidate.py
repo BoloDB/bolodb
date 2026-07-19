@@ -23,6 +23,11 @@ log = logging.getLogger(__name__)
 # the query will run against.
 _GLOT_DIALECT = {"postgresql": "postgres", "mssql": "tsql"}
 
+# Dialects that let a SELECT alias be referenced in a HAVING clause. Standard
+# SQL (and Postgres / SQL Server) disallow it; MySQL and SQLite permit it.
+# ORDER BY and GROUP BY accept aliases everywhere we support.
+_HAVING_ALIAS_DIALECTS = {"mysql", "sqlite"}
+
 
 def _normalize_schema(schema):
     """Return {table_lower: {col_lower: original_col_name}} from a get_schema() dict."""
@@ -35,6 +40,40 @@ def _normalize_schema(schema):
                 cols[name.lower()] = name
         norm[tbl.lower()] = cols
     return norm
+
+
+def _alias_clause(col):
+    """Classify where ``col`` sits relative to its nearest enclosing SELECT.
+
+    Returns ``(clause, select)`` where ``clause`` is ``"order"``, ``"group"``,
+    ``"having"`` or ``None`` (anything else — WHERE, JOIN ON, the projection
+    list, ...). ``select`` is the enclosing SELECT node whose projection aliases
+    are visible from that clause, so alias resolution stays scoped to the SELECT
+    that actually defines them (a nested SELECT's aliases don't leak outward).
+    """
+    clause = None
+    node = col.parent
+    while node is not None:
+        if isinstance(node, exp.Select):
+            return clause, node
+        if clause is None:
+            if isinstance(node, exp.Order):
+                clause = "order"
+            elif isinstance(node, exp.Group):
+                clause = "group"
+            elif isinstance(node, exp.Having):
+                clause = "having"
+        node = node.parent
+    return clause, None
+
+
+def _projection_aliases(select):
+    """Return the lower-cased SELECT-list aliases defined by ``select``."""
+    return {
+        a.alias.lower()
+        for a in select.expressions
+        if isinstance(a, exp.Alias) and a.alias
+    }
 
 
 def validate_sql(sql, schema, dialect=""):
@@ -68,8 +107,9 @@ def validate_sql(sql, schema, dialect=""):
         if sub.alias:
             opaque_sources.add(sub.alias.lower())
 
-    # SELECT aliases are valid references in ORDER BY, GROUP BY, and HAVING.
-    select_aliases = {a.alias.lower() for a in tree.find_all(exp.Alias) if a.alias}
+    # Cache of a SELECT node's projection aliases, keyed by object id, so the
+    # per-clause alias check below stays scoped to the defining SELECT.
+    alias_cache = {}
 
     # Map every alias / table name in use to its resolved base table (for real
     # schema tables only), and collect the set of real tables referenced.
@@ -115,9 +155,22 @@ def validate_sql(sql, schema, dialect=""):
         # Unqualified column: accept if it exists in any real table in scope.
         if any(cname in norm[t] for t in real_tables_in_use):
             continue
-        # Accept if it matches a SELECT alias (ORDER BY / GROUP BY / HAVING).
-        if cname in select_aliases:
-            continue
+        # Accept if it matches a SELECT alias, but only where SQL actually
+        # allows referencing one: ORDER BY / GROUP BY (all dialects) and HAVING
+        # (MySQL / SQLite only). Aliases in WHERE, JOIN ON, etc. are not valid
+        # references, so an unknown column there is still flagged. The alias set
+        # comes from the enclosing SELECT so nested-SELECT aliases don't leak.
+        clause, select = _alias_clause(col)
+        if clause == "order" or clause == "group" or (
+            clause == "having" and dialect in _HAVING_ALIAS_DIALECTS
+        ):
+            if select is not None:
+                aliases = alias_cache.get(id(select))
+                if aliases is None:
+                    aliases = _projection_aliases(select)
+                    alias_cache[id(select)] = aliases
+                if cname in aliases:
+                    continue
         # If an opaque source is present, the column might come from it — don't
         # flag. Only report when every source is a known table and none has it.
         if opaque_sources or not real_tables_in_use:
