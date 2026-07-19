@@ -20,6 +20,8 @@
     theme = 'dark',
     onToggleTheme,
     onLogout,
+    mobileOpen = false,
+    onClose,
   }: {
     activeTab: Tab;
     onTab: (t: Tab) => void;
@@ -34,6 +36,8 @@
     theme?: string;
     onToggleTheme?: () => void;
     onLogout?: () => void;
+    mobileOpen?: boolean;
+    onClose?: () => void;
   } = $props();
 
   let sidePanel: 'chats' | 'schema' = $state('chats');
@@ -132,9 +136,26 @@
       editTitle = '';
     }
   }
+
+  // Selecting a destination on mobile should dismiss the drawer.
+  function selectTab(t: Tab) {
+    onTab(t);
+    onClose?.();
+  }
+  function selectConversation(id: string) {
+    onConversationSelect?.(id);
+    onTab('ask');
+    onClose?.();
+  }
+  function newChat() {
+    onNewChat?.();
+    onTab('ask');
+    sidePanel = 'chats';
+    onClose?.();
+  }
 </script>
 
-<aside class="sidebar">
+<aside class="sidebar" class:mobile-open={mobileOpen}>
   <!-- brand -->
   <div class="brand">
     <svg width="22" height="22" viewBox="0 0 256 256" fill="none">
@@ -146,6 +167,7 @@
       </g>
     </svg>
     <span class="brand-name">Bolo<span style="color:var(--brand)">DB</span></span>
+    <button class="mobile-close" aria-label="Close menu" onclick={() => onClose?.()}>✕</button>
   </div>
 
   <!-- nav -->
@@ -153,7 +175,7 @@
     <button
       class="nav-item"
       class:active={activeTab === n.key}
-      onclick={() => onTab(n.key)}
+      onclick={() => selectTab(n.key)}
       data-testid="app-nav-{n.key}"
     >
       <span class="nav-icon">{n.icon}</span>{n.label}
@@ -166,7 +188,7 @@
       <button class:on={sidePanel === 'chats'} onclick={() => (sidePanel = 'chats')}>Chats</button>
       <button class:on={sidePanel === 'schema'} onclick={() => (sidePanel = 'schema')}>Schema</button>
     </div>
-    <button class="new-chat" aria-label="New chat" title="New chat" onclick={() => { onNewChat?.(); onTab('ask'); sidePanel = 'chats'; }}>+</button>
+    <button class="new-chat" aria-label="New chat" title="New chat" onclick={newChat}>+</button>
   </div>
 
   <!-- panel body -->
@@ -186,7 +208,7 @@
                   autofocus
                 />
               {:else}
-                <button class="convo" class:active={activeConversationId === cv._id} onclick={() => { onConversationSelect?.(cv._id); onTab('ask'); }}>
+                <button class="convo" class:active={activeConversationId === cv._id} onclick={() => selectConversation(cv._id)}>
                   <span class="convo-title">{cv.title || cv.last_question || 'New conversation'}</span>
                   <span class="convo-meta">{cv.turn_count} turn{cv.turn_count === 1 ? '' : 's'} · {formatTime(cv.updated_at)}</span>
                 </button>
@@ -242,7 +264,7 @@
             <span class="pmenu-email">{userEmail || '—'}</span>
             <span class="pmenu-plan">FREE PLAN</span>
           </div>
-          <button class="pmenu-item" onclick={() => { profileOpen = false; onTab('settings'); }}>⚙ Settings</button>
+          <button class="pmenu-item" onclick={() => { profileOpen = false; selectTab('settings'); }}>⚙ Settings</button>
           <button class="pmenu-item" onclick={() => { profileOpen = false; onToggleTheme?.(); }}>{theme === 'dark' ? '☀' : '☾'} {theme === 'dark' ? 'Light mode' : 'Dark mode'}</button>
           <button class="pmenu-item danger" onclick={() => { profileOpen = false; onLogout?.(); }}>↪ Log out</button>
         </div>
@@ -280,6 +302,20 @@
     gap: 9px;
     padding: 4px 10px 18px;
   }
+  /* Close button lives in the brand row, mobile drawer only. */
+  .mobile-close {
+    display: none;
+    margin-left: auto;
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    border: none;
+    background: var(--surface-2);
+    color: var(--muted);
+    font-size: 14px;
+    cursor: pointer;
+  }
+  .mobile-close:hover { color: var(--ink); }
   .brand-name {
     font-weight: 800;
     font-size: 15px;
@@ -586,4 +622,24 @@
   .pmenu-item:hover { background: var(--surface-2); color: var(--ink); }
   .pmenu-item.danger { color: var(--muted); }
   .pmenu-item.danger:hover { color: var(--low); }
+
+  /* ── Mobile: sidebar becomes an off-canvas drawer ── */
+  @media (max-width: 768px) {
+    .sidebar {
+      position: fixed;
+      top: 0;
+      left: 0;
+      bottom: 0;
+      z-index: 60;
+      width: min(84vw, 300px);
+      transform: translateX(-100%);
+      transition: transform 0.25s var(--ease, ease);
+      box-shadow: none;
+    }
+    .sidebar.mobile-open {
+      transform: translateX(0);
+      box-shadow: 0 0 40px rgba(0, 0, 0, 0.4);
+    }
+    .mobile-close { display: inline-flex; align-items: center; justify-content: center; }
+  }
 </style>

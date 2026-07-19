@@ -1,16 +1,9 @@
 <script lang="ts">
   import { appState } from '$lib/appState.svelte';
-  import { page } from '$app/stores';
   import { goto } from '$app/navigation';
   import { onMount } from 'svelte';
   import { apiCall } from '$lib/api';
   import Logo from './Logo.svelte';
-
-  const navLinks = $derived([
-    { label: 'Chat', path: '/chat' },
-    { label: 'Dashboard', path: '/dashboard' },
-    { label: appState.dbInfo ? 'Switch DB' : 'Connect', path: '/connect' }
-  ]);
 
   let userEmail = $state<string>('');
   let menuOpen = $state(false);
@@ -51,18 +44,6 @@
 <nav class="navbar" data-testid="app-navbar">
   <div class="navbar-left" onclick={() => goto('/chat')} role="button" tabindex="0" onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); goto('/chat'); } }}>
     <Logo size={24} sub={false} />
-  </div>
-
-  <div class="navbar-center">
-    {#each navLinks as link}
-      <button
-        class="nav-link {$page.url.pathname === link.path ? 'active' : ''}"
-        data-testid="app-nav-{link.label.toLowerCase()}"
-        onclick={() => goto(link.path)}
-      >
-        {link.label}
-      </button>
-    {/each}
   </div>
 
   <div class="navbar-right">
@@ -141,35 +122,6 @@
     cursor: pointer;
     flex: 1;
   }
-
-  .navbar-center {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    background: var(--surface-2);
-    padding: 4px;
-    border-radius: 99px;
-    border: 1px solid var(--border-2);
-    box-shadow: var(--shadow-sm);
-  }
-
-  .nav-link {
-    background: transparent;
-    border: none;
-    padding: 6px 16px;
-    font-size: 13.5px;
-    font-weight: 500;
-    color: var(--muted);
-    border-radius: 99px;
-    transition: all 0.2s var(--ease);
-  }
-  .nav-link:hover { color: var(--ink); }
-  .nav-link.active {
-    background: var(--surface);
-    color: var(--ink);
-    box-shadow: 0 1px 3px rgba(0,0,0,0.08);
-  }
-  :global([data-theme="dark"]) .nav-link.active { box-shadow: 0 1px 3px rgba(0,0,0,0.3); }
 
   .navbar-right {
     display: flex;

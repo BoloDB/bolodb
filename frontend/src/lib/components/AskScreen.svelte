@@ -82,6 +82,7 @@
   let showScrollBtn = $state(false);
   let lastTurnCount = 0;
   let convLoadSeq = 0;
+  let mobileNavOpen = $state(false);
 
   const trust = $derived(trustFor(verifiedCount));
 
@@ -563,9 +564,26 @@
     theme={appState.theme}
     onToggleTheme={() => appState.toggleTheme()}
     onLogout={() => appState.logout()}
+    mobileOpen={mobileNavOpen}
+    onClose={() => (mobileNavOpen = false)}
   />
 
+  {#if mobileNavOpen}
+    <button
+      class="nav-backdrop"
+      aria-label="Close menu"
+      onclick={() => (mobileNavOpen = false)}
+    ></button>
+  {/if}
+
   <main class="main">
+    <!-- mobile top bar: hamburger + brand (mobile only) -->
+    <div class="mobile-topbar">
+      <button class="hamburger" aria-label="Open menu" onclick={() => (mobileNavOpen = true)}>
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M4 6h16M4 12h16M4 18h16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+      </button>
+      <span class="mobile-brand">Bolo<span style="color:var(--brand)">DB</span></span>
+    </div>
     {#if tab === "ask"}
       <!-- db header -->
       <div class="db-header">
@@ -845,5 +863,58 @@
     text-align: center;
     font-size: 11.5px;
     color: var(--faint);
+  }
+
+  /* mobile top bar — hidden on desktop */
+  .mobile-topbar {
+    display: none;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 16px;
+    border-bottom: 1px solid var(--border);
+    background: var(--card-2);
+  }
+  .hamburger {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 38px;
+    height: 38px;
+    border-radius: 10px;
+    border: 1px solid var(--border-2);
+    background: transparent;
+    color: var(--ink);
+    cursor: pointer;
+  }
+  .mobile-brand {
+    font-weight: 800;
+    font-size: 15px;
+    letter-spacing: -0.02em;
+    color: var(--ink);
+  }
+  .nav-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 55;
+    border: none;
+    padding: 0;
+    background: rgba(0, 0, 0, 0.45);
+    cursor: pointer;
+    animation: fadeIn 0.2s ease both;
+  }
+  @keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+
+  @media (max-width: 768px) {
+    .mobile-topbar { display: flex; }
+    .db-header { padding: 10px 16px; }
+    .switch-db { padding: 6px 11px; }
+    .feed { padding: 20px 16px 16px; }
+    .empty { padding-top: 6vh; }
+    .empty-title { font-size: clamp(1.5rem, 7vw, 2rem); }
+    .input-zone { padding: 12px 14px calc(16px + env(safe-area-inset-bottom, 0px)); }
+    .input-hint { font-size: 11px; }
   }
 </style>

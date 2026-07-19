@@ -183,5 +183,9 @@
     overflow-y: auto;
     padding: 40px;
     width: 100%;
+    box-sizing: border-box;
+  }
+  @media (max-width: 768px) {
+    .dash-scroll { padding: 20px 16px; }
   }
 </style>

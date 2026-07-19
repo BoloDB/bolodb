@@ -73,7 +73,7 @@
 {/if}
 
 <style>
-  .wrap { flex: 1; overflow-y: auto; padding: 40px 36px; }
+  .wrap { flex: 1; overflow-y: auto; padding: 40px 36px; box-sizing: border-box; }
   .inner { max-width: 640px; margin: 0 auto; display: flex; flex-direction: column; gap: 20px; }
   .title { margin: 0; font-size: 26px; font-weight: 800; letter-spacing: -0.025em; color: var(--ink); }
   .card {
@@ -116,4 +116,8 @@
     cursor: pointer;
   }
   .muted { font-size: 13.5px; color: var(--muted); line-height: 1.6; margin: 0; }
+  @media (max-width: 768px) {
+    .wrap { padding: 20px 16px; }
+    .card { padding: 18px; }
+  }
 </style>
