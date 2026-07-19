@@ -35,6 +35,7 @@
   {#if appState.isLoaded && appState.dbInfo}
     <OnboardScreen
       onDone={(seedCount) => appState.setOnboardDone(seedCount)}
+      onChangeDb={() => appState.disconnect()}
       dbInfo={appState.dbInfo}
       schema={appState.realSchema}
     />

@@ -6,8 +6,8 @@
   import GlossaryStep from '$lib/components/GlossaryStep.svelte';
   import StartersStep from '$lib/components/StartersStep.svelte';
 
-  let { onDone, dbInfo, schema }:
-    { onDone: (count: number) => void; dbInfo: DbInfo | null; schema: SchemaTable[] | null } = $props();
+  let { onDone, dbInfo, schema, onChangeDb }:
+    { onDone: (count: number) => void; dbInfo: DbInfo | null; schema: SchemaTable[] | null; onChangeDb?: () => void } = $props();
 
   let step = $state('profile');
   let realGlossary: GlossaryItem[] | null = $state(null);
@@ -41,6 +41,9 @@
 </script>
 
 <div class="ob">
+  {#if onChangeDb}
+    <button class="ob-change-db" onclick={onChangeDb} data-testid="onboard-change-db">← Change database</button>
+  {/if}
   <div class="ob-logo">
     <svg width="26" height="26" viewBox="0 0 256 256" fill="none">
       <path d="M 52 44 Q 52 30 66 30 L 190 30 Q 204 30 204 44 L 204 138 Q 204 152 190 152 L 116 152 L 88 176 L 92 152 L 66 152 Q 52 152 52 138 Z" stroke="var(--brand)" stroke-width="6" fill="none" />
@@ -88,7 +91,26 @@
     padding: 48px 24px 40px;
     min-height: 100vh;
     box-sizing: border-box;
+    position: relative;
     background: radial-gradient(1000px 600px at 50% -10%, rgba(var(--glow-rgb), 0.1) 0%, transparent 60%), var(--bg);
+  }
+  .ob-change-db {
+    position: absolute;
+    top: 20px;
+    left: 20px;
+    background: transparent;
+    border: 1px solid var(--border-2);
+    color: var(--muted);
+    font-size: 13px;
+    font-weight: 600;
+    padding: 7px 14px;
+    border-radius: 99px;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .ob-change-db:hover { color: var(--ink); border-color: var(--muted); }
+  @media (max-width: 768px) {
+    .ob-change-db { top: 12px; left: 12px; padding: 6px 12px; font-size: 12px; }
   }
   .ob-logo {
     display: flex;
