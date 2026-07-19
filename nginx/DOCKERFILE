@@ -1,20 +1,24 @@
 # ──────────────────────────────────────────────
 #  BoloDB  ·  Nginx Reverse Proxy
-#  Serves Svelte build + proxies /api → backend
-# ──────────────────────────────────────────────
-#  Build context: ./nginx
+#  Reads MIGRATE env var to select config:
+#    True → proxy to nextjs:3000
+#    else → proxy to frontend:5173
 # ──────────────────────────────────────────────
 FROM nginx:1.27-alpine
 
-# Remove default site
 RUN rm -rf /usr/share/nginx/html/* /etc/nginx/conf.d/default.conf
 
-# Custom config
-COPY nginx.conf /etc/nginx/conf.d/default.conf
+# Legacy config (SvelteKit frontend:5173)
+COPY nginx.conf /etc/nginx/conf.d/nginx.conf.legacy
+# Next.js config (nextjs:3000)
+COPY nginx.conf.next /etc/nginx/conf.d/nginx.conf.next
+# Entrypoint selector
+COPY entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
 
 EXPOSE 80
 
 HEALTHCHECK --interval=30s --timeout=3s --retries=3 \
     CMD wget -q -O /dev/null http://127.0.0.1:80/ || exit 1
 
-CMD ["nginx", "-g", "daemon off;"]
+ENTRYPOINT ["/entrypoint.sh"]

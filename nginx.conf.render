@@ -2,9 +2,6 @@ server {
     listen 80;
     server_name _;
 
-    root /usr/share/nginx/html;
-    index index.html;
-
     location /api/ {
         proxy_pass http://127.0.0.1:4321;
         proxy_http_version 1.1;
@@ -19,20 +16,13 @@ server {
         proxy_read_timeout 86400s;
     }
 
-    location ~ /__data\.json {
-        try_files $uri @empty_data;
-    }
-
-    location @empty_data {
-        add_header Content-Type application/json;
-        return 200 '{"type":"data","nodes":[null,null,null]}';
-    }
-
     location / {
-        # /index.html is the prerendered marketing homepage; client-only
-        # routes (dashboard, chat, etc.) fall back to the SPA shell in
-        # 200.html instead, so they don't get served homepage markup.
-        # $uri.html catches flat-file routes (adapter-static default).
-        try_files $uri $uri.html $uri/ /200.html;
+        proxy_pass http://127.0.0.1:3000;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_buffering off;
     }
 }

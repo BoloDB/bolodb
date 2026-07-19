@@ -1,25 +1,24 @@
 # ──────────────────────────────────────────────
 #  BoloDB  ·  Render (single Web Service)
-#  Multi-stage: builds frontend, serves with
-#  nginx + FastAPI backend in one container.
+#  Multi-stage: builds Next.js frontend, serves
+#  with nginx + FastAPI backend in one container.
 # ──────────────────────────────────────────────
-FROM node:26-alpine AS frontend-builder
+FROM node:26-alpine AS next-builder
 
 WORKDIR /app
 
-COPY frontend/package.json frontend/package-lock.json* ./
+COPY next/package.json next/package-lock.json* ./
 RUN npm ci
 
-COPY frontend/ .
+COPY next/ .
 
-# Render only injects dashboard env vars at container runtime, not into
-# `docker build`. Declaring matching ARGs makes Render forward them as
-# build args, which SvelteKit needs since adapter-static bakes
-# $env/dynamic/public values in at build time (there's no server to
-# inject them per-request in a static export).
+ARG NEXT_PUBLIC_SUPABASE_URL
+ARG NEXT_PUBLIC_SUPABASE_ANON_KEY
 ARG PUBLIC_POSTHOG_PROJECT_TOKEN
 ARG PUBLIC_POSTHOG_HOST
-ENV PUBLIC_POSTHOG_PROJECT_TOKEN=$PUBLIC_POSTHOG_PROJECT_TOKEN \
+ENV NEXT_PUBLIC_SUPABASE_URL=$NEXT_PUBLIC_SUPABASE_URL \
+    NEXT_PUBLIC_SUPABASE_ANON_KEY=$NEXT_PUBLIC_SUPABASE_ANON_KEY \
+    PUBLIC_POSTHOG_PROJECT_TOKEN=$PUBLIC_POSTHOG_PROJECT_TOKEN \
     PUBLIC_POSTHOG_HOST=$PUBLIC_POSTHOG_HOST
 
 RUN npm run build
@@ -40,7 +39,10 @@ RUN pip install --no-cache-dir -r /app/backend/requirements.txt
 
 COPY backend/ /app/backend/
 
-COPY --from=frontend-builder /app/build /usr/share/nginx/html
+# Next.js standalone output
+COPY --from=next-builder /app/.next/standalone /app/next
+COPY --from=next-builder /app/public /app/next/public
+COPY --from=next-builder /app/.next/static /app/next/.next/static
 
 COPY nginx.conf.render /etc/nginx/conf.d/default.conf
 
@@ -50,4 +52,4 @@ RUN addgroup --system bolodb && adduser --system --home /home/bolodb --ingroup b
 
 EXPOSE 80
 
-CMD sh -c "nginx -g 'daemon off;' & exec python -m uvicorn backend.app.server:create_app --factory --host 0.0.0.0 --port 4321 --log-level info"
+CMD sh -c "nginx -g 'daemon off;' & node /app/next/server.js & exec python -m uvicorn backend.app.server:create_app --factory --host 0.0.0.0 --port 4321 --log-level info"

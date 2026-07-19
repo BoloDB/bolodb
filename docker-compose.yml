@@ -60,7 +60,32 @@ services:
     networks:
       - bolodb-net
 
-  # ── Nginx: Reverse proxy + Vite dev server ──
+  # ── Frontend: Next.js dev server (MIGRATE=True) ──
+  nextjs:
+    profiles: ["migrate"]
+    build:
+      context: ./next
+      dockerfile: DOCKERFILE.dev
+    container_name: bolodb-nextjs
+    volumes:
+      - ./next:/app
+      - /app/node_modules
+      - /app/.next
+    ports:
+      - "3000:3000"
+    environment:
+      - BACKEND_URL=http://backend:4321
+      - PUBLIC_POSTHOG_PROJECT_TOKEN=${PUBLIC_POSTHOG_PROJECT_TOKEN}
+      - PUBLIC_POSTHOG_HOST=${PUBLIC_POSTHOG_HOST:-https://us.i.posthog.com}
+      - NEXT_PUBLIC_SUPABASE_URL=${SUPABASE_URL}
+      - NEXT_PUBLIC_SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY}
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks:
+      - bolodb-net
+
+  # ── Nginx: Reverse proxy (MIGRATE env var selects config) ──
   nginx:
     build:
       context: ./nginx
@@ -69,9 +94,9 @@ services:
     restart: unless-stopped
     ports:
       - "80:80"
+    environment:
+      - MIGRATE=${MIGRATE:-false}
     depends_on:
-      frontend:
-        condition: service_started
       backend:
         condition: service_healthy
     networks:
