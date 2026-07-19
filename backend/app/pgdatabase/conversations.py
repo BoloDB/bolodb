@@ -11,6 +11,8 @@ from backend.app.pgdatabase.serialization import _to_uuid, serialize_doc
 
 # Max result rows returned per turn when restoring a conversation.
 MAX_RESTORED_ROWS = 100
+# Max result rows stored per turn when saving a query execution.
+MAX_SAVED_ROWS = 500
 
 
 async def create_conversation(user_id, title="", database_id=None):

@@ -29,7 +29,7 @@ def get_engine():
             db_url,
             pool_size=5,
             max_overflow=10,
-            pool_recycle=60,
+            pool_recycle=300,
             pool_pre_ping=True,
             connect_args={"statement_cache_size": 0},
         )

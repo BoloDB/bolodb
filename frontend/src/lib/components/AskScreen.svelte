@@ -472,6 +472,7 @@
     // the fresh conversation view.
     abortController?.abort();
     convLoadSeq++;
+    loading = false;
     turns = [];
     activeConversationId = null;
     onActiveConversationChange(null);
@@ -533,7 +534,9 @@
       turns = loaded;
     } catch (e) {
       console.error('Failed to load conversation', e);
-      appState.showError("Couldn't open that conversation — please try again.");
+      if (seq === convLoadSeq) {
+        appState.showError("Couldn't open that conversation — please try again.");
+      }
     } finally {
       if (seq === convLoadSeq) loading = false;
     }

@@ -9,6 +9,8 @@
 
   let { children } = $props();
 
+  // Global navbar is hidden on /chat because the chat page provides its own sidebar.
+  // Also hidden on marketing/auth/onboard pages.
   const hiddenPaths = ['/', '/chat', '/login', '/signup', '/onboard', '/forgot-password', '/reset-password', '/verify-email', '/privacy', '/terms'];
   // Stale-chunk-after-deploy recovery: when a new build has shipped, the old
   // content-hashed JS chunks stop existing, so client-side navigation into a

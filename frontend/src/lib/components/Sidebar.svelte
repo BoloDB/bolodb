@@ -85,6 +85,9 @@
     try {
       await deleteConversation(id);
       conversations = conversations.filter((c) => c._id !== id);
+      if (id === activeConversationId) {
+        onNewChat?.();
+      }
     } catch (e) {
       console.error(e);
       appState.showError("Couldn't delete that conversation — please try again.");

@@ -77,7 +77,7 @@
 
         <!-- Total Queries -->
         <div class="card p-5 rise" style="animation-delay:0.2s;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;">
-          <h3 style="font-size:13px;font-weight:800;color:var(--faint);letter-spacing:.07em;text-transform:uppercase;margin:0 0 12px;width:100;text-align:left;">Total Queries</h3>
+          <h3 style="font-size:13px;font-weight:800;color:var(--faint);letter-spacing:.07em;text-transform:uppercase;margin:0 0 12px;width:100%;text-align:left;">Total Queries</h3>
           {#if statsLoading}
             <div class="spin" style="width:32px;height:32px;border:3px solid var(--border-2);border-top-color:var(--brand);border-radius:50%;"></div>
           {:else}

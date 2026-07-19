@@ -14,7 +14,7 @@ from backend.app.models.api import QueryReq, FeedbackReq, VerifyReq, RawSQLReq
 from backend.app.ratelimit import limiter
 import backend.app.controllers.query as ctrl
 import backend.app.pgdatabase as mdb
-from backend.app.pgdatabase.conversations import MAX_RESTORED_ROWS
+from backend.app.pgdatabase.conversations import MAX_SAVED_ROWS
 
 log = logging.getLogger(__name__)
 router = APIRouter()
@@ -167,7 +167,7 @@ async def execute(
                 user_id=user_id,
                 question=req.sql,
                 sql=req.sql,
-                result=(out.get("rows") or [])[:MAX_RESTORED_ROWS],
+                result=(out.get("rows") or [])[:MAX_SAVED_ROWS],
                 confidence="High",
                 conversation_id=conversation_id,
                 restatement="Direct SQL execution",
