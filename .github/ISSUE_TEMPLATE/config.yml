@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: BoloDB Documentation
+    url: https://github.com/HAAHIT/bolodb/blob/master/docs/README.md
+    about: Check the docs before opening an issue
+  - name: Contributing Guide
+    url: https://github.com/HAAHIT/bolodb/blob/master/CONTRIBUTING.md
+    about: Read the contributing guidelines before submitting PRs
