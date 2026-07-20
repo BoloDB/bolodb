@@ -15,5 +15,11 @@ COPY . .
 
 EXPOSE 5173
 
-# Run the dev server on all network interfaces (host 0.0.0.0)
-CMD ["npm", "run", "dev", "--", "--host", "0.0.0.0"]
+# docker-compose.yml mounts an anonymous volume over /app/node_modules so the
+# bind-mounted source doesn't shadow it. That volume persists across
+# `docker compose up --build` (only the image's node_modules gets rebuilt),
+# so a container recreated from an old volume can silently run with
+# dependencies missing whenever package.json gains a new one — surfacing as
+# ERR_MODULE_NOT_FOUND for a package that installs fine everywhere else.
+# Reconcile against the lockfile on every start so the volume can't go stale.
+CMD ["sh", "-c", "npm ci && npm run dev -- --host 0.0.0.0"]
