@@ -1,6 +1,6 @@
 # BoloDB
 
-[![pre-commit.ci status](https://results.pre-commit.ci/badge/github/HAAHIT/bolodb/master.svg)](https://results.pre-commit.ci/latest/github/HAAHIT/bolodb/master)
+[![pre-commit.ci status](https://results.pre-commit.ci/badge/github/BoloDB/bolodb/master.svg)](https://results.pre-commit.ci/latest/github/BoloDB/bolodb/master)
 
 **Ask your data. Trust the answer.**
 
