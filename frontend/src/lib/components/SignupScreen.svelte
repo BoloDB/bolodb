@@ -3,6 +3,7 @@
   import Logo from "$lib/components/ui/Logo.svelte";
   import Button from "$lib/components/ui/Button.svelte";
   import Spinner from "$lib/components/ui/Spinner.svelte";
+  import GoogleSignIn from "$lib/components/GoogleSignIn.svelte";
   import { goto } from "$app/navigation";
   import posthog from "posthog-js";
 
@@ -140,6 +141,8 @@
           {loading ? "Creating account…" : "Sign up"}
         </Button>
       </form>
+
+      <GoogleSignIn mode="signup" />
 
       <div class="auth-footer">
         Already have an account? <a href="/login" data-testid="signup-signin-link">Sign in</a>

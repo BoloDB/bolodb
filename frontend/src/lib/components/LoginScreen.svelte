@@ -119,7 +119,7 @@
       </Button>
     </form>
 
-    <GoogleSignIn onSuccess={onLogin} />
+    <GoogleSignIn />
 
     <div class="auth-footer">
       Don't have an account? <a href="/signup" data-testid="login-signup-link">Sign up</a>

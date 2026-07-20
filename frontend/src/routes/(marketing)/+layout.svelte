@@ -2,6 +2,7 @@
   import "../layout.css";
   import "$lib/styles/auth.css";
   import { browser } from "$app/environment";
+  import { goto } from "$app/navigation";
   import { locale } from "$lib/i18n/i18n-svelte";
   import { initLenis, destroyLenis, scrollTo } from "$lib/motion/lenis";
   import { motionPrefs } from "$lib/motion/motionPrefs";
@@ -13,6 +14,14 @@
   import { authModal } from "$lib/stores/authModal";
 
   let { children } = $props();
+
+  $effect(() => {
+    if (!browser) return;
+    fetch("/api/auth/me", { credentials: "include" }).then((res) => {
+      if (res.ok) goto("/dashboard");
+      else goto("/signup");
+    });
+  });
 
   $effect(() => {
     document.documentElement.lang = $locale;

@@ -4,10 +4,8 @@
   import posthog from "posthog-js";
 
   let {
-    onSuccess,
     mode = "signin",
   }: {
-    onSuccess: () => void;
     mode?: "signin" | "signup";
   } = $props();
 
