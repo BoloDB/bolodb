@@ -31,5 +31,11 @@ export default defineConfig({
         changeOrigin: true,
       },
     },
+    allowedHosts: [
+      "testing.bolodb.dev",
+      "localhost",
+      "app.bolodb.dev",
+      "bolodb.dev",
+    ],
   },
 });
