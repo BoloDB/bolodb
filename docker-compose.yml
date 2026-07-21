@@ -67,8 +67,8 @@ services:
       dockerfile: DOCKERFILE
     container_name: bolodb-nginx
     restart: unless-stopped
-    ports:
-      - "80:80"
+    expose:
+      - '80'
     depends_on:
       frontend:
         condition: service_started
