@@ -130,7 +130,7 @@ def test_connect_sample_uses_result_metadata_for_recent_connection(monkeypatch):
 def test_schema_route_passes_workspace_id_to_controller(monkeypatch):
     called = {}
 
-    async def fake_get_schema(workspace_id, db, refresh):
+    async def fake_get_schema(workspace_id, db, refresh, db_id=None):
         called["args"] = (workspace_id, db, refresh)
         return {"ok": True}
 

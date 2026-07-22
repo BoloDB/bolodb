@@ -3,6 +3,7 @@ from fastapi.responses import JSONResponse
 from sqlalchemy import text
 from backend.app.dependencies import (
     get_current_user,
+    get_current_workspace,
     get_db,
     get_cfg,
     get_kb,
@@ -32,7 +33,11 @@ async def state(
         The current application state.
     """
     user_id = user_token["user_id"]
-    return await ctrl.get_state(user_id, x_workspace_id, x_db_id, db, cfg, kb)
+    verified_workspace_id = None
+    if x_workspace_id:
+        workspace = await get_current_workspace(x_workspace_id, user_token)
+        verified_workspace_id = workspace["workspace_id"]
+    return await ctrl.get_state(user_id, verified_workspace_id, x_db_id, db, cfg, kb)
 
 
 @router.post("/api/tour-complete")

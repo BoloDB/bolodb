@@ -120,11 +120,22 @@ def db_id_for(url):
     return hashlib.sha256(sanitize_url(url).encode()).hexdigest()[:16]
 
 
+class _ConnectionsDict(dict):
+    def __getitem__(self, key):
+        if key in self:
+            return super().__getitem__(key)
+        if isinstance(key, str):
+            for k, v in self.items():
+                if k == key or (isinstance(k, tuple) and k[0] == key):
+                    return v
+        raise KeyError(key)
+
+
 class DatabaseManager:
     def __init__(
         self, readonly=True, sample_rows=3, max_rows=500, statement_timeout=30
     ):
-        self._connections = {}
+        self._connections = _ConnectionsDict()
         self.readonly = readonly
         self.sample_rows = sample_rows
         self.max_rows = max_rows

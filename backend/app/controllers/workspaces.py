@@ -1,8 +1,9 @@
 import uuid
 import re
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from fastapi import HTTPException
-from sqlalchemy import select, delete
+from sqlalchemy import select, func
+from sqlalchemy.exc import IntegrityError
 from backend.app.pgdatabase.engine import async_session
 from backend.app.models.workspace import Workspace, WorkspaceMember, WorkspaceInvite
 from backend.app.models.orm_user import User
@@ -41,32 +42,48 @@ async def create_workspace(user_id: str, name: str):
     uid = _to_uuid(user_id)
     base_slug = slugify(name) or "workspace"
 
-    async with async_session() as session:
-        # Simple unique slug generation
-        slug = base_slug
-        counter = 1
-        while True:
-            exists = await session.execute(
-                select(Workspace).where(Workspace.slug == slug)
-            )
-            if not exists.scalar_one_or_none():
-                break
-            slug = f"{base_slug}-{counter}"
-            counter += 1
+    max_attempts = 10
+    counter = 1
+    slug = base_slug
 
-        workspace = Workspace(name=name, slug=slug, created_by=uid)
-        session.add(workspace)
-        await session.flush()
+    for attempt in range(max_attempts):
+        async with async_session() as session:
+            try:
+                # Check slug uniqueness inside session
+                if attempt > 0:
+                    slug = f"{base_slug}-{counter}"
+                    counter += 1
 
-        member = WorkspaceMember(workspace_id=workspace.id, user_id=uid, role="owner")
-        session.add(member)
-        await session.commit()
-        return {
-            "id": str(workspace.id),
-            "name": workspace.name,
-            "slug": workspace.slug,
-            "role": "owner",
-        }
+                exists = await session.execute(
+                    select(Workspace).where(Workspace.slug == slug)
+                )
+                if exists.scalar_one_or_none():
+                    if attempt == 0:
+                        slug = f"{base_slug}-{counter}"
+                        counter += 1
+                    continue
+
+                workspace = Workspace(name=name, slug=slug, created_by=uid)
+                session.add(workspace)
+                await session.flush()
+
+                member = WorkspaceMember(
+                    workspace_id=workspace.id, user_id=uid, role="owner"
+                )
+                session.add(member)
+                await session.commit()
+                return {
+                    "id": str(workspace.id),
+                    "name": workspace.name,
+                    "slug": workspace.slug,
+                    "role": "owner",
+                }
+            except IntegrityError:
+                await session.rollback()
+                slug = f"{base_slug}-{counter}"
+                counter += 1
+
+    raise HTTPException(400, "Could not generate unique workspace slug")
 
 
 async def get_workspace(workspace_id: str, user_id: str):
@@ -135,8 +152,11 @@ async def list_members(workspace_id: str):
 async def invite_user(workspace_id: str, email: str, role: str, inviter_id: str):
     wid = _to_uuid(workspace_id)
     uid = _to_uuid(inviter_id)
+    if role not in ["admin", "member"]:
+        raise HTTPException(400, "Invalid role for invite")
+
     async with async_session() as session:
-        # Check if already a member
+        # Check if user is already a member
         user_exists = await session.execute(select(User).where(User.email == email))
         user = user_exists.scalar_one_or_none()
         if user:
@@ -149,35 +169,53 @@ async def invite_user(workspace_id: str, email: str, role: str, inviter_id: str)
             if member.scalar_one_or_none():
                 raise HTTPException(400, "User is already a member")
 
-        # Create invite
         token = str(uuid.uuid4())
-        from datetime import datetime, timedelta, timezone
-
         expires = datetime.now(timezone.utc) + timedelta(days=7)
 
-        invite = WorkspaceInvite(
-            workspace_id=wid,
-            email=email,
-            role=role,
-            token=token,
-            invited_by=uid,
-            expires_at=expires,
+        # Query existing invite for this workspace + email
+        existing = await session.execute(
+            select(WorkspaceInvite).where(
+                WorkspaceInvite.workspace_id == wid,
+                WorkspaceInvite.email == email,
+            )
         )
-        session.add(invite)
-        await session.commit()
-        return {
-            "id": str(invite.id),
-            "email": invite.email,
-            "role": invite.role,
-            "token": invite.token,
-            "expires_at": invite.expires_at,
-        }
+        invite = existing.scalar_one_or_none()
+
+        if invite:
+            invite.role = role
+            invite.token = token
+            invite.invited_by = uid
+            invite.expires_at = expires
+            invite.accepted_at = None
+        else:
+            invite = WorkspaceInvite(
+                workspace_id=wid,
+                email=email,
+                role=role,
+                token=token,
+                invited_by=uid,
+                expires_at=expires,
+            )
+            session.add(invite)
+
+        try:
+            await session.commit()
+            return {
+                "id": str(invite.id),
+                "email": invite.email,
+                "role": invite.role,
+                "token": invite.token,
+                "expires_at": invite.expires_at,
+            }
+        except IntegrityError:
+            await session.rollback()
+            raise HTTPException(400, "Could not process invite")
 
 
 async def update_member_role(workspace_id: str, target_user_id: str, role: str):
     wid = _to_uuid(workspace_id)
     tuid = _to_uuid(target_user_id)
-    if role not in ["admin", "member", "owner"]:
+    if role not in ["admin", "member"]:
         raise HTTPException(400, "Invalid role")
 
     async with async_session() as session:
@@ -189,6 +227,22 @@ async def update_member_role(workspace_id: str, target_user_id: str, role: str):
         member = result.scalar_one_or_none()
         if not member:
             raise HTTPException(404, "Member not found")
+
+        if member.role == "owner" and role != "owner":
+            # Check if there are other owners
+            owners_count = await session.scalar(
+                select(func.count())
+                .select_from(WorkspaceMember)
+                .where(
+                    WorkspaceMember.workspace_id == wid,
+                    WorkspaceMember.role == "owner",
+                )
+            )
+            if owners_count <= 1:
+                raise HTTPException(
+                    400, "Cannot change role of the sole workspace owner"
+                )
+
         member.role = role
         await session.commit()
         return {"ok": True}
@@ -198,11 +252,28 @@ async def remove_member(workspace_id: str, target_user_id: str):
     wid = _to_uuid(workspace_id)
     tuid = _to_uuid(target_user_id)
     async with async_session() as session:
-        await session.execute(
-            delete(WorkspaceMember).where(
+        result = await session.execute(
+            select(WorkspaceMember).where(
                 WorkspaceMember.workspace_id == wid, WorkspaceMember.user_id == tuid
             )
         )
+        member = result.scalar_one_or_none()
+        if not member:
+            raise HTTPException(404, "Member not found")
+
+        if member.role == "owner":
+            owners_count = await session.scalar(
+                select(func.count())
+                .select_from(WorkspaceMember)
+                .where(
+                    WorkspaceMember.workspace_id == wid,
+                    WorkspaceMember.role == "owner",
+                )
+            )
+            if owners_count <= 1:
+                raise HTTPException(400, "Cannot remove the sole owner of a workspace")
+
+        await session.delete(member)
         await session.commit()
         return {"ok": True}
 
@@ -247,10 +318,14 @@ async def accept_invite(token: str, user_id: str, user_email: str):
         if invite.expires_at < datetime.now(invite.expires_at.tzinfo):
             raise HTTPException(400, "Invite expired")
 
-        member = WorkspaceMember(
-            workspace_id=invite.workspace_id, user_id=uid, role=invite.role
-        )
-        invite.accepted_at = datetime.now(invite.expires_at.tzinfo)
-        session.add(member)
-        await session.commit()
-        return {"ok": True, "workspace_id": str(invite.workspace_id)}
+        try:
+            member = WorkspaceMember(
+                workspace_id=invite.workspace_id, user_id=uid, role=invite.role
+            )
+            invite.accepted_at = datetime.now(invite.expires_at.tzinfo)
+            session.add(member)
+            await session.commit()
+            return {"ok": True, "workspace_id": str(invite.workspace_id)}
+        except IntegrityError:
+            await session.rollback()
+            raise HTTPException(400, "User is already a member of this workspace")
