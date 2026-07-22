@@ -4,7 +4,7 @@
   import { apiCall } from '$lib/api';
   import { appState } from '$lib/appState.svelte';
 
-  let dashboards = $state([]);
+  let dashboards = $state<any[]>([]);
   let loading = $state(true);
   let showCreateModal = $state(false);
   let newName = $state('');
@@ -31,10 +31,10 @@
   async function createDashboard() {
     if (!newName.trim()) return;
     try {
-      const res = await apiCall('/api/dashboards', 'POST', {
+      const res = await apiCall('/api/dashboards', {
         name: newName,
         description: newDescription
-      });
+      }, 'POST');
       showCreateModal = false;
       newName = '';
       newDescription = '';
@@ -54,7 +54,7 @@
         <h1 class="text-3xl font-bold text-gray-900">Dashboards</h1>
         <p class="text-gray-500 mt-2">Saved reports and visual analytics for your workspace.</p>
       </div>
-      {#if appState.userRole === 'admin' || appState.userRole === 'owner'}
+      {#if appState.activeWorkspace?.role === 'admin' || appState.activeWorkspace?.role === 'owner'}
         <button
           onclick={() => showCreateModal = true}
           class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none"
