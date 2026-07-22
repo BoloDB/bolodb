@@ -7,6 +7,7 @@ from backend.app.dependencies import (
     get_cfg,
     get_kb,
     get_providers,
+    get_current_db_id,
 )
 from backend.app.models.api import ConfigUpdate
 from backend.app.secrets import get_supabase_url, get_supabase_anon_key
@@ -19,6 +20,7 @@ router = APIRouter()
 async def state(
     user_token=Depends(get_current_user),
     x_workspace_id: str = Header(None),
+    x_db_id: str = Depends(get_current_db_id),
     db=Depends(get_db),
     cfg=Depends(get_cfg),
     kb=Depends(get_kb),
@@ -30,7 +32,7 @@ async def state(
         The current application state.
     """
     user_id = user_token["user_id"]
-    return await ctrl.get_state(user_id, x_workspace_id, db, cfg, kb)
+    return await ctrl.get_state(user_id, x_workspace_id, x_db_id, db, cfg, kb)
 
 
 @router.post("/api/tour-complete")

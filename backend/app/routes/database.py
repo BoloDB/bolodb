@@ -1,5 +1,11 @@
 from fastapi import APIRouter, Depends, HTTPException
-from backend.app.dependencies import get_current_workspace, get_db, get_kb, get_cfg
+from backend.app.dependencies import (
+    get_current_workspace,
+    get_db,
+    get_kb,
+    get_cfg,
+    get_current_db_id,
+)
 from backend.app.models.api import ConnectReq
 import backend.app.controllers.database as ctrl
 import backend.app.pgdatabase as mdb
@@ -32,16 +38,22 @@ async def connect_sample(
 
 @router.post("/api/disconnect")
 async def disconnect(
-    workspace=Depends(get_current_workspace), db=Depends(get_db), cfg=Depends(get_cfg)
+    workspace=Depends(get_current_workspace),
+    db_id: str = Depends(get_current_db_id),
+    db=Depends(get_db),
+    cfg=Depends(get_cfg),
 ):
-    return await ctrl.disconnect(workspace["workspace_id"], db, cfg)
+    return await ctrl.disconnect(workspace["workspace_id"], db, cfg, db_id=db_id)
 
 
 @router.get("/api/schema")
 async def schema(
-    refresh: bool = False, workspace=Depends(get_current_workspace), db=Depends(get_db)
+    refresh: bool = False,
+    workspace=Depends(get_current_workspace),
+    db_id: str = Depends(get_current_db_id),
+    db=Depends(get_db),
 ):
-    return await ctrl.get_schema(workspace["workspace_id"], db, refresh)
+    return await ctrl.get_schema(workspace["workspace_id"], db, refresh, db_id=db_id)
 
 
 @router.post("/api/reconnect")

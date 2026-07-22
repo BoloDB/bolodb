@@ -63,6 +63,10 @@ def require_role(minimum_role: str):
     return role_dependency
 
 
+def get_current_db_id(x_db_id: str = Header(None)):
+    return x_db_id
+
+
 def get_db(request: Request):
     return request.app.state.db
 

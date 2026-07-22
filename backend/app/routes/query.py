@@ -9,6 +9,7 @@ from backend.app.dependencies import (
     get_cfg,
     get_providers,
     get_session_log,
+    get_current_db_id,
 )
 from backend.app.models.api import QueryReq, FeedbackReq, VerifyReq, RawSQLReq
 from backend.app.ratelimit import limiter
@@ -40,11 +41,12 @@ async def query(
     cfg=Depends(get_cfg),
     providers=Depends(get_providers),
     session_log=Depends(get_session_log),
+    db_id=Depends(get_current_db_id),
 ) -> dict:
     try:
         workspace_id = workspace["workspace_id"]
         out = await ctrl.run_query(
-            workspace_id, db, kb, cfg, providers, session_log, req
+            workspace_id, db, kb, cfg, providers, session_log, req, db_id=db_id
         )
 
         if out.get("answered") and out.get("sql"):
@@ -90,11 +92,12 @@ async def query_stream(
     cfg=Depends(get_cfg),
     providers=Depends(get_providers),
     session_log=Depends(get_session_log),
+    db_id=Depends(get_current_db_id),
 ) -> StreamingResponse:
     try:
         workspace_id = workspace["workspace_id"]
         stream = ctrl.run_query_stream(
-            workspace_id, db, kb, cfg, providers, session_log, req
+            workspace_id, db, kb, cfg, providers, session_log, req, db_id=db_id
         )
 
         return StreamingResponse(
@@ -119,10 +122,11 @@ async def feedback(
     db=Depends(get_db),
     kb=Depends(get_kb),
     session_log=Depends(get_session_log),
+    db_id=Depends(get_current_db_id),
 ) -> dict:
     try:
         workspace_id = workspace["workspace_id"]
-        return await ctrl.feedback(workspace_id, db, kb, session_log, req)
+        return await ctrl.feedback(workspace_id, db, kb, session_log, req, db_id=db_id)
     except HTTPException:
         raise
     except Exception:
@@ -136,10 +140,11 @@ async def verify(
     workspace=Depends(get_current_workspace),
     db=Depends(get_db),
     kb=Depends(get_kb),
+    db_id=Depends(get_current_db_id),
 ) -> dict:
     try:
         workspace_id = workspace["workspace_id"]
-        return await ctrl.verify(workspace_id, db, kb, req)
+        return await ctrl.verify(workspace_id, db, kb, req, db_id=db_id)
     except HTTPException:
         raise
     except Exception:
@@ -154,10 +159,11 @@ async def execute(
     req: RawSQLReq,
     workspace=Depends(get_current_workspace),
     db=Depends(get_db),
+    db_id=Depends(get_current_db_id),
 ) -> dict:
     try:
         workspace_id = workspace["workspace_id"]
-        out = await ctrl.execute(workspace_id, db, req)
+        out = await ctrl.execute(workspace_id, db, req, db_id=db_id)
 
         conversation_id = req.conversation_id
         if conversation_id and not await mdb.conversation_owned_by(
@@ -194,10 +200,11 @@ async def explain(
     workspace=Depends(get_current_workspace),
     db=Depends(get_db),
     providers=Depends(get_providers),
+    db_id=Depends(get_current_db_id),
 ) -> dict:
     try:
         workspace_id = workspace["workspace_id"]
-        return await ctrl.explain(workspace_id, db, providers, req)
+        return await ctrl.explain(workspace_id, db, providers, req, db_id=db_id)
     except HTTPException:
         raise
     except Exception:
