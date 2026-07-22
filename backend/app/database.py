@@ -132,26 +132,37 @@ class DatabaseManager:
         # it. Enforced server-side per connection (see _apply_statement_timeout).
         self.statement_timeout = statement_timeout
 
-    def connected(self, workspace_id):
-        return workspace_id in self._connections
+    def connected(self, workspace_id, db_id=None):
+        if db_id:
+            return (workspace_id, db_id) in self._connections
+        return any(k[0] == workspace_id for k in self._connections.keys())
 
-    def _get(self, workspace_id):
-        try:
-            return self._connections[workspace_id]
-        except KeyError:
-            raise HTTPException(409, "No Database Connected")
+    def _get(self, workspace_id, db_id=None):
+        if db_id:
+            try:
+                return self._connections[(workspace_id, db_id)]
+            except KeyError:
+                raise HTTPException(409, "No Database Connected")
 
-    def disconnect(self, workspace_id):
+        # Fallback to the first connected database for this workspace
+        for k, v in self._connections.items():
+            if k[0] == workspace_id:
+                return v
+        raise HTTPException(409, "No Database Connected")
+
+    def disconnect(self, workspace_id, db_id=None):
         """Reset all connection state so the server accepts a new connect call."""
-        if workspace_id not in self._connections:
-            return
-        try:
-            self._connections[workspace_id][
-                "engine"
-            ].dispose()  # release pooled connections
-        except Exception as e:
-            logger.warning("Error disposing engine on disconnect: %s", e)
-        del self._connections[workspace_id]
+        keys_to_delete = []
+        for k in self._connections.keys():
+            if k[0] == workspace_id and (db_id is None or k[1] == db_id):
+                keys_to_delete.append(k)
+
+        for k in keys_to_delete:
+            try:
+                self._connections[k]["engine"].dispose()
+            except Exception as e:
+                logger.warning("Error disposing engine on disconnect: %s", e)
+            del self._connections[k]
 
     def connect(self, workspace_id, url):
         import os
@@ -172,11 +183,12 @@ class DatabaseManager:
             with engine.connect() as c:
                 c.execute(text("SELECT 1"))
             tables = len(inspect(engine).get_table_names())
-            old_connection = self._connections.get(workspace_id)
-            self._connections[workspace_id] = {
+            db_id = db_id_for(url)
+            old_connection = self._connections.get((workspace_id, db_id))
+            self._connections[(workspace_id, db_id)] = {
                 "engine": engine,
                 "url": url,
-                "db_id": db_id_for(url),
+                "db_id": db_id,
                 "dialect": url.split(":")[0].split("+")[0],
                 "_schema_cache": None,
                 "_table_count": tables,
@@ -185,9 +197,9 @@ class DatabaseManager:
                 old_connection["engine"].dispose()
             return {
                 "ok": True,
-                "dialect": self._connections[workspace_id]["dialect"],
+                "dialect": self._connections[(workspace_id, db_id)]["dialect"],
                 "tables": tables,
-                "db_id": self._connections[workspace_id]["db_id"],
+                "db_id": self._connections[(workspace_id, db_id)]["db_id"],
                 "url": sanitize_url(url),
             }
         except Exception as e:
@@ -416,9 +428,9 @@ class DatabaseManager:
         c["_schema_cache"] = schema
         return schema
 
-    def schema_as_text(self, workspace_id):
-        c = self._get(workspace_id)
-        schema = self.get_schema(workspace_id)
+    def schema_as_text(self, workspace_id, db_id=None):
+        c = self._get(workspace_id, db_id)
+        schema = self.get_schema(workspace_id, db_id=db_id)
         lines = [f"Database dialect: {c['dialect']}"]
         for tbl, info in schema.items():
             rc = (
@@ -443,7 +455,7 @@ class DatabaseManager:
                 lines.append(f"  sample: {info['sample_rows'][:1]}")
         return "\n".join(lines)
 
-    def _readonly_violation(self, workspace_id, cleaned):
+    def _readonly_violation(self, workspace_id, cleaned, db_id=None):
         """Return an error string if `cleaned` is not a safe read-only query, else None.
 
         Primary check parses the SQL into an AST (sqlglot) and rejects anything
@@ -455,7 +467,7 @@ class DatabaseManager:
         """
         if not cleaned:
             return "Empty statement."
-        c = self._get(workspace_id)
+        c = self._get(workspace_id, db_id)
         glot_dialect = _GLOT_DIALECT.get(c["dialect"], c["dialect"])
         try:
             stmts = sqlglot.parse(cleaned, dialect=glot_dialect)
@@ -514,11 +526,11 @@ class DatabaseManager:
         except SQLAlchemyError as e:
             logger.warning("Could not set statement timeout for %s: %s", dialect, e)
 
-    def execute(self, workspace_id, sql):
-        c = self._get(workspace_id)
+    def execute(self, workspace_id, sql, db_id=None):
+        c = self._get(workspace_id, db_id)
         cleaned = sql.strip().rstrip(";").strip()
         if self.readonly:
-            violation = self._readonly_violation(workspace_id, cleaned)
+            violation = self._readonly_violation(workspace_id, cleaned, db_id)
             if violation:
                 return {"error": violation, "sql": cleaned}
         try:
@@ -553,14 +565,14 @@ class DatabaseManager:
                 }
             return {"error": _sanitize_db_error(e), "sql": cleaned}
 
-    def get_db_id(self, workspace_id):
-        return self._get(workspace_id)["db_id"]
+    def get_db_id(self, workspace_id, db_id=None):
+        return self._get(workspace_id, db_id)["db_id"]
 
-    def get_dialect(self, workspace_id):
-        return self._get(workspace_id)["dialect"]
+    def get_dialect(self, workspace_id, db_id=None):
+        return self._get(workspace_id, db_id)["dialect"]
 
-    def get_info(self, workspace_id):
-        c = self._get(workspace_id)
+    def get_info(self, workspace_id, db_id=None):
+        c = self._get(workspace_id, db_id)
         return {
             "url": sanitize_url(c["url"]),
             "dialect": c["dialect"],
