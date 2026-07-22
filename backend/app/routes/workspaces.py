@@ -4,6 +4,7 @@ from backend.app.models.workspace_api import (
     WorkspaceCreate,
     WorkspaceMemberRoleUpdate,
     WorkspaceInviteCreate,
+    WorkspaceUpdate,
 )
 import backend.app.controllers.workspaces as ctrl
 
@@ -26,6 +27,15 @@ async def create_workspace(req: WorkspaceCreate, user=Depends(get_current_user))
 async def get_workspace(workspace_id: str, user=Depends(get_current_user)):
     user_id = user.get("user_id", user.get("sub"))
     return await ctrl.get_workspace(workspace_id, user_id)
+
+
+@router.patch("/api/workspaces/{workspace_id}")
+async def update_workspace(
+    workspace_id: str,
+    req: WorkspaceUpdate,
+    workspace=Depends(require_role("admin")),
+):
+    return await ctrl.update_workspace(workspace["workspace_id"], req.name)
 
 
 @router.get("/api/workspaces/{workspace_id}/members")

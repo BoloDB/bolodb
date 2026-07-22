@@ -90,6 +90,27 @@ async def get_workspace(workspace_id: str, user_id: str):
         }
 
 
+async def update_workspace(workspace_id: str, name: str | None):
+    wid = _to_uuid(workspace_id)
+    async with async_session() as session:
+        try:
+            from sqlalchemy import update
+
+            stmt = update(Workspace).where(Workspace.id == wid)
+            values = {}
+            if name is not None:
+                values["name"] = name
+            if values:
+                stmt = stmt.values(**values)
+                result = await session.execute(stmt)
+                await session.commit()
+                return {"ok": result.rowcount > 0}
+            return {"ok": True}
+        except Exception:
+            await session.rollback()
+            raise
+
+
 async def list_members(workspace_id: str):
     wid = _to_uuid(workspace_id)
     async with async_session() as session:

@@ -12,3 +12,7 @@ class WorkspaceMemberRoleUpdate(BaseModel):
 class WorkspaceInviteCreate(BaseModel):
     email: EmailStr
     role: str = "member"
+
+
+class WorkspaceUpdate(BaseModel):
+    name: str | None = None
