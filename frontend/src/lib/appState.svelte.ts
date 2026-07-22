@@ -18,14 +18,15 @@ class AppState {
   activeWorkspace = $state<any | null>(null);
   invites = $state<any[]>([]);
   tourCompleted = $state(false);
-  tourCompleted = $state(false);
+  // tourCompleted = $state(false);
 
   constructor() {
     if (typeof window !== "undefined") {
       const stored = localStorage.getItem("bolodb_theme");
       // Normalize legacy theme names to the two-theme system (dark / light)
       this.theme = stored === "dark" ? "dark" : stored ? "light" : "dark";
-
+    }
+  }
 
   applyTheme(theme: string) {
     const next = theme === "dark" ? "dark" : "light";
@@ -165,6 +166,27 @@ class AppState {
     }
   }
 
+  async switchDatabase(dbId: string) {
+    if (typeof window !== "undefined") {
+      localStorage.setItem("bolodb_active_db_id", dbId);
+    }
+    try {
+      const res = await apiCall("/api/reconnect", { db_id: dbId });
+      const s = await apiCall("/api/state");
+      if (s.database) {
+        this.dbInfo = s.database;
+      }
+      if (s.starters) {
+        this.starters = s.starters;
+      }
+      this.realSchema = null;
+      this.fetchSchemaAsync(true);
+    } catch (e) {
+      console.error("Failed to switch DB:", e);
+      this.showError("Failed to switch database. It may have been deleted.");
+    }
+  }
+
   async setOnboardDone(seedCount: number) {
     try {
       const s = await apiCall("/api/state");
@@ -243,6 +265,16 @@ class AppState {
   async restoreSession(id: string) {
     this.activeConversationId = id;
     goto(`/chat?id=${id}`);
+  }
+
+  async fetchSchemaAsync(forceRefresh = false) {
+    try {
+      const qs = forceRefresh ? "?refresh=true" : "";
+      const schema = await apiCall(`/api/schema${qs}`);
+      this.realSchema = schemaObjToDisplay(schema);
+    } catch (e) {
+      console.error("Failed to load async schema:", e);
+    }
   }
 
   async fetchStartersAsync() {

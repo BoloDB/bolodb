@@ -1,6 +1,6 @@
 <script lang="ts">
   import { trustFor } from "$lib/data";
-  import { apiCall, rowsToArrays, streamApiCall, createConversation, getConversation } from "$lib/api";
+  import { apiCall, rowsToArrays, streamApiCall, createConversation, getConversation, listDatabases } from "$lib/api";
   import type {
     Turn,
     SchemaTable,
@@ -58,12 +58,20 @@
   let userEmail = $state("");
   let openCatalogTrigger = $state(0);
 
+  let databases = $state<any[]>([]);
+  let showDbDropdown = $state(false);
+
   onMount(async () => {
     appState.fetchStartersAsync();
     try {
       const res = await apiCall("/api/auth/me");
       userEmail = res?.content?.email || "";
     } catch {}
+    try {
+      databases = await listDatabases();
+    } catch (e) {
+      console.error("Failed to list databases", e);
+    }
   });
 
   const suggestionChips = $derived(
@@ -513,9 +521,6 @@
 
   async function handleConversationSelect(convId: string) {
     if (convId === activeConversationId) return;
-    // Cancel any in-flight query stream and stamp this load so that when two
-    // conversations are clicked in quick succession, only the latest click's
-    // response is applied (otherwise the slower fetch would win).
     abortController?.abort();
     const seq = ++convLoadSeq;
     loading = true;
@@ -524,6 +529,12 @@
     try {
       const conv = await getConversation(convId);
       if (seq !== convLoadSeq) return;
+
+      // Auto-switch database if the conversation belongs to a different one
+      if (conv.database_id && dbInfo?.db_id !== conv.database_id) {
+        await appState.switchDatabase(conv.database_id);
+      }
+
       activeConversationId = conv._id;
       onActiveConversationChange(conv._id);
       const loaded: Turn[] = [];
@@ -542,6 +553,24 @@
       }
     } finally {
       if (seq === convLoadSeq) { loading = false; convLoading = false; }
+    }
+  }
+
+  async function handleSwitchDb(dbId: string) {
+    showDbDropdown = false;
+    if (dbId === dbInfo?.db_id) return;
+
+    abortController?.abort();
+    loading = true;
+    convLoading = true;
+    turns = [];
+    activeConversationId = null;
+    onActiveConversationChange(null);
+    try {
+      await appState.switchDatabase(dbId);
+    } finally {
+      loading = false;
+      convLoading = false;
     }
   }
 
@@ -606,14 +635,38 @@
     {#if tab === "ask"}
       <!-- db header -->
       <div class="db-header">
-        <div class="db-info">
-          <span class="db-icon">🗄</span>
-          <div style="display:flex;flex-direction:column">
-            <span class="db-name mono">{dbLabel}</span>
-            <span class="db-sub">{tableCount > 0 ? `${tableCount} table${tableCount === 1 ? "" : "s"} · ` : ""}read-only</span>
-          </div>
+        <div class="db-dropdown-wrapper">
+          <button class="db-dropdown-btn" aria-expanded={showDbDropdown} onclick={() => showDbDropdown = !showDbDropdown}>
+            <span class="db-icon">🗄</span>
+            <div style="display:flex;flex-direction:column;align-items:flex-start">
+              <span class="db-name mono">{dbInfo?.alias_name || dbLabel}</span>
+              <span class="db-sub">{tableCount > 0 ? `${tableCount} table${tableCount === 1 ? "" : "s"} · ` : ""}read-only</span>
+            </div>
+            <svg class="dd-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="m6 9 6 6 6-6"/></svg>
+          </button>
+          {#if showDbDropdown}
+            <div class="db-dropdown-menu">
+              {#each databases as db}
+                <button class="db-dropdown-item {db.db_id === dbInfo?.db_id ? 'active' : ''}" onclick={() => handleSwitchDb(db.db_id)}>
+                  <div style="display:flex;flex-direction:column;align-items:flex-start">
+                    <span class="db-item-name">{db.alias_name || db.db_url.split('/').pop()}</span>
+                    <span class="db-item-url mono">{db.dialect}</span>
+                  </div>
+                  {#if db.db_id === dbInfo?.db_id}
+                    <span class="db-check">✓</span>
+                  {/if}
+                </button>
+              {/each}
+              <div class="db-dropdown-div"></div>
+              {#if appState.activeWorkspace?.role === 'admin' || appState.activeWorkspace?.role === 'owner'}
+                <button class="db-dropdown-item" style="color:var(--brand)" onclick={() => goto('/connect')}>
+                  <span class="db-item-name">+ Connect new database</span>
+                </button>
+              {/if}
+            </div>
+            <button class="nav-backdrop" style="z-index:9;background:transparent" onclick={() => showDbDropdown = false}></button>
+          {/if}
         </div>
-        <button class="switch-db" onclick={onDisconnect}>⇄ Switch DB</button>
       </div>
 
       <!-- feed -->
@@ -739,32 +792,80 @@
     padding: 12px 24px;
     border-bottom: 1px solid var(--border);
     background: var(--card-2);
+    position: relative;
+    z-index: 20;
   }
-  .db-info { display: flex; align-items: center; gap: 10px; }
+  .db-dropdown-wrapper {
+    position: relative;
+  }
+  .db-dropdown-btn {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: transparent;
+    border: none;
+    padding: 6px;
+    margin: -6px;
+    border-radius: 8px;
+    cursor: pointer;
+    text-align: left;
+    transition: background 0.15s;
+  }
+  .db-dropdown-btn:hover { background: var(--surface); }
+  .db-dropdown-btn[aria-expanded="true"] .dd-chevron { transform: rotate(180deg); }
+  .dd-chevron {
+    color: var(--muted);
+    transition: transform 0.2s;
+    margin-left: 8px;
+  }
+  .db-dropdown-menu {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    margin-top: 12px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    box-shadow: var(--shadow-lg);
+    width: 280px;
+    padding: 6px;
+    z-index: 50;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .db-dropdown-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    text-align: left;
+    padding: 10px 12px;
+    border: none;
+    background: transparent;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: background 0.1s;
+  }
+  .db-dropdown-item:hover { background: var(--surface); }
+  .db-dropdown-item.active { background: var(--brand-tint); }
+  .db-dropdown-div { height: 1px; background: var(--border-2); margin: 4px 6px; }
+  .db-item-name { font-size: 13.5px; font-weight: 600; color: var(--ink); }
+  .db-item-url { font-size: 11px; color: var(--muted); margin-top: 2px; }
+  .db-check { color: var(--brand); font-weight: 700; font-size: 14px; }
+
   .db-icon {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 30px;
-    height: 30px;
+    width: 32px;
+    height: 32px;
     border-radius: 9px;
     background: var(--surface-2);
     font-size: 13px;
   }
-  .db-name { font-size: 12.5px; font-weight: 600; color: var(--ink); }
-  .db-sub { font-size: 11px; color: var(--faint); }
-  .switch-db {
-    background: transparent;
-    border: 1px solid var(--border-2);
-    color: var(--muted);
-    font-size: 12px;
-    font-weight: 600;
-    padding: 6px 13px;
-    border-radius: 99px;
-    cursor: pointer;
-    transition: all 0.15s;
-  }
-  .switch-db:hover { color: var(--ink); border-color: var(--muted); }
+  .db-name { font-size: 13px; font-weight: 600; color: var(--ink); }
+  .db-sub { font-size: 11.5px; color: var(--faint); }
   .feed { flex: 1; overflow-y: auto; padding: 36px 32px 20px; position: relative; }
   .feed-inner { max-width: 760px; margin: 0 auto; }
   .empty {
