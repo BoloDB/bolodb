@@ -48,12 +48,18 @@ class UserInDB(BaseModel):
     google_id: Optional[str] = None
     supabase_id: Optional[str] = None
     email_verified: bool = False
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
+    avatar_url: Optional[str] = None
 
 
 class UserPublic(BaseModel):
     id: str = ""
     email: EmailStr
     role: Role
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
+    avatar_url: Optional[str] = None
 
 
 class SupabaseLogin(BaseModel):
@@ -66,3 +72,6 @@ class VerifyEmailOTP(BaseModel):
 
 class UpdateProfile(BaseModel):
     email: Optional[EmailStr] = None
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
+    avatar_url: Optional[str] = None

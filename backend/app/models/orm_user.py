@@ -22,6 +22,9 @@ class User(Base):
         String, unique=True, nullable=True
     )
     email_verified: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    first_name: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    last_name: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    avatar_url: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     tour_completed: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=_utcnow
