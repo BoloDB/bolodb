@@ -13,8 +13,10 @@ class RecentConnection(Base):
     id: Mapped[uuid.UUID] = mapped_column(
         PgUUID(as_uuid=True), primary_key=True, default=_uuid7
     )
-    user_id: Mapped[uuid.UUID] = mapped_column(
-        PgUUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    workspace_id: Mapped[uuid.UUID] = mapped_column(
+        PgUUID(as_uuid=True),
+        ForeignKey("workspaces.id", ondelete="CASCADE"),
+        nullable=False,
     )
     db_url: Mapped[str] = mapped_column(Text, nullable=False)
     display_url: Mapped[str] = mapped_column(String, nullable=False)
@@ -24,4 +26,4 @@ class RecentConnection(Base):
     connected_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=_utcnow
     )
-    __table_args__ = (UniqueConstraint("user_id", "db_id"),)
+    __table_args__ = (UniqueConstraint("workspace_id", "db_id"),)

@@ -3,7 +3,7 @@ import logging
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
-from backend.app.dependencies import get_current_user
+from backend.app.dependencies import get_current_workspace
 import backend.app.controllers.conversations as ctrl
 
 log = logging.getLogger(__name__)
@@ -20,10 +20,10 @@ class RenameConversationReq(BaseModel):
 
 
 @router.get("")
-async def list_conversations(user_token=Depends(get_current_user)):
+async def list_conversations(workspace=Depends(get_current_workspace)):
     try:
-        user_id = user_token["user_id"]
-        convs = await ctrl.list_conversations(user_id)
+        workspace_id = workspace["workspace_id"]
+        convs = await ctrl.list_conversations(workspace_id)
         return JSONResponse({"conversations": convs})
     except Exception:
         log.exception("Failed to list conversations")
@@ -33,12 +33,12 @@ async def list_conversations(user_token=Depends(get_current_user)):
 @router.post("")
 async def create_conversation(
     req: CreateConversationReq,
-    user_token=Depends(get_current_user),
+    workspace=Depends(get_current_workspace),
 ):
     try:
-        user_id = user_token["user_id"]
+        workspace_id = workspace["workspace_id"]
         conv = await ctrl.create_conversation(
-            user_id,
+            workspace_id,
             title=req.title,
             database_id=req.database_id,
         )
@@ -51,11 +51,11 @@ async def create_conversation(
 @router.get("/{conversation_id}")
 async def get_conversation(
     conversation_id: str,
-    user_token=Depends(get_current_user),
+    workspace=Depends(get_current_workspace),
 ):
     try:
-        user_id = user_token["user_id"]
-        conv = await ctrl.get_conversation(user_id, conversation_id)
+        workspace_id = workspace["workspace_id"]
+        conv = await ctrl.get_conversation(workspace_id, conversation_id)
         if not conv:
             raise HTTPException(status_code=404, detail="Conversation not found")
         return JSONResponse(conv)
@@ -70,11 +70,13 @@ async def get_conversation(
 async def rename_conversation(
     conversation_id: str,
     req: RenameConversationReq,
-    user_token=Depends(get_current_user),
+    workspace=Depends(get_current_workspace),
 ):
     try:
-        user_id = user_token["user_id"]
-        success = await ctrl.rename_conversation(user_id, conversation_id, req.title)
+        workspace_id = workspace["workspace_id"]
+        success = await ctrl.rename_conversation(
+            workspace_id, conversation_id, req.title
+        )
         if not success:
             raise HTTPException(
                 status_code=404, detail="Conversation not found or unauthorized"
@@ -90,11 +92,11 @@ async def rename_conversation(
 @router.delete("/{conversation_id}")
 async def delete_conversation(
     conversation_id: str,
-    user_token=Depends(get_current_user),
+    workspace=Depends(get_current_workspace),
 ):
     try:
-        user_id = user_token["user_id"]
-        success = await ctrl.delete_conversation(user_id, conversation_id)
+        workspace_id = workspace["workspace_id"]
+        success = await ctrl.delete_conversation(workspace_id, conversation_id)
         if not success:
             raise HTTPException(
                 status_code=404, detail="Conversation not found or unauthorized"
@@ -108,10 +110,10 @@ async def delete_conversation(
 
 
 @router.delete("")
-async def clear_conversations(user_token=Depends(get_current_user)):
+async def clear_conversations(workspace=Depends(get_current_workspace)):
     try:
-        user_id = user_token["user_id"]
-        await ctrl.clear_conversations(user_id)
+        workspace_id = workspace["workspace_id"]
+        await ctrl.clear_conversations(workspace_id)
         return JSONResponse({"message": "Cleared successfully"})
     except Exception:
         log.exception("Failed to clear conversations")

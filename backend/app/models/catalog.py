@@ -13,8 +13,10 @@ class VerifiedQA(Base):
     id: Mapped[uuid.UUID] = mapped_column(
         PgUUID(as_uuid=True), primary_key=True, default=_uuid7
     )
-    user_id: Mapped[uuid.UUID] = mapped_column(
-        PgUUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    workspace_id: Mapped[uuid.UUID] = mapped_column(
+        PgUUID(as_uuid=True),
+        ForeignKey("workspaces.id", ondelete="CASCADE"),
+        nullable=False,
     )
     db_id: Mapped[str] = mapped_column(String, nullable=False)
     question: Mapped[str] = mapped_column(Text, nullable=False)
@@ -25,9 +27,9 @@ class VerifiedQA(Base):
     )
     __table_args__ = (
         UniqueConstraint(
-            "user_id", "db_id", "question", name="uq_verified_qa_user_db_question"
+            "workspace_id", "db_id", "question", name="uq_verified_qa_user_db_question"
         ),
-        Index("ix_verified_qa_user_db", "user_id", "db_id"),
+        Index("ix_verified_qa_user_db", "workspace_id", "db_id"),
     )
 
 
@@ -36,14 +38,16 @@ class Glossary(Base):
     id: Mapped[uuid.UUID] = mapped_column(
         PgUUID(as_uuid=True), primary_key=True, default=_uuid7
     )
-    user_id: Mapped[uuid.UUID] = mapped_column(
-        PgUUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    workspace_id: Mapped[uuid.UUID] = mapped_column(
+        PgUUID(as_uuid=True),
+        ForeignKey("workspaces.id", ondelete="CASCADE"),
+        nullable=False,
     )
     db_id: Mapped[str] = mapped_column(String, nullable=False)
     term: Mapped[str] = mapped_column(String, nullable=False)
     maps_to: Mapped[str] = mapped_column(String, nullable=False)
     sql_hint: Mapped[str] = mapped_column(String, nullable=False, default="")
-    __table_args__ = (Index("ix_glossary_user_db", "user_id", "db_id"),)
+    __table_args__ = (Index("ix_glossary_user_db", "workspace_id", "db_id"),)
 
 
 class CatalogColumn(Base):
@@ -51,14 +55,16 @@ class CatalogColumn(Base):
     id: Mapped[uuid.UUID] = mapped_column(
         PgUUID(as_uuid=True), primary_key=True, default=_uuid7
     )
-    user_id: Mapped[uuid.UUID] = mapped_column(
-        PgUUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    workspace_id: Mapped[uuid.UUID] = mapped_column(
+        PgUUID(as_uuid=True),
+        ForeignKey("workspaces.id", ondelete="CASCADE"),
+        nullable=False,
     )
     db_id: Mapped[str] = mapped_column(String, nullable=False)
     table_name: Mapped[str] = mapped_column(String, nullable=False)
     column_name: Mapped[str] = mapped_column(String, nullable=False)
     description: Mapped[str] = mapped_column(Text, nullable=False)
-    __table_args__ = (Index("ix_cat_col_user_db", "user_id", "db_id"),)
+    __table_args__ = (Index("ix_cat_col_user_db", "workspace_id", "db_id"),)
 
 
 class CatalogMetric(Base):
@@ -66,14 +72,16 @@ class CatalogMetric(Base):
     id: Mapped[uuid.UUID] = mapped_column(
         PgUUID(as_uuid=True), primary_key=True, default=_uuid7
     )
-    user_id: Mapped[uuid.UUID] = mapped_column(
-        PgUUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    workspace_id: Mapped[uuid.UUID] = mapped_column(
+        PgUUID(as_uuid=True),
+        ForeignKey("workspaces.id", ondelete="CASCADE"),
+        nullable=False,
     )
     db_id: Mapped[str] = mapped_column(String, nullable=False)
     name: Mapped[str] = mapped_column(String, nullable=False)
     description: Mapped[str] = mapped_column(Text, nullable=False, default="")
     sql_expression: Mapped[str] = mapped_column(Text, nullable=False)
-    __table_args__ = (Index("ix_cat_met_user_db", "user_id", "db_id"),)
+    __table_args__ = (Index("ix_cat_met_user_db", "workspace_id", "db_id"),)
 
 
 class CatalogJoin(Base):
@@ -81,14 +89,16 @@ class CatalogJoin(Base):
     id: Mapped[uuid.UUID] = mapped_column(
         PgUUID(as_uuid=True), primary_key=True, default=_uuid7
     )
-    user_id: Mapped[uuid.UUID] = mapped_column(
-        PgUUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    workspace_id: Mapped[uuid.UUID] = mapped_column(
+        PgUUID(as_uuid=True),
+        ForeignKey("workspaces.id", ondelete="CASCADE"),
+        nullable=False,
     )
     db_id: Mapped[str] = mapped_column(String, nullable=False)
     tables: Mapped[str] = mapped_column(String, nullable=False)
     join_condition: Mapped[str] = mapped_column(Text, nullable=False)
     description: Mapped[str] = mapped_column(Text, nullable=False, default="")
-    __table_args__ = (Index("ix_cat_join_user_db", "user_id", "db_id"),)
+    __table_args__ = (Index("ix_cat_join_user_db", "workspace_id", "db_id"),)
 
 
 class CatalogSynonym(Base):
@@ -96,14 +106,16 @@ class CatalogSynonym(Base):
     id: Mapped[uuid.UUID] = mapped_column(
         PgUUID(as_uuid=True), primary_key=True, default=_uuid7
     )
-    user_id: Mapped[uuid.UUID] = mapped_column(
-        PgUUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    workspace_id: Mapped[uuid.UUID] = mapped_column(
+        PgUUID(as_uuid=True),
+        ForeignKey("workspaces.id", ondelete="CASCADE"),
+        nullable=False,
     )
     db_id: Mapped[str] = mapped_column(String, nullable=False)
     term: Mapped[str] = mapped_column(String, nullable=False)
     entity_type: Mapped[str] = mapped_column(String, nullable=False)
     entity_name: Mapped[str] = mapped_column(String, nullable=False)
-    __table_args__ = (Index("ix_cat_syn_user_db", "user_id", "db_id"),)
+    __table_args__ = (Index("ix_cat_syn_user_db", "workspace_id", "db_id"),)
 
 
 class CatalogValueMapping(Base):
@@ -111,12 +123,14 @@ class CatalogValueMapping(Base):
     id: Mapped[uuid.UUID] = mapped_column(
         PgUUID(as_uuid=True), primary_key=True, default=_uuid7
     )
-    user_id: Mapped[uuid.UUID] = mapped_column(
-        PgUUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    workspace_id: Mapped[uuid.UUID] = mapped_column(
+        PgUUID(as_uuid=True),
+        ForeignKey("workspaces.id", ondelete="CASCADE"),
+        nullable=False,
     )
     db_id: Mapped[str] = mapped_column(String, nullable=False)
     table_name: Mapped[str] = mapped_column(String, nullable=False)
     column_name: Mapped[str] = mapped_column(String, nullable=False)
     db_value: Mapped[str] = mapped_column(String, nullable=False)
     business_label: Mapped[str] = mapped_column(String, nullable=False)
-    __table_args__ = (Index("ix_cat_val_user_db", "user_id", "db_id"),)
+    __table_args__ = (Index("ix_cat_val_user_db", "workspace_id", "db_id"),)

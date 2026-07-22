@@ -10,9 +10,19 @@ export async function apiCall(
   const opts: RequestInit = {
     method: method || (body ? "POST" : "GET"),
   };
+  const activeWorkspaceId =
+    typeof window !== "undefined"
+      ? localStorage.getItem("bolodb_active_workspace_id")
+      : null;
+  const headers: Record<string, string> = {};
+  if (activeWorkspaceId) headers["X-Workspace-Id"] = activeWorkspaceId;
+
   if (body) {
-    opts.headers = { "Content-Type": "application/json" };
+    headers["Content-Type"] = "application/json";
     opts.body = JSON.stringify(body);
+  }
+  if (Object.keys(headers).length > 0) {
+    opts.headers = headers;
   }
   opts.credentials = "include";
   const r = await fetch(path, opts);
@@ -46,9 +56,18 @@ export async function streamApiCall(
   signal?: AbortSignal,
 ): Promise<void> {
   try {
+    const activeWorkspaceId =
+      typeof window !== "undefined"
+        ? localStorage.getItem("bolodb_active_workspace_id")
+        : null;
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json",
+    };
+    if (activeWorkspaceId) headers["X-Workspace-Id"] = activeWorkspaceId;
+
     const response = await fetch(path, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers,
       credentials: "include",
       body: JSON.stringify(body),
       signal,
@@ -183,6 +202,51 @@ export async function supabaseGoogleLogin(accessToken: string): Promise<any> {
   return apiCall("/api/auth/supabase-google", {
     access_token: accessToken,
   });
+}
+
+// --- Workspaces ---
+
+export async function createWorkspace(name: string): Promise<any> {
+  return apiCall("/api/workspaces", { name });
+}
+
+export async function getWorkspaceMembers(id: string): Promise<any> {
+  return apiCall(`/api/workspaces/${id}/members`);
+}
+
+export async function inviteWorkspaceMember(
+  id: string,
+  email: string,
+  role: string,
+): Promise<any> {
+  return apiCall(`/api/workspaces/${id}/members`, { email, role }, "POST");
+}
+
+export async function updateWorkspaceMemberRole(
+  workspaceId: string,
+  userId: string,
+  role: string,
+): Promise<any> {
+  return apiCall(
+    `/api/workspaces/${workspaceId}/members/${userId}`,
+    { role },
+    "PUT",
+  );
+}
+
+export async function removeWorkspaceMember(
+  workspaceId: string,
+  userId: string,
+): Promise<any> {
+  return apiCall(
+    `/api/workspaces/${workspaceId}/members/${userId}`,
+    undefined,
+    "DELETE",
+  );
+}
+
+export async function acceptWorkspaceInvite(token: string): Promise<any> {
+  return apiCall(`/api/workspaces/invites/${token}/accept`, undefined, "POST");
 }
 
 /** Convert API rows (array of objects) to 2D string arrays for ResultTable */

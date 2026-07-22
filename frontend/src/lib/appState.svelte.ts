@@ -14,6 +14,9 @@ class AppState {
   theme = $state("dark");
   openrouterReady = $state(false);
   activeConversationId = $state<string | null>(null);
+  workspaces = $state<any[]>([]);
+  activeWorkspace = $state<any | null>(null);
+  invites = $state<any[]>([]);
   tourCompleted = $state(false);
   // True while a freshly connected user is walking the onboarding flow —
   // stops /onboard's has_knowledge redirect from kicking them out (sample
@@ -59,7 +62,32 @@ class AppState {
     return trustFor(this.verifiedCount).key;
   }
 
+  async loadWorkspaces() {
+    try {
+      this.workspaces = await apiCall("/api/workspaces");
+      this.invites = await apiCall("/api/workspaces/invites/me");
+      const stored = localStorage.getItem("bolodb_active_workspace_id");
+      if (stored && this.workspaces.find((w: any) => w.id === stored)) {
+        this.activeWorkspace = this.workspaces.find(
+          (w: any) => w.id === stored,
+        );
+      } else if (this.workspaces.length > 0) {
+        this.activeWorkspace = this.workspaces[0];
+        localStorage.setItem(
+          "bolodb_active_workspace_id",
+          this.activeWorkspace.id,
+        );
+      } else {
+        this.activeWorkspace = null;
+        localStorage.removeItem("bolodb_active_workspace_id");
+      }
+    } catch (e) {
+      console.error("Failed to load workspaces:", e);
+    }
+  }
+
   async init(redirect: boolean = true) {
+    await this.loadWorkspaces();
     try {
       const s = await apiCall("/api/state");
       this.openrouterReady = s.openrouter_ready ?? false;

@@ -16,6 +16,9 @@ from backend.app.models import (
     CatalogJoin,
     CatalogSynonym,
     CatalogValueMapping,
+    Workspace,
+    WorkspaceMember,
+    WorkspaceInvite,
 )
 from backend.app.pgdatabase.users import (
     get_user_by_email,
@@ -70,6 +73,9 @@ __all__ = [
     "CatalogJoin",
     "CatalogSynonym",
     "CatalogValueMapping",
+    "Workspace",
+    "WorkspaceMember",
+    "WorkspaceInvite",
     "get_user_by_email",
     "get_user_by_google_id",
     "get_user_by_supabase_id",

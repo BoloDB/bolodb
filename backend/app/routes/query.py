@@ -3,7 +3,7 @@ import logging
 from fastapi import APIRouter, Depends, Request, HTTPException
 from fastapi.responses import StreamingResponse
 from backend.app.dependencies import (
-    get_current_user,
+    get_current_workspace,
     get_db,
     get_kb,
     get_cfg,
@@ -34,7 +34,7 @@ async def _format_sse(stream):
 async def query(
     request: Request,
     req: QueryReq,
-    user_token=Depends(get_current_user),
+    workspace=Depends(get_current_workspace),
     db=Depends(get_db),
     kb=Depends(get_kb),
     cfg=Depends(get_cfg),
@@ -42,8 +42,10 @@ async def query(
     session_log=Depends(get_session_log),
 ) -> dict:
     try:
-        user_id = user_token["user_id"]
-        out = await ctrl.run_query(user_id, db, kb, cfg, providers, session_log, req)
+        workspace_id = workspace["workspace_id"]
+        out = await ctrl.run_query(
+            workspace_id, db, kb, cfg, providers, session_log, req
+        )
 
         if out.get("answered") and out.get("sql"):
             conf = out.get("confidence", "low")
@@ -52,12 +54,12 @@ async def query(
             )
             conversation_id = req.conversation_id
             if conversation_id and not await mdb.conversation_owned_by(
-                user_id, conversation_id
+                workspace_id, conversation_id
             ):
                 conversation_id = None
             try:
                 await mdb.save_query(
-                    user_id=user_token["user_id"],
+                    workspace_id=workspace_id,
                     question=req.question,
                     sql=out["sql"],
                     result=out.get("rows", []),
@@ -82,7 +84,7 @@ async def query(
 async def query_stream(
     request: Request,
     req: QueryReq,
-    user_token=Depends(get_current_user),
+    workspace=Depends(get_current_workspace),
     db=Depends(get_db),
     kb=Depends(get_kb),
     cfg=Depends(get_cfg),
@@ -90,9 +92,9 @@ async def query_stream(
     session_log=Depends(get_session_log),
 ) -> StreamingResponse:
     try:
-        user_id = user_token["user_id"]
+        workspace_id = workspace["workspace_id"]
         stream = ctrl.run_query_stream(
-            user_id, db, kb, cfg, providers, session_log, req
+            workspace_id, db, kb, cfg, providers, session_log, req
         )
 
         return StreamingResponse(
@@ -113,14 +115,14 @@ async def query_stream(
 @router.post("/api/feedback")
 async def feedback(
     req: FeedbackReq,
-    user_token=Depends(get_current_user),
+    workspace=Depends(get_current_workspace),
     db=Depends(get_db),
     kb=Depends(get_kb),
     session_log=Depends(get_session_log),
 ) -> dict:
     try:
-        user_id = user_token["user_id"]
-        return await ctrl.feedback(user_id, db, kb, session_log, req)
+        workspace_id = workspace["workspace_id"]
+        return await ctrl.feedback(workspace_id, db, kb, session_log, req)
     except HTTPException:
         raise
     except Exception:
@@ -131,13 +133,13 @@ async def feedback(
 @router.post("/api/verify")
 async def verify(
     req: VerifyReq,
-    user_token=Depends(get_current_user),
+    workspace=Depends(get_current_workspace),
     db=Depends(get_db),
     kb=Depends(get_kb),
 ) -> dict:
     try:
-        user_id = user_token["user_id"]
-        return await ctrl.verify(user_id, db, kb, req)
+        workspace_id = workspace["workspace_id"]
+        return await ctrl.verify(workspace_id, db, kb, req)
     except HTTPException:
         raise
     except Exception:
@@ -150,21 +152,21 @@ async def verify(
 async def execute(
     request: Request,
     req: RawSQLReq,
-    user_token=Depends(get_current_user),
+    workspace=Depends(get_current_workspace),
     db=Depends(get_db),
 ) -> dict:
     try:
-        user_id = user_token["user_id"]
-        out = await ctrl.execute(user_id, db, req)
+        workspace_id = workspace["workspace_id"]
+        out = await ctrl.execute(workspace_id, db, req)
 
         conversation_id = req.conversation_id
         if conversation_id and not await mdb.conversation_owned_by(
-            user_id, conversation_id
+            workspace_id, conversation_id
         ):
             conversation_id = None
         try:
             await mdb.save_query(
-                user_id=user_id,
+                workspace_id=workspace_id,
                 question=req.sql,
                 sql=req.sql,
                 result=(out.get("rows") or [])[:MAX_SAVED_ROWS],
@@ -189,13 +191,13 @@ async def execute(
 async def explain(
     request: Request,
     req: RawSQLReq,
-    user_token=Depends(get_current_user),
+    workspace=Depends(get_current_workspace),
     db=Depends(get_db),
     providers=Depends(get_providers),
 ) -> dict:
     try:
-        user_id = user_token["user_id"]
-        return await ctrl.explain(user_id, db, providers, req)
+        workspace_id = workspace["workspace_id"]
+        return await ctrl.explain(workspace_id, db, providers, req)
     except HTTPException:
         raise
     except Exception:

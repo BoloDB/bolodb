@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Header
 from fastapi.responses import JSONResponse
 from sqlalchemy import text
 from backend.app.dependencies import (
@@ -18,6 +18,7 @@ router = APIRouter()
 @router.get("/api/state")
 async def state(
     user_token=Depends(get_current_user),
+    x_workspace_id: str = Header(None),
     db=Depends(get_db),
     cfg=Depends(get_cfg),
     kb=Depends(get_kb),
@@ -29,7 +30,7 @@ async def state(
         The current application state.
     """
     user_id = user_token["user_id"]
-    return await ctrl.get_state(user_id, db, cfg, kb)
+    return await ctrl.get_state(user_id, x_workspace_id, db, cfg, kb)
 
 
 @router.post("/api/tour-complete")

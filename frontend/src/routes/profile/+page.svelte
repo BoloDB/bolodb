@@ -79,6 +79,7 @@
     <div class="card" style="padding:20px;margin-bottom:16px">
       <div style="font-size:15px;font-weight:700;margin-bottom:12px;color:var(--ink)">Account actions</div>
       <div style="display:flex;flex-wrap:wrap;gap:10px">
+        <Button kind="ghost" onclick={() => goto('/workspaces')} data-testid="profile-action-workspaces">Manage workspaces</Button>
         <Button kind="ghost" onclick={() => goto('/connect')} data-testid="profile-action-databases">Manage databases</Button>
         <Button kind="ghost" onclick={() => goto('/chat')} data-testid="profile-action-chat">Back to chat</Button>
         <Button

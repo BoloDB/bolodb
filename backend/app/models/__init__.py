@@ -1,5 +1,6 @@
 from backend.app.models.base import Base, _utcnow, _uuid7
 from backend.app.models.orm_user import User
+from backend.app.models.workspace import Workspace, WorkspaceMember, WorkspaceInvite
 from backend.app.models.conversation import Conversation, QueryHistory
 from backend.app.models.recent_connection import RecentConnection
 from backend.app.models.catalog import (
@@ -18,6 +19,9 @@ __all__ = [
     "_utcnow",
     "_uuid7",
     "User",
+    "Workspace",
+    "WorkspaceMember",
+    "WorkspaceInvite",
     "Conversation",
     "QueryHistory",
     "RecentConnection",

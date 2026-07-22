@@ -56,12 +56,12 @@ class KnowledgeService:
         """
         self._session_factory = session_factory
 
-    async def add_verified(self, user_id, db_id, question, sql, restatement=""):
+    async def add_verified(self, workspace_id, db_id, question, sql, restatement=""):
         """
         Add a verified question-and-answer entry unless a sufficiently similar question already exists.
 
         Parameters:
-                user_id: Identifier of the user who owns the entry.
+                workspace_id: Identifier of the user who owns the entry.
                 db_id: Identifier of the database associated with the entry.
                 question: Natural-language question associated with the SQL query.
                 sql: SQL query that answers the question.
@@ -71,7 +71,7 @@ class KnowledgeService:
         async with self._session_factory() as session:
             result = await session.execute(
                 select(VerifiedQA).where(
-                    VerifiedQA.user_id == user_id, VerifiedQA.db_id == db_id
+                    VerifiedQA.workspace_id == workspace_id, VerifiedQA.db_id == db_id
                 )
             )
             tb = _tokens(question)
@@ -81,7 +81,7 @@ class KnowledgeService:
                     return
             session.add(
                 VerifiedQA(
-                    user_id=user_id,
+                    workspace_id=workspace_id,
                     db_id=db_id,
                     question=question,
                     sql=sql,
@@ -93,18 +93,18 @@ class KnowledgeService:
             except IntegrityError:
                 await session.rollback()
                 logger.warning(
-                    "Duplicate verified QA skipped (user=%s db=%s question=%s)",
-                    user_id,
+                    "Duplicate verified QA skipped (workspace=%s db=%s question=%s)",
+                    workspace_id,
                     db_id,
                     question,
                 )
 
-    async def get_verified(self, user_id, db_id):
+    async def get_verified(self, workspace_id, db_id):
         """
         Retrieve verified question-and-answer entries for a user and database, with newest entries first.
 
         Parameters:
-                user_id: Identifier of the user.
+                workspace_id: Identifier of the user.
                 db_id: Identifier of the database.
 
         Returns:
@@ -113,7 +113,9 @@ class KnowledgeService:
         async with self._session_factory() as session:
             result = await session.execute(
                 select(VerifiedQA)
-                .where(VerifiedQA.user_id == user_id, VerifiedQA.db_id == db_id)
+                .where(
+                    VerifiedQA.workspace_id == workspace_id, VerifiedQA.db_id == db_id
+                )
                 .order_by(VerifiedQA.created_at.desc())
             )
             return [
@@ -121,12 +123,12 @@ class KnowledgeService:
                 for r in result.scalars().all()
             ]
 
-    async def count_verified(self, user_id, db_id):
+    async def count_verified(self, workspace_id, db_id):
         """
         Count verified Q&A entries for a user and database.
 
         Parameters:
-                user_id: Identifier of the user.
+                workspace_id: Identifier of the user.
                 db_id: Identifier of the database.
 
         Returns:
@@ -135,12 +137,14 @@ class KnowledgeService:
         async with self._session_factory() as session:
             result = await session.execute(
                 select(func.count()).where(
-                    VerifiedQA.user_id == user_id, VerifiedQA.db_id == db_id
+                    VerifiedQA.workspace_id == workspace_id, VerifiedQA.db_id == db_id
                 )
             )
             return result.scalar() or 0
 
-    async def retrieve_similar(self, user_id, db_id, question, k=3, threshold=0.25):
+    async def retrieve_similar(
+        self, workspace_id, db_id, question, k=3, threshold=0.25
+    ):
         """
         Finds verified questions that are similar to the provided question.
 
@@ -155,14 +159,14 @@ class KnowledgeService:
         scored = []
         tb = _tokens(question)
         b_lower = question.lower()
-        for c in await self.get_verified(user_id, db_id):
+        for c in await self.get_verified(workspace_id, db_id):
             s = _similarity(c["question"], question, tb, b_lower)
             if s >= threshold:
                 scored.append({**c, "similarity": round(s, 3)})
         scored.sort(key=lambda x: -x["similarity"])
         return scored[:k]
 
-    async def set_glossary(self, user_id, db_id, terms):
+    async def set_glossary(self, workspace_id, db_id, terms):
         """
         Replace the glossary entries for a user and database.
 
@@ -172,13 +176,13 @@ class KnowledgeService:
         async with self._session_factory() as session:
             await session.execute(
                 delete(Glossary).where(
-                    Glossary.user_id == user_id, Glossary.db_id == db_id
+                    Glossary.workspace_id == workspace_id, Glossary.db_id == db_id
                 )
             )
             for t in terms:
                 session.add(
                     Glossary(
-                        user_id=user_id,
+                        workspace_id=workspace_id,
                         db_id=db_id,
                         term=t.get("term", ""),
                         maps_to=t.get("maps_to", ""),
@@ -187,11 +191,11 @@ class KnowledgeService:
                 )
             await session.commit()
 
-    async def get_glossary(self, user_id, db_id):
+    async def get_glossary(self, workspace_id, db_id):
         """Retrieve glossary entries for a user and database.
 
         Parameters:
-                user_id: The user identifier.
+                workspace_id: The user identifier.
                 db_id: The database identifier.
 
         Returns:
@@ -200,7 +204,7 @@ class KnowledgeService:
         async with self._session_factory() as session:
             result = await session.execute(
                 select(Glossary).where(
-                    Glossary.user_id == user_id, Glossary.db_id == db_id
+                    Glossary.workspace_id == workspace_id, Glossary.db_id == db_id
                 )
             )
             return [
@@ -236,7 +240,7 @@ class KnowledgeService:
         ),
     }
 
-    async def set_catalog(self, user_id, db_id, catalog):
+    async def set_catalog(self, workspace_id, db_id, catalog):
         """
         Replace the specified catalog sections for a user and database.
 
@@ -249,22 +253,23 @@ class KnowledgeService:
                     continue
                 await session.execute(
                     delete(model_class).where(
-                        model_class.user_id == user_id, model_class.db_id == db_id
+                        model_class.workspace_id == workspace_id,
+                        model_class.db_id == db_id,
                     )
                 )
                 for entry in catalog[key] or []:
-                    kwargs = {"user_id": user_id, "db_id": db_id}
+                    kwargs = {"workspace_id": workspace_id, "db_id": db_id}
                     for c, ok in zip(cols, in_keys):
                         kwargs[c] = str(entry.get(ok, "") or "")
                     session.add(model_class(**kwargs))
             await session.commit()
 
-    async def get_catalog(self, user_id, db_id):
+    async def get_catalog(self, workspace_id, db_id):
         """
         Retrieve the semantic catalog entries for a user and database.
 
         Parameters:
-            user_id: Identifier of the user whose catalog entries are retrieved.
+            workspace_id: Identifier of the user whose catalog entries are retrieved.
             db_id: Identifier of the database whose catalog entries are retrieved.
 
         Returns:
@@ -275,7 +280,8 @@ class KnowledgeService:
             for key, (model_class, cols, out_keys) in self._CATALOG_CLASSES.items():
                 result = await session.execute(
                     select(model_class).where(
-                        model_class.user_id == user_id, model_class.db_id == db_id
+                        model_class.workspace_id == workspace_id,
+                        model_class.db_id == db_id,
                     )
                 )
                 rows = []
@@ -287,20 +293,20 @@ class KnowledgeService:
                 out[key] = rows
             return out
 
-    async def catalog_is_empty(self, user_id, db_id):
+    async def catalog_is_empty(self, workspace_id, db_id):
         """Determine whether a user's catalog contains any entries.
 
         Parameters:
-                user_id: The user whose catalog is checked.
+                workspace_id: The user whose catalog is checked.
                 db_id: The database whose catalog is checked.
 
         Returns:
                 bool: `True` if all catalog sections are empty, `False` otherwise.
         """
-        catalog = await self.get_catalog(user_id, db_id)
+        catalog = await self.get_catalog(workspace_id, db_id)
         return not any(catalog.values())
 
-    async def seed_sample(self, user_id, db_id):
+    async def seed_sample(self, workspace_id, db_id):
         """Seed sample knowledge for a new sample-database connection.
 
         All operations run in one transaction so partial failures roll back
@@ -309,14 +315,14 @@ class KnowledgeService:
         async with self._session_factory() as session:
             count = await session.execute(
                 select(func.count()).where(
-                    VerifiedQA.user_id == user_id, VerifiedQA.db_id == db_id
+                    VerifiedQA.workspace_id == workspace_id, VerifiedQA.db_id == db_id
                 )
             )
             if count.scalar():
                 return
             await session.execute(
                 delete(Glossary).where(
-                    Glossary.user_id == user_id, Glossary.db_id == db_id
+                    Glossary.workspace_id == workspace_id, Glossary.db_id == db_id
                 )
             )
             for t in [
@@ -336,7 +342,7 @@ class KnowledgeService:
                     "sql_hint": "Product ranked by units sold (sum of quantity)",
                 },
             ]:
-                session.add(Glossary(user_id=user_id, db_id=db_id, **t))
+                session.add(Glossary(workspace_id=workspace_id, db_id=db_id, **t))
             for q, s, r in [
                 (
                     "How many orders were completed last month?",
@@ -356,23 +362,27 @@ class KnowledgeService:
             ]:
                 session.add(
                     VerifiedQA(
-                        user_id=user_id, db_id=db_id, question=q, sql=s, restatement=r
+                        workspace_id=workspace_id,
+                        db_id=db_id,
+                        question=q,
+                        sql=s,
+                        restatement=r,
                     )
                 )
             await session.commit()
 
-    async def trust_level(self, user_id, db_id):
+    async def trust_level(self, workspace_id, db_id):
         """
         Summarize the trust level for a user's database from its verified answers.
 
         Parameters:
-                user_id: Identifier of the user.
+                workspace_id: Identifier of the user.
                 db_id: Identifier of the database.
 
         Returns:
                 A dictionary containing the trust `level`, verified-answer count, percentage, and explanatory note.
         """
-        n = await self.count_verified(user_id, db_id)
+        n = await self.count_verified(workspace_id, db_id)
         if n >= 7:
             return {
                 "level": "Trusted",

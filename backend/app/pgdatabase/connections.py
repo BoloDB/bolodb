@@ -113,9 +113,9 @@ def _decrypt_connection_url(value):
 
 
 async def save_recent_connection(
-    user_id, db_url, display_url, dialect, db_id, table_count
+    workspace_id, db_url, display_url, dialect, db_id, table_count
 ):
-    uid = _to_uuid(user_id)
+    wid = _to_uuid(workspace_id)
     encrypted_url = _encrypt_connection_url(db_url)
     async with async_session() as session:
         try:
@@ -123,7 +123,7 @@ async def save_recent_connection(
                 pg_insert(RecentConnection)
                 .values(
                     id=_uuid7(),
-                    user_id=uid,
+                    workspace_id=wid,
                     db_url=encrypted_url,
                     display_url=display_url,
                     dialect=dialect,
@@ -131,7 +131,7 @@ async def save_recent_connection(
                     table_count=table_count,
                 )
                 .on_conflict_do_update(
-                    index_elements=["user_id", "db_id"],
+                    index_elements=["workspace_id", "db_id"],
                     set_=dict(
                         db_url=encrypted_url,
                         display_url=display_url,
@@ -148,12 +148,12 @@ async def save_recent_connection(
             raise
 
 
-async def get_recent_connections(user_id: str, limit: int = 5):
-    uid = _to_uuid(user_id)
+async def get_recent_connections(workspace_id: str, limit: int = 5):
+    wid = _to_uuid(workspace_id)
     async with async_session() as session:
         result = await session.execute(
             select(RecentConnection)
-            .where(RecentConnection.user_id == uid)
+            .where(RecentConnection.workspace_id == wid)
             .order_by(RecentConnection.connected_at.desc())
             .limit(limit)
         )
@@ -162,7 +162,7 @@ async def get_recent_connections(user_id: str, limit: int = 5):
         for row in rows:
             d = {
                 "id": row.id,
-                "user_id": row.user_id,
+                "workspace_id": row.workspace_id,
                 "display_url": row.display_url,
                 "dialect": row.dialect,
                 "db_id": row.db_id,
@@ -173,9 +173,9 @@ async def get_recent_connections(user_id: str, limit: int = 5):
         return out
 
 
-async def delete_recent_connection(user_id: str, connection_id: str) -> bool:
+async def delete_recent_connection(workspace_id: str, connection_id: str) -> bool:
     try:
-        uid = _to_uuid(user_id)
+        wid = _to_uuid(workspace_id)
         cid = _to_uuid(connection_id)
     except (ValueError, TypeError):
         return False
@@ -183,7 +183,7 @@ async def delete_recent_connection(user_id: str, connection_id: str) -> bool:
         try:
             result = await session.execute(
                 delete(RecentConnection).where(
-                    RecentConnection.id == cid, RecentConnection.user_id == uid
+                    RecentConnection.id == cid, RecentConnection.workspace_id == wid
                 )
             )
             await session.commit()
@@ -193,12 +193,14 @@ async def delete_recent_connection(user_id: str, connection_id: str) -> bool:
             raise
 
 
-async def get_recent_connection_by_db_id(user_id: str, db_id: str) -> Optional[dict]:
-    uid = _to_uuid(user_id)
+async def get_recent_connection_by_db_id(
+    workspace_id: str, db_id: str
+) -> Optional[dict]:
+    wid = _to_uuid(workspace_id)
     async with async_session() as session:
         result = await session.execute(
             select(RecentConnection).where(
-                RecentConnection.user_id == uid, RecentConnection.db_id == db_id
+                RecentConnection.workspace_id == wid, RecentConnection.db_id == db_id
             )
         )
         conn = result.scalar_one_or_none()
@@ -206,7 +208,7 @@ async def get_recent_connection_by_db_id(user_id: str, db_id: str) -> Optional[d
             return None
         d = {
             "id": conn.id,
-            "user_id": conn.user_id,
+            "workspace_id": conn.workspace_id,
             "db_url": conn.db_url,
             "display_url": conn.display_url,
             "dialect": conn.dialect,
