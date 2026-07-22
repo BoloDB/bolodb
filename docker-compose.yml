@@ -13,7 +13,7 @@ services:
     build:
       context: .
       dockerfile: backend/DOCKERFILE
-    container_name: bolodb-backend
+    # container_name: bolodb-backend
     restart: unless-stopped
     expose:
       - "4321"
@@ -42,7 +42,7 @@ services:
     build:
       context: ./frontend
       dockerfile: DOCKERFILE.dev
-    container_name: bolodb-frontend
+    # container_name: bolodb-frontend
     volumes:
       - ./frontend:/app
       - /app/node_modules
@@ -65,7 +65,7 @@ services:
     build:
       context: ./nginx
       dockerfile: DOCKERFILE
-    container_name: bolodb-nginx
+    # container_name: bolodb-nginx
     restart: unless-stopped
     expose:
       - '80'
