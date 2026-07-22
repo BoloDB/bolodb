@@ -21,16 +21,20 @@ from backend.app.ratelimit import limiter
 from backend.app.pgdatabase import KnowledgeService
 from backend.app.pgdatabase.engine import async_session
 
-from backend.app.routes.auth import router as auth_router
-from backend.app.routes.system import router as system_router
-from backend.app.routes.database import router as database_router
-from backend.app.routes.onboard import router as onboard_router
-from backend.app.routes.query import router as query_router
-from backend.app.routes.history import router as history_router
-from backend.app.routes.connections import router as connections_router
-from backend.app.routes.catalog import router as catalog_router
-from backend.app.routes.conversations import router as conversations_router
-from backend.app.routes.workspaces import router as workspaces_router
+from backend.app.routes import (
+    auth,
+    catalog,
+    connections,
+    conversations,
+    database,
+    history,
+    onboard,
+    query,
+    system,
+    workspaces,
+    dashboards,
+    saved_queries,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -149,15 +153,19 @@ def create_app(initial_db_url="", readonly=True):
             "in the server. Connect from the UI after signing in."
         )
 
-    app.include_router(auth_router)
-    app.include_router(system_router)
-    app.include_router(database_router)
-    app.include_router(onboard_router)
-    app.include_router(query_router)
-    app.include_router(history_router)
-    app.include_router(connections_router)
-    app.include_router(catalog_router)
-    app.include_router(conversations_router)
-    app.include_router(workspaces_router)
+    app.include_router(auth.router)
+    app.include_router(system.router)
+    app.include_router(database.router)
+    app.include_router(onboard.router)
+    app.include_router(query.router)
+    app.include_router(history.router)
+    app.include_router(connections.router)
+    app.include_router(catalog.router)
+    app.include_router(conversations.router)
+    app.include_router(workspaces.router)
+    app.include_router(dashboards.router)
+    app.include_router(saved_queries.router)
+
+    # Catch-all for API 404app
 
     return app
