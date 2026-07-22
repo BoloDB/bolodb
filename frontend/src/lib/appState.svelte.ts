@@ -237,6 +237,34 @@ class AppState {
     this.setOnboardingActive(false);
     goto("/connect");
   }
+
+  async restoreSession(id: string) {
+    this.activeConversationId = id;
+    goto(`/chat?id=${id}`);
+  }
+
+  async fetchStartersAsync() {
+    if (this.starters && this.starters.length > 0) return;
+    try {
+      const res = await apiCall("/api/onboard/generate-starters", {});
+      if (res && res.starters && res.starters.length > 0) {
+        this.starters = res.starters;
+      } else {
+        this.starters = [
+          "Top 5 rows in the largest table",
+          "Show me a summary of the data",
+          "How many records were added recently?",
+        ];
+      }
+    } catch (e) {
+      console.error("Failed to fetch async starters:", e);
+      this.starters = [
+        "Top 5 rows in the largest table",
+        "Show me a summary of the data",
+        "How many records were added recently?",
+      ];
+    }
+  }
 }
 
 export const appState = new AppState();

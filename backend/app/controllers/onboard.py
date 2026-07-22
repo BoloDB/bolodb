@@ -2,57 +2,10 @@ from fastapi import HTTPException
 from fastapi.concurrency import run_in_threadpool
 import asyncio
 import logging
-from backend.app.llm import generate_glossary, generate_starters
 from backend.app.semantic import suggest_from_schema
+from backend.app.llm import generate_starters
 
 log = logging.getLogger(__name__)
-
-
-async def get_glossary(user_id, db, providers):
-    if not db.connected(user_id):
-        raise HTTPException(409, "No database connected")
-    try:
-        schema_text = db.schema_as_text(user_id)
-        log.info(
-            "get_glossary: schema_text len=%d preview=%s",
-            len(schema_text),
-            schema_text[:300],
-        )
-        terms = await generate_glossary(providers.get(user_id), schema_text)
-        return {"glossary": terms}
-    except Exception:
-        log.exception("Failed to generate glossary")
-        raise HTTPException(502, "Failed to generate glossary — please try again")
-
-
-async def get_starters(user_id, db, providers):
-    if not db.connected(user_id):
-        raise HTTPException(409, "No database connected")
-    try:
-        schema_text = db.schema_as_text(user_id)
-        dialect = db.get_dialect(user_id)
-        log.info(
-            "get_starters: dialect=%s schema_text len=%d preview=%s",
-            dialect,
-            len(schema_text),
-            schema_text[:300],
-        )
-        starters = await generate_starters(providers.get(user_id), schema_text, dialect)
-
-        async def _run_starter(s):
-            res = await run_in_threadpool(db.execute, user_id, s.get("sql", ""))
-            s["columns"] = res.get("columns", [])
-            s["rows"] = res.get("rows", [])[:5]
-            s["error"] = res.get("error")
-            return s
-
-        starters = list(await asyncio.gather(*[_run_starter(s) for s in starters]))
-        return {"starters": starters}
-    except Exception:
-        log.exception("Failed to generate starters")
-        raise HTTPException(
-            502, "Failed to generate example questions — please try again"
-        )
 
 
 async def save(user_id, db, kb, req_data):
@@ -86,3 +39,38 @@ async def save(user_id, db, kb, req_data):
             user_id, db_id, suggest_from_schema(db.get_schema(user_id))
         )
     return {"ok": True, "trust": await kb.trust_level(user_id, db_id)}
+
+
+async def generate_starters_async(user_id, db, kb, providers):
+    if not db.connected(user_id):
+        raise HTTPException(409, "No database connected")
+    try:
+        db_id = db.get_db_id(user_id)
+        schema_text = db.schema_as_text(user_id)
+        dialect = db.get_dialect(user_id)
+
+        starters = await generate_starters(providers.get(user_id), schema_text, dialect)
+
+        async def _run_starter(s):
+            res = await run_in_threadpool(db.execute, user_id, s.get("sql", ""))
+            s["error"] = res.get("error")
+            return s
+
+        starters = list(await asyncio.gather(*[_run_starter(s) for s in starters]))
+        # Filter out starters that failed to execute
+        valid_starters = [s for s in starters if not s.get("error")]
+
+        for s in valid_starters:
+            await kb.add_verified(
+                user_id,
+                db_id,
+                s["question"],
+                s["sql"],
+                s["restatement"],
+            )
+
+        # Return the generated list of questions
+        return {"starters": [s["question"] for s in valid_starters]}
+    except Exception:
+        log.exception("Failed to generate async starters")
+        return {"starters": []}

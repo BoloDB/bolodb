@@ -59,6 +59,7 @@
   let openCatalogTrigger = $state(0);
 
   onMount(async () => {
+    appState.fetchStartersAsync();
     try {
       const res = await apiCall("/api/auth/me");
       userEmail = res?.content?.email || "";
@@ -68,11 +69,7 @@
   const suggestionChips = $derived(
     starters && starters.length
       ? starters.slice(0, 3)
-      : [
-          "Top 5 products by revenue",
-          "How many active customers do we have?",
-          "Compare sales this month vs last",
-        ],
+      : []
   );
   let loading = $state(false);
   let feedRef: HTMLDivElement | undefined = $state(undefined);
@@ -634,9 +631,14 @@
               <p class="empty-sub">Ask the way you'd ask a colleague. No SQL needed.</p>
               <span class="empty-badge">✓ QUESTIONS VERIFIED FOR THIS DATABASE</span>
               <div class="chips" data-tour="starters" data-testid="chat-starters">
-                {#each suggestionChips as sg}
-                  <button class="sg-chip" onclick={() => ask(sg)}>{sg}</button>
-                {/each}
+                {#if suggestionChips.length === 0}
+                  <div class="sg-chip shimmer">Generating suggestions...</div>
+                  <div class="sg-chip shimmer" style="animation-delay: 0.1s">Waiting for AI...</div>
+                {:else}
+                  {#each suggestionChips as sg}
+                    <button class="sg-chip" onclick={() => ask(sg)}>{sg}</button>
+                  {/each}
+                {/if}
               </div>
               <button class="catalog-card" onclick={() => { openCatalogTrigger++; tab = "settings"; }}>
                 <span style="display:flex;flex-direction:column;gap:3px">
@@ -800,6 +802,19 @@
     transition: all 0.15s;
   }
   .sg-chip:hover { border-color: var(--brand); color: var(--brand); }
+  .sg-chip.shimmer {
+    background: linear-gradient(90deg, rgba(255,255,255,0.03) 25%, rgba(255,255,255,0.08) 50%, rgba(255,255,255,0.03) 75%);
+    background-size: 200% 100%;
+    animation: shimmer 2s infinite linear;
+    color: var(--fg-muted);
+    border: 1px solid rgba(255,255,255,0.05);
+    cursor: default;
+    pointer-events: none;
+  }
+  @keyframes shimmer {
+    0% { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
+  }
   .catalog-card {
     display: flex;
     align-items: center;
