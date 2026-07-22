@@ -1,10 +1,9 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from backend.app.dependencies import get_current_user, require_role
 from backend.app.models.workspace_api import (
     WorkspaceCreate,
     WorkspaceMemberRoleUpdate,
     WorkspaceInviteCreate,
-    WorkspaceUpdate,
 )
 import backend.app.controllers.workspaces as ctrl
 
@@ -27,15 +26,6 @@ async def create_workspace(req: WorkspaceCreate, user=Depends(get_current_user))
 async def get_workspace(workspace_id: str, user=Depends(get_current_user)):
     user_id = user.get("user_id", user.get("sub"))
     return await ctrl.get_workspace(workspace_id, user_id)
-
-
-@router.patch("/api/workspaces/{workspace_id}")
-async def update_workspace(
-    workspace_id: str,
-    req: WorkspaceUpdate,
-    workspace=Depends(require_role("admin")),
-):
-    return await ctrl.update_workspace(workspace["workspace_id"], req.name)
 
 
 @router.get("/api/workspaces/{workspace_id}/members")
@@ -68,10 +58,8 @@ async def update_member_role(
 async def remove_member(
     workspace_id: str, user_id: str, workspace=Depends(require_role("member"))
 ):
-    # Members can remove themselves, admins can remove anyone
+    # Members can remove themselves, admins can remove non-owners
     if workspace["user_id"] != user_id and workspace["role"] not in ["admin", "owner"]:
-        from fastapi import HTTPException
-
         raise HTTPException(403, "Insufficient permissions to remove other members")
     return await ctrl.remove_member(workspace["workspace_id"], user_id)
 
@@ -89,7 +77,5 @@ async def accept_invite(token: str, user=Depends(get_current_user)):
     user_id = user.get("user_id", user.get("sub"))
     email = user.get("email")
     if not email:
-        from fastapi import HTTPException
-
         raise HTTPException(400, "User email not found in token")
     return await ctrl.accept_invite(token, user_id, email)

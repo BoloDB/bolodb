@@ -17,6 +17,7 @@ from datetime import datetime
 from sqlalchemy import (
     String,
     UniqueConstraint,
+    CheckConstraint,
     ForeignKey,
     DateTime,
     Index,
@@ -49,6 +50,9 @@ class WorkspaceMember(Base):
     )
     __table_args__ = (
         UniqueConstraint("workspace_id", "user_id", name="uq_workspace_member"),
+        CheckConstraint(
+            "role IN ('owner', 'admin', 'member')", name="ck_workspace_member_role"
+        ),
         Index("ix_workspace_member_user", "user_id"),
     )
 
@@ -77,6 +81,9 @@ class WorkspaceInvite(Base):
     )
     __table_args__ = (
         UniqueConstraint("workspace_id", "email", name="uq_workspace_invite_email"),
+        CheckConstraint(
+            "role IN ('owner', 'admin', 'member')", name="ck_workspace_invite_role"
+        ),
     )
 
 
@@ -87,8 +94,8 @@ class Workspace(Base):
     )
     name: Mapped[str] = mapped_column(String, nullable=False)
     slug: Mapped[str] = mapped_column(String, unique=True, nullable=False)
-    created_by: Mapped[uuid.UUID] = mapped_column(
-        PgUUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    created_by: Mapped[Optional[uuid.UUID]] = mapped_column(
+        PgUUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=_utcnow

@@ -1,4 +1,7 @@
+from typing import Literal
 from pydantic import BaseModel, EmailStr
+
+RoleLiteral = Literal["admin", "member"]
 
 
 class WorkspaceCreate(BaseModel):
@@ -6,12 +9,12 @@ class WorkspaceCreate(BaseModel):
 
 
 class WorkspaceMemberRoleUpdate(BaseModel):
-    role: str
+    role: RoleLiteral
 
 
 class WorkspaceInviteCreate(BaseModel):
     email: EmailStr
-    role: str = "member"
+    role: RoleLiteral = "member"
 
 
 class WorkspaceUpdate(BaseModel):
