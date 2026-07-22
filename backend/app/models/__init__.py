@@ -4,6 +4,8 @@ from backend.app.models.workspace import Workspace, WorkspaceMember, WorkspaceIn
 from backend.app.models.activity import WorkspaceActivityLog
 from backend.app.models.conversation import Conversation, QueryHistory
 from backend.app.models.recent_connection import RecentConnection
+from backend.app.models.saved_query import SavedQuery
+from backend.app.models.dashboard import Dashboard, DashboardPanel
 from backend.app.models.catalog import (
     VerifiedQA,
     Glossary,
@@ -36,4 +38,7 @@ __all__ = [
     "CatalogValueMapping",
     "PasswordResetToken",
     "OtpCode",
+    "SavedQuery",
+    "Dashboard",
+    "DashboardPanel",
 ]
