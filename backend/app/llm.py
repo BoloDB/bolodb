@@ -641,6 +641,7 @@ async def suggest_catalog(provider, schema_text):
         "Produce the catalog.",
         json_mode=True,
         schema=CATALOG_SCHEMA,
+        temperature=0.5,
     )
     obj = raw if isinstance(raw, dict) else parse_json(raw)
     return {
