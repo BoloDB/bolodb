@@ -4,12 +4,12 @@
 
 <main class="legal-page">
   <h1>Terms of Service</h1>
-  <p class="legal-updated">Last updated: July 16, 2026</p>
+  <p class="legal-updated">Last updated: July 22, 2026</p>
 
   <section>
     <h2>Acceptance</h2>
     <p>
-      By using BoloDB you agree to these terms. If you do not agree, do not use the service.
+      By using BoloDB, or by authenticating via a third-party provider like Google Login, you agree to these terms. If you do not agree, do not use the service.
     </p>
   </section>
 
@@ -27,15 +27,16 @@
     <ul>
       <li>You retain full ownership of all data in your database.</li>
       <li>BoloDB never writes to your database — all queries are read-only.</li>
-      <li>Only your schema structure and question are sent to Google Gemini for SQL generation. Row data stays on your machine.</li>
+      <li>Only your schema structure and question are sent to OpenRouter for SQL generation. Row data stays on your machine.</li>
+      <li>If you sign in using Google Login, you consent to our use of your email and basic profile data for authentication. You may request data deletion at any time.</li>
     </ul>
   </section>
 
   <section>
     <h2>API costs</h2>
     <p>
-      SQL generation uses the Google Gemini API. You are responsible for your own
-      Gemini API key and any associated costs. BoloDB does not mark up or resell API access.
+      SQL generation uses the OpenRouter API. You are responsible for your own
+      OpenRouter API key and any associated costs. BoloDB does not mark up or resell API access.
     </p>
   </section>
 

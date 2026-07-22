@@ -89,9 +89,9 @@ const de = {
     removeFromRecent: "Aus letzen entfernen",
     setUpAi: "KI einrichten",
     setUpAiHint:
-      "BoloDB verwendet Google Gemini, um Ihre Fragen in Datenbankabfragen umzuwandeln. Sie benötigen nur einen kostenlosen API-Schlüssel.",
-    geminiKeyConfigured:
-      "Gemini-API-Schlüssel konfiguriert — die KI ist bereit.",
+      "BoloDB verwendet OpenRouter, um Ihre Fragen in Datenbankabfragen umzuwandeln. Sie benötigen nur einen kostenlosen API-Schlüssel.",
+    openrouterKeyConfigured:
+      "OpenRouter-API-Schlüssel konfiguriert — die KI ist bereit.",
     changeKey: "Schlüssel ändern",
     getFreeKey: "Kostenlosen API-Schlüssel erhalten von",
     googleAiStudio: "Google AI Studio \u2192",
@@ -103,7 +103,7 @@ const de = {
     privacyNotice:
       "Selbst mit einer Cloud-Engine werden nur Ihre Datenbankstruktur und Ihre Frage gesendet — niemals Ihre tatsächlichen Datenzeilen.",
     privacyShort:
-      "Nur das Schema und Ihre Frage werden an Google Gemini gesendet, um SQL zu generieren — niemals Ihre Zeilendaten.",
+      "Nur das Schema und Ihre Frage werden an OpenRouter gesendet, um SQL zu generieren — niemals Ihre Zeilendaten.",
     connectDatabase: "Datenbank verbinden",
     connectDatabaseHint:
       "Noch keine? Verwenden Sie zuerst die Beispieldaten, um zu sehen, wie es funktioniert.",
@@ -154,7 +154,7 @@ const de = {
     scrollToLatest: "Zum Neuesten scrollen",
     tableCount: "{n} Tabelle{?n}",
     privacyFooter:
-      "Nur das Schema und Ihre Frage werden an Google Gemini gesendet, um SQL zu generieren — niemals Ihre Zeilendaten.",
+      "Nur das Schema und Ihre Frage werden an OpenRouter gesendet, um SQL zu generieren — niemals Ihre Zeilendaten.",
     sqlCommandDescription: "SQL-Abfrage direkt ausführen",
     directSql: "DIREKTES SQL",
     directSqlReason: "Direkte SQL-Ausführung",
@@ -270,19 +270,19 @@ const de = {
       "Zuversichtliche Antworten werden angezeigt; neue werden noch einmal überprüft.",
     supervisedBehaviour:
       "Jede Antwort wartet auf Ihre Bestätigung, während die KI lernt.",
-    providerGeminiName: "Google Gemini",
-    providerGeminiSub: "Gemini-API",
-    providerGeminiPrivacy:
+    providerOpenRouterName: "OpenRouter",
+    providerOpenRouterSub: "OpenRouter-API",
+    providerOpenRouterPrivacy:
       "Schema + Frage an Google gesendet — niemals Ihre Zeilendaten",
-    providerGeminiCost:
+    providerOpenRouterCost:
       "Kostenloses Kontingent verfügbar, dann nutzungsabhängige Bezahlung",
-    providerGeminiAccuracy: "Höchste",
+    providerOpenRouterAccuracy: "Höchste",
     providerDefault: "Standard",
   },
   settings: {
     title: "Einstellungen",
     close: "Einstellungen schließen",
-    googleGemini: "Google Gemini",
+    googleOpenRouter: "OpenRouter",
     powersAi: "Betreibt jede KI-Funktion in BoloDB",
     model: "Modell",
     modelDefaultHint:
@@ -291,12 +291,12 @@ const de = {
     modelBalanced:
       "Ausgewogen — für die meisten Anwendungen empfohlen (Standard)",
     modelAccurate: "Genaueste — für große Schemata und schwierige Fragen",
-    apiKey: "Gemini-API-Schlüssel",
+    apiKey: "OpenRouter-API-Schlüssel",
     keyConfigured: "API-Schlüssel konfiguriert",
     cancelKeepKey: "\u2190 Abbrechen, vorhandenen Schlüssel behalten",
     getKeyAt: "Kostenlosen Schlüssel erhalten unter",
     keyStoredLocally:
-      "Nur lokal gespeichert. Schema + Frage werden an Google Gemini gesendet, um SQL zu generieren — niemals Ihre Tabellendaten.",
+      "Nur lokal gespeichert. Schema + Frage werden an OpenRouter gesendet, um SQL zu generieren — niemals Ihre Tabellendaten.",
     dataCatalog: "Datenkatalog",
     catalogDescription:
       "Bringen Sie BoloDB Ihre Geschäftsbegriffe, Metriken und Wertbedeutungen bei, damit Antworten genauer werden.",

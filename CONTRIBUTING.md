@@ -14,7 +14,7 @@ BoloDB is built using a modern containerized stack designed for ease of local de
 - **Database:** PostgreSQL container storing user accounts, query history, conversations, and recent connections.
 - **Knowledge Base:** Per-user SQLite database storing verified queries, glossary, and trust level.
 - **Reverse Proxy:** Nginx configured to route traffic seamlessly between the frontend and backend services while handling proxy configurations.
-- **LLM Connectors:** Support for Google Gemini API.
+- **LLM Connectors:** Support for OpenRouter API.
 
 ---
 
@@ -105,7 +105,7 @@ Ensure all tests pass before making a pull request.
 
 ### Core Backend (`backend/app/`)
 - **Read-Only Safety:** The AST-based read-only verification in `app/database.py` is BoloDB's primary defense line. If you modify database execution paths, verify that no write queries (`INSERT`, `UPDATE`, `DROP`, `SELECT INTO`, etc.) can be executed unless explicitly permitted via a bypass flag.
-- **LLM Compatibility:** Ensure prompts are concise and token-efficient. Test prompt changes against the Gemini API.
+- **LLM Compatibility:** Ensure prompts are concise and token-efficient. Test prompt changes against the OpenRouter API.
 - **Typing:** Provide Python 3 type hints where possible to keep the codebase easy to read and maintain.
 - **Async Code:** The FastAPI backend relies on asynchronous operations. Avoid introducing blocking synchronous calls, especially in endpoints handling database or LLM interactions.
 

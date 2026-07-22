@@ -81,7 +81,7 @@ they get more tables:
 
 | Model tier | Max tables (before FK expansion) | Sample rows per table | Verified examples in prompt |
 |---|---|---|---|
-| `lite` (gemini-2.5-flash-lite) | 12 | 1 | 3 |
+| `lite` (deepseek-v4-flash) | 12 | 1 | 3 |
 | `flash` (default) | 20 | 2 | 5 |
 | `pro` | 25 | 2 | 5 |
 
@@ -93,7 +93,7 @@ On big databases (more than 30 tables — `_SHORTLIST_MIN_TABLES` in
 `backend/app/controllers/query.py`), BoloDB adds a cheap first AI pass:
 
 1. A **names-only catalog** of every table (`orders(id, customer_id, …)` — a
-   few tokens per table even for hundreds of tables) is sent to Gemini with
+   few tokens per table even for hundreds of tables) is sent to OpenRouter with
    thinking disabled, asking "which tables might matter for this question?"
    *Code:* `backend/app/llm.py` → `shortlist_tables()`.
 2. The picks come back into local scoring as a **+6 boost** — never as a

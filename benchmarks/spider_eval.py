@@ -10,7 +10,7 @@ BoloDB's own pipeline pieces and measures:
    A miss here means the AI could never have answered correctly — this is the
    number that tells us how often our table-picking fails before a customer
    ever sees it.
-2. EXECUTION ACCURACY (optional, needs GEMINI_API_KEY, costs tokens): run the
+2. EXECUTION ACCURACY (optional, needs OPENROUTER_API_KEY, costs tokens): run the
    full generate→validate→execute pipeline and compare the result rows of the
    generated SQL against the gold SQL, order-insensitively.
 
@@ -18,8 +18,8 @@ Usage (see benchmarks/README.md for getting the dataset):
 
     python -m benchmarks.spider_eval --spider-dir /path/to/spider
     python -m benchmarks.spider_eval --spider-dir /path/to/spider --limit 100
-    GEMINI_API_KEY=... python -m benchmarks.spider_eval --spider-dir /path/to/spider \
-        --generate --model gemini-2.5-flash --limit 50
+    OPENROUTER_API_KEY=... python -m benchmarks.spider_eval --spider-dir /path/to/spider \
+        --generate --model deepseek-v4-flash --limit 50
 
 Outputs a summary to stdout and a JSONL report (one line per question) with
 every miss, so failures can be inspected one by one.
@@ -37,7 +37,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from backend.app.database import DatabaseManager  # noqa: E402
-from backend.app.llm import GeminiProvider, generate_sql  # noqa: E402
+from backend.app.llm import OpenRouterProvider, generate_sql  # noqa: E402
 from backend.app.schema_link import (  # noqa: E402
     compact_schema,
     extract_table_names_from_prev_query,
@@ -84,13 +84,13 @@ def main():
     )
     ap.add_argument(
         "--model",
-        default="gemini-2.5-flash",
+        default="deepseek-v4-flash",
         help="Model whose linking budget (and generation) to use",
     )
     ap.add_argument(
         "--generate",
         action="store_true",
-        help="Also run SQL generation + execution accuracy (needs GEMINI_API_KEY)",
+        help="Also run SQL generation + execution accuracy (needs OPENROUTER_API_KEY)",
     )
     ap.add_argument(
         "--out",
@@ -105,13 +105,15 @@ def main():
 
     provider = None
     if args.generate:
-        key = os.environ.get("GEMINI_API_KEY", "")
+        key = os.environ.get("OPENROUTER_API_KEY", "")
         if not key:
-            sys.exit("error: --generate needs the GEMINI_API_KEY environment variable")
-        provider = GeminiProvider(api_key=key, model=args.model)
+            sys.exit(
+                "error: --generate needs the OPENROUTER_API_KEY environment variable"
+            )
+        provider = OpenRouterProvider(api_key=key, model=args.model)
 
     db = DatabaseManager(readonly=True)
-    budget = model_budget("gemini", args.model)
+    budget = model_budget("openrouter", args.model)
 
     n = 0
     linking_hits = 0

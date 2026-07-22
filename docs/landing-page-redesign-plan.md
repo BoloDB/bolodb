@@ -55,7 +55,7 @@ The page is a narrative. Each section answers the visitor's next question.
 | 5 | "Does it actually get smarter?" | **The flywheel** | Every verified answer teaches your database. |
 | 6 | "What can it connect to?" | **Integrations** | Postgres, MySQL, SQL Server, SQLite. |
 | 7 | "Convince me / who's it for." | **Social proof / outcomes** | Roles + before/after. |
-| 8 | "How do I start?" | **Final CTA** | Start free with a Gemini key in ~1 min. |
+| 8 | "How do I start?" | **Final CTA** | Start free with a OpenRouter key in ~1 min. |
 
 Copy is owned by product; engineers should use the placeholder copy in §4 and
 leave `<!-- COPY -->` markers so it's swappable without touching layout.
@@ -203,7 +203,7 @@ There's already a `Flywheel.svelte` — audit it for reuse.
 
 ### 4.7 Final CTA
 - Full-bleed gradient panel. Big headline ("Ask your first question in a
-  minute."), the ~1-minute Gemini-key value prop, primary CTA → `/signup`,
+  minute."), the ~1-minute OpenRouter-key value prop, primary CTA → `/signup`,
   secondary "Try with sample data". Magnetic button again.
 - Background: the mesh/orb system reprised, slightly more saturated.
 

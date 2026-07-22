@@ -7,7 +7,7 @@ the static validator (backend/app/sqlvalidate.py), optionally executes it, and o
 any failure feeds the specific error back into the next generation attempt.
 
 This loop is what answers real questions: ``run_query`` in
-backend/app/controllers/query.py wires it up with the Gemini provider as the
+backend/app/controllers/query.py wires it up with the OpenRouter provider as the
 generator and the live database as the executor. It stays decoupled — callers
 inject plain callables (sync or async), which keeps the control flow pure and
 unit-testable here.

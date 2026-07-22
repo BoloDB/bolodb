@@ -327,7 +327,7 @@ type RootTranslation = {
     /**
      * G​e​m​i​n​i​ ​A​P​I​ ​k​e​y​ ​c​o​n​f​i​g​u​r​e​d​ ​—​ ​t​h​e​ ​A​I​ ​i​s​ ​r​e​a​d​y​.
      */
-    geminiKeyConfigured: string;
+    openrouterKeyConfigured: string;
     /**
      * C​h​a​n​g​e​ ​k​e​y
      */
@@ -935,23 +935,23 @@ type RootTranslation = {
     /**
      * G​o​o​g​l​e​ ​G​e​m​i​n​i
      */
-    providerGeminiName: string;
+    providerOpenRouterName: string;
     /**
      * G​e​m​i​n​i​ ​A​P​I
      */
-    providerGeminiSub: string;
+    providerOpenRouterSub: string;
     /**
      * S​c​h​e​m​a​ ​+​ ​q​u​e​s​t​i​o​n​ ​s​e​n​t​ ​t​o​ ​G​o​o​g​l​e​ ​—​ ​n​e​v​e​r​ ​y​o​u​r​ ​r​o​w​ ​d​a​t​a
      */
-    providerGeminiPrivacy: string;
+    providerOpenRouterPrivacy: string;
     /**
      * F​r​e​e​ ​t​i​e​r​ ​a​v​a​i​l​a​b​l​e​,​ ​t​h​e​n​ ​p​a​y​ ​p​e​r​ ​u​s​e
      */
-    providerGeminiCost: string;
+    providerOpenRouterCost: string;
     /**
      * H​i​g​h​e​s​t
      */
-    providerGeminiAccuracy: string;
+    providerOpenRouterAccuracy: string;
     /**
      * D​e​f​a​u​l​t
      */
@@ -969,7 +969,7 @@ type RootTranslation = {
     /**
      * G​o​o​g​l​e​ ​G​e​m​i​n​i
      */
-    googleGemini: string;
+    openRouter: string;
     /**
      * P​o​w​e​r​s​ ​e​v​e​r​y​ ​A​I​ ​f​e​a​t​u​r​e​ ​i​n​ ​B​o​l​o​D​B
      */
@@ -1889,13 +1889,13 @@ export type TranslationFunctions = {
      */
     setUpAi: () => LocalizedString;
     /**
-     * BoloDB uses Google Gemini to turn your questions into database queries. You just need a free API key.
+     * BoloDB uses OpenRouter to turn your questions into database queries. You just need a free API key.
      */
     setUpAiHint: () => LocalizedString;
     /**
-     * Gemini API key configured — the AI is ready.
+     * OpenRouter API key configured — the AI is ready.
      */
-    geminiKeyConfigured: () => LocalizedString;
+    openrouterKeyConfigured: () => LocalizedString;
     /**
      * Change key
      */
@@ -1929,7 +1929,7 @@ export type TranslationFunctions = {
      */
     privacyNotice: () => LocalizedString;
     /**
-     * Only the schema and your question are sent to Google Gemini to generate SQL — never your row data.
+     * Only the schema and your question are sent to OpenRouter to generate SQL — never your row data.
      */
     privacyShort: () => LocalizedString;
     /**
@@ -2099,7 +2099,7 @@ export type TranslationFunctions = {
      */
     tableCount: (arg: { n: unknown }) => LocalizedString;
     /**
-     * Only the schema and your question are sent to Google Gemini to generate SQL — never your row data.
+     * Only the schema and your question are sent to OpenRouter to generate SQL — never your row data.
      */
     privacyFooter: () => LocalizedString;
     /**
@@ -2487,25 +2487,25 @@ export type TranslationFunctions = {
      */
     supervisedBehaviour: () => LocalizedString;
     /**
-     * Google Gemini
+     * OpenRouter
      */
-    providerGeminiName: () => LocalizedString;
+    providerOpenRouterName: () => LocalizedString;
     /**
-     * Gemini API
+     * OpenRouter API
      */
-    providerGeminiSub: () => LocalizedString;
+    providerOpenRouterSub: () => LocalizedString;
     /**
      * Schema + question sent to Google — never your row data
      */
-    providerGeminiPrivacy: () => LocalizedString;
+    providerOpenRouterPrivacy: () => LocalizedString;
     /**
      * Free tier available, then pay per use
      */
-    providerGeminiCost: () => LocalizedString;
+    providerOpenRouterCost: () => LocalizedString;
     /**
      * Highest
      */
-    providerGeminiAccuracy: () => LocalizedString;
+    providerOpenRouterAccuracy: () => LocalizedString;
     /**
      * Default
      */
@@ -2521,9 +2521,9 @@ export type TranslationFunctions = {
      */
     close: () => LocalizedString;
     /**
-     * Google Gemini
+     * OpenRouter
      */
-    googleGemini: () => LocalizedString;
+    openRouter: () => LocalizedString;
     /**
      * Powers every AI feature in BoloDB
      */
@@ -2549,7 +2549,7 @@ export type TranslationFunctions = {
      */
     modelAccurate: () => LocalizedString;
     /**
-     * Gemini API key
+     * OpenRouter API key
      */
     apiKey: () => LocalizedString;
     /**
@@ -2565,7 +2565,7 @@ export type TranslationFunctions = {
      */
     getKeyAt: () => LocalizedString;
     /**
-     * Stored locally only. Schema + question are sent to Google Gemini to generate SQL — never your table data.
+     * Stored locally only. Schema + question are sent to OpenRouter to generate SQL — never your table data.
      */
     keyStoredLocally: () => LocalizedString;
     /**

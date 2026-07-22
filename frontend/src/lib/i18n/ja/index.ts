@@ -88,9 +88,9 @@ const ja = {
     removeFromRecent: "最近から削除",
     setUpAi: "AIをセットアップ",
     setUpAiHint:
-      "BoloDBはGoogle Geminiを使用して質問をデータベースクエリに変換します。無料のAPIキーが必要です。",
-    geminiKeyConfigured:
-      "Gemini APIキーが設定されました — AIの準備ができました。",
+      "BoloDBはOpenRouterを使用して質問をデータベースクエリに変換します。無料のAPIキーが必要です。",
+    openrouterKeyConfigured:
+      "OpenRouter APIキーが設定されました — AIの準備ができました。",
     changeKey: "キーを変更",
     getFreeKey: "無料APIキーを取得",
     googleAiStudio: "Google AI Studio \u2192",
@@ -102,7 +102,7 @@ const ja = {
     privacyNotice:
       "クラウドエンジンを使用しても、データベース構造と質問のみが送信されます — 実際のデータ行は決して送信されません。",
     privacyShort:
-      "スキーマと質問のみがGoogle Geminiに送信されSQLが生成されます — 行データは決して送信されません。",
+      "スキーマと質問のみがOpenRouterに送信されSQLが生成されます — 行データは決して送信されません。",
     connectDatabase: "データベースに接続",
     connectDatabaseHint:
       "まだお持ちでないですか？サンプルデータで最初にお試しください。",
@@ -152,7 +152,7 @@ const ja = {
     scrollToLatest: "最新にスクロール",
     tableCount: "{n}テーブル",
     privacyFooter:
-      "スキーマと質問のみがGoogle Geminiに送信されSQLが生成されます — 行データは決して送信されません。",
+      "スキーマと質問のみがOpenRouterに送信されSQLが生成されます — 行データは決して送信されません。",
     sqlCommandDescription: "SQLクエリを直接実行",
     directSql: "ダイレクトSQL",
     directSqlReason: "SQL直接実行",
@@ -263,18 +263,18 @@ const ja = {
       "回答が直接表示されます。推論はワンタップで確認できます。",
     assistedBehaviour: "確信度の高い回答が表示され、新しいものは確認されます。",
     supervisedBehaviour: "学習中は各回答が確認を待ちます。",
-    providerGeminiName: "Google Gemini",
-    providerGeminiSub: "Gemini API",
-    providerGeminiPrivacy:
+    providerOpenRouterName: "OpenRouter",
+    providerOpenRouterSub: "OpenRouter API",
+    providerOpenRouterPrivacy:
       "スキーマ+質問をGoogleに送信 — 行データは送信しません",
-    providerGeminiCost: "無料枠あり、その後は従量課金",
-    providerGeminiAccuracy: "最高",
+    providerOpenRouterCost: "無料枠あり、その後は従量課金",
+    providerOpenRouterAccuracy: "最高",
     providerDefault: "デフォルト",
   },
   settings: {
     title: "設定",
     close: "設定を閉じる",
-    googleGemini: "Google Gemini",
+    googleOpenRouter: "OpenRouter",
     powersAi: "BoloDBのすべてのAI機能を強化",
     model: "モデル",
     modelDefaultHint:
@@ -282,12 +282,12 @@ const ja = {
     modelFast: "最速＆最安 — 小規模でシンプルなデータベースに最適",
     modelBalanced: "バランス — ほとんどの用途にお勧め（デフォルト）",
     modelAccurate: "最も正確 — 大規模スキーマや難しい質問に",
-    apiKey: "Gemini APIキー",
+    apiKey: "OpenRouter APIキー",
     keyConfigured: "APIキー設定済み",
     cancelKeepKey: "\u2190 キャンセル、既存のキーを保持",
     getKeyAt: "無料キーを取得",
     keyStoredLocally:
-      "ローカルにのみ保存されます。スキーマ+質問がGoogle Geminiに送信されSQLが生成されます — テーブルデータは決して送信されません。",
+      "ローカルにのみ保存されます。スキーマ+質問がOpenRouterに送信されSQLが生成されます — テーブルデータは決して送信されません。",
     dataCatalog: "データカタログ",
     catalogDescription:
       "BoloDBにビジネス用語、メトリクス、値の意味を教えて、回答の精度を向上させましょう。",

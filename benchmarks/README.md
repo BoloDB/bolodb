@@ -51,11 +51,11 @@ AI.
 ### Measuring end-to-end execution accuracy (costs tokens)
 
 ```bash
-GEMINI_API_KEY=your-key python -m benchmarks.spider_eval \
+OPENROUTER_API_KEY=your-key python -m benchmarks.spider_eval \
     --spider-dir /path/to/spider --generate --limit 100
 ```
 
-Additionally generates SQL with the real Gemini model and compares the rows it
+Additionally generates SQL with the real OpenRouter model and compares the rows it
 returns against the rows the gold SQL returns (order-insensitive). Use
 `--limit` to control cost; `--model` to compare model tiers.
 
