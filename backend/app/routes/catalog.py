@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, Request, HTTPException
 
 from backend.app.dependencies import (
     get_current_workspace,
+    require_role,
     get_db,
     get_kb,
     get_providers,
@@ -35,7 +36,7 @@ async def get_catalog(
 @router.post("/api/catalog")
 async def save_catalog(
     payload: CatalogPayload,
-    workspace=Depends(get_current_workspace),
+    workspace=Depends(require_role("admin")),
     db=Depends(get_db),
     kb=Depends(get_kb),
 ):
@@ -53,7 +54,7 @@ async def save_catalog(
 @limiter.limit("10/minute")
 async def suggest_catalog(
     request: Request,
-    workspace=Depends(get_current_workspace),
+    workspace=Depends(require_role("admin")),
     db=Depends(get_db),
     providers=Depends(get_providers),
 ):
