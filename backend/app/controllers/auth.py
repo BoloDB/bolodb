@@ -6,6 +6,7 @@ import bcrypt
 from pydantic import EmailStr
 from fastapi import HTTPException
 from backend.app.models.user import (
+    UpdateProfile,
     UserSignup,
     UserInDB,
     Role,
@@ -54,6 +55,13 @@ async def get_me(user_id):
         return None
     data.pop("hashed_pass", None)
     return data
+
+
+async def update_profile(user_id: str, req: UpdateProfile):
+    fields = req.dict(exclude_unset=True)
+    if fields:
+        await update_user(user_id, **fields)
+    return await get_me(user_id)
 
 
 async def login(email: EmailStr, password: str):
