@@ -82,7 +82,7 @@
     z-index: 10;
   }
   .connected-banner-inner {
-    max-width: 980px;
+    max-width: 1200px;
     margin: 0 auto;
     display: flex;
     align-items: center;
