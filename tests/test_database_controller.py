@@ -6,11 +6,11 @@ import backend.app.routes.database as database_routes
 
 
 class DummyKB:
-    async def trust_level(self, user_id, db_id):
+    async def trust_level(self, workspace_id, db_id):
         """Return the trust level associated with a database.
 
         Parameters:
-                user_id: The user requesting the trust level.
+                workspace_id: The user requesting the trust level.
                 db_id: The database identifier.
 
         Returns:
@@ -18,11 +18,11 @@ class DummyKB:
         """
         return f"trust:{db_id}"
 
-    async def get_glossary(self, user_id, db_id):
+    async def get_glossary(self, workspace_id, db_id):
         """Return glossary entries for a database.
 
         Parameters:
-                user_id: The user requesting the glossary.
+                workspace_id: The user requesting the glossary.
                 db_id: The database identifier.
 
         Returns:
@@ -30,11 +30,11 @@ class DummyKB:
         """
         return [{"db_id": db_id}]
 
-    async def count_verified(self, user_id, db_id):
+    async def count_verified(self, workspace_id, db_id):
         """Count the verified entries for a database.
 
         Parameters:
-            user_id: Identifier of the user requesting the count.
+            workspace_id: Identifier of the user requesting the count.
             db_id: Identifier of the database.
 
         Returns:
@@ -42,7 +42,7 @@ class DummyKB:
         """
         return 1
 
-    async def get_verified(self, user_id, db_id):
+    async def get_verified(self, workspace_id, db_id):
         """Return a verified starter question for the specified database.
 
         Parameters:
@@ -53,7 +53,7 @@ class DummyKB:
         """
         return [{"question": f"starter:{db_id}"}]
 
-    async def seed_sample(self, user_id, db_id):
+    async def seed_sample(self, workspace_id, db_id):
         return
 
 
@@ -62,8 +62,8 @@ def test_connect_uses_user_scoped_connect_and_result_metadata(monkeypatch):
         def __init__(self):
             self.args = None
 
-        def connect(self, user_id, url):
-            self.args = (user_id, url)
+        def connect(self, workspace_id, url):
+            self.args = (workspace_id, url)
             return {
                 "ok": True,
                 "dialect": "sqlite",
@@ -84,9 +84,9 @@ def test_connect_uses_user_scoped_connect_and_result_metadata(monkeypatch):
     cfg = {}
     req = SimpleNamespace(db_url="sqlite:///tmp.db")
 
-    result = asyncio.run(database_ctrl.connect(db, kb, cfg, req, user_id="u1"))
+    result = asyncio.run(database_ctrl.connect(db, kb, cfg, req, workspace_id="w1"))
 
-    assert db.args == ("u1", "sqlite:///tmp.db")
+    assert db.args == ("w1", "sqlite:///tmp.db")
     assert result["trust"] == "trust:db-123"
     assert saved["dialect"] == "sqlite"
     assert saved["db_id"] == "db-123"
@@ -95,7 +95,7 @@ def test_connect_uses_user_scoped_connect_and_result_metadata(monkeypatch):
 
 def test_connect_sample_uses_result_metadata_for_recent_connection(monkeypatch):
     class DummyDB:
-        def connect(self, user_id, url):
+        def connect(self, workspace_id, url):
             return {
                 "ok": True,
                 "dialect": "sqlite",
@@ -104,7 +104,7 @@ def test_connect_sample_uses_result_metadata_for_recent_connection(monkeypatch):
                 "url": "sqlite:///sample.db",
             }
 
-        def get_db_id(self, user_id):
+        def get_db_id(self, workspace_id):
             return "sample-db"
 
     saved = {}
@@ -118,7 +118,7 @@ def test_connect_sample_uses_result_metadata_for_recent_connection(monkeypatch):
     monkeypatch.setattr(database_ctrl.mdb, "save_recent_connection", fake_save)
 
     result = asyncio.run(
-        database_ctrl.connect_sample(DummyDB(), DummyKB(), {}, user_id="u1")
+        database_ctrl.connect_sample(DummyDB(), DummyKB(), {}, workspace_id="w1")
     )
 
     assert result["is_sample"] is True
@@ -127,17 +127,19 @@ def test_connect_sample_uses_result_metadata_for_recent_connection(monkeypatch):
     assert saved["table_count"] == 9
 
 
-def test_schema_route_passes_user_id_to_controller(monkeypatch):
+def test_schema_route_passes_workspace_id_to_controller(monkeypatch):
     called = {}
 
-    async def fake_get_schema(user_id, db, refresh):
-        called["args"] = (user_id, db, refresh)
+    async def fake_get_schema(workspace_id, db, refresh):
+        called["args"] = (workspace_id, db, refresh)
         return {"ok": True}
 
     monkeypatch.setattr(database_routes.ctrl, "get_schema", fake_get_schema)
     res = asyncio.run(
-        database_routes.schema(refresh=True, user_token={"user_id": "u1"}, db="db-ref")
+        database_routes.schema(
+            refresh=True, workspace={"workspace_id": "w1"}, db="db-ref"
+        )
     )
 
     assert res == {"ok": True}
-    assert called["args"] == ("u1", "db-ref", True)
+    assert called["args"] == ("w1", "db-ref", True)

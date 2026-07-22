@@ -31,7 +31,7 @@ def _collect(provider, db=None, monkeypatch_saves=None, kb=None):
     async def _run():
         events = []
         async for ev in run_query_stream(
-            "u1",
+            "w1",
             db or FakeDB(),
             kb or FakeKB(),
             CFG,

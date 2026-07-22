@@ -4,7 +4,7 @@ import asyncio
 import logging
 from backend.app.semantic import suggest_from_schema
 from backend.app.llm import generate_starters
-from backend.app.pgdatabase.models import VerifiedQA
+from backend.app.models.catalog import VerifiedQA
 from sqlalchemy.dialects.postgresql import insert
 
 log = logging.getLogger(__name__)

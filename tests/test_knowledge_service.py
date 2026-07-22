@@ -81,7 +81,7 @@ async def test_add_verified_inserts(kbs):
     session.add.assert_called_once()
     session.commit.assert_awaited_once()
     args = session.add.call_args[0][0]
-    assert args.user_id == USER_ID
+    assert args.workspace_id == USER_ID
     assert args.db_id == DB_ID
     assert args.question == "test question?"
 

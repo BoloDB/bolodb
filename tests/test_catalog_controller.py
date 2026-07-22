@@ -1,7 +1,7 @@
 """Tests for the semantic-catalog controller and routes (backend/app/
 controllers/catalog.py, backend/app/routes/catalog.py).
 
-``get_catalog`` / ``save_catalog`` became async and now pass ``user_id``
+``get_catalog`` / ``save_catalog`` became async and now pass ``workspace_id``
 through to the (user, db)-scoped KnowledgeService, and the routes had to
 start awaiting them.
 """
@@ -21,12 +21,12 @@ class DummyDB:
         self._connected = connected
         self.db_id_calls = []
 
-    def connected(self, user_id):
+    def connected(self, workspace_id):
         return self._connected
 
-    def get_db_id(self, user_id):
-        self.db_id_calls.append(user_id)
-        return f"db-{user_id}"
+    def get_db_id(self, workspace_id):
+        self.db_id_calls.append(workspace_id)
+        return f"db-{workspace_id}"
 
 
 class DummyKB:
@@ -35,12 +35,12 @@ class DummyKB:
         self.get_calls = []
         self.set_calls = []
 
-    async def get_catalog(self, user_id, db_id):
-        self.get_calls.append((user_id, db_id))
+    async def get_catalog(self, workspace_id, db_id):
+        self.get_calls.append((workspace_id, db_id))
         return self._catalog
 
-    async def set_catalog(self, user_id, db_id, catalog):
-        self.set_calls.append((user_id, db_id, catalog))
+    async def set_catalog(self, workspace_id, db_id, catalog):
+        self.set_calls.append((workspace_id, db_id, catalog))
 
 
 # ── controllers/catalog.py ──────────────────────────────────────────
@@ -50,16 +50,16 @@ def test_get_catalog_raises_409_when_not_connected():
     db = DummyDB(connected=False)
     kb = DummyKB()
     with pytest.raises(HTTPException) as exc:
-        asyncio.run(catalog_ctrl.get_catalog("u1", db, kb))
+        asyncio.run(catalog_ctrl.get_catalog("w1", db, kb))
     assert exc.value.status_code == 409
 
 
-def test_get_catalog_passes_user_id_and_db_id_to_kb():
+def test_get_catalog_passes_workspace_id_and_db_id_to_kb():
     db = DummyDB()
     kb = DummyKB(catalog={"metrics": [{"name": "revenue"}]})
-    result = asyncio.run(catalog_ctrl.get_catalog("u1", db, kb))
+    result = asyncio.run(catalog_ctrl.get_catalog("w1", db, kb))
     assert result == {"catalog": {"metrics": [{"name": "revenue"}]}}
-    assert kb.get_calls == [("u1", "db-u1")]
+    assert kb.get_calls == [("w1", "db-w1")]
 
 
 def test_save_catalog_raises_409_when_not_connected():
@@ -67,20 +67,20 @@ def test_save_catalog_raises_409_when_not_connected():
     kb = DummyKB()
     payload = CatalogPayload()
     with pytest.raises(HTTPException) as exc:
-        asyncio.run(catalog_ctrl.save_catalog("u1", db, kb, payload))
+        asyncio.run(catalog_ctrl.save_catalog("w1", db, kb, payload))
     assert exc.value.status_code == 409
 
 
-def test_save_catalog_persists_payload_with_user_id_and_returns_ok():
+def test_save_catalog_persists_payload_with_workspace_id_and_returns_ok():
     db = DummyDB()
     kb = DummyKB()
     payload = CatalogPayload(metrics=[{"name": "revenue", "sql_expression": "SUM(x)"}])
-    result = asyncio.run(catalog_ctrl.save_catalog("u1", db, kb, payload))
+    result = asyncio.run(catalog_ctrl.save_catalog("w1", db, kb, payload))
     assert result == {"ok": True}
     assert len(kb.set_calls) == 1
-    user_id, db_id, catalog = kb.set_calls[0]
-    assert user_id == "u1"
-    assert db_id == "db-u1"
+    workspace_id, db_id, catalog = kb.set_calls[0]
+    assert workspace_id == "w1"
+    assert db_id == "db-w1"
     assert catalog["metrics"][0]["name"] == "revenue"
 
 
@@ -88,65 +88,72 @@ def test_save_catalog_persists_payload_with_user_id_and_returns_ok():
 
 
 def test_get_catalog_route_awaits_controller_and_returns_value(monkeypatch):
-    async def fake_get_catalog(user_id, db, kb):
-        assert user_id == "u1"
+    async def fake_get_catalog(workspace_id, db, kb):
+        assert workspace_id == "w1"
         return {"catalog": {"metrics": []}}
 
     monkeypatch.setattr(catalog_routes.ctrl, "get_catalog", fake_get_catalog)
     result = asyncio.run(
-        catalog_routes.get_catalog(user_token={"user_id": "u1"}, db="db", kb="kb")
+        catalog_routes.get_catalog(workspace={"workspace_id": "w1"}, db="db", kb="kb")
     )
     assert result == {"catalog": {"metrics": []}}
 
 
 def test_get_catalog_route_reraises_http_exception(monkeypatch):
-    async def fake_get_catalog(user_id, db, kb):
+    async def fake_get_catalog(workspace_id, db, kb):
         raise HTTPException(409, "No database connected")
 
     monkeypatch.setattr(catalog_routes.ctrl, "get_catalog", fake_get_catalog)
     with pytest.raises(HTTPException) as exc:
         asyncio.run(
-            catalog_routes.get_catalog(user_token={"user_id": "u1"}, db="db", kb="kb")
+            catalog_routes.get_catalog(
+                workspace={"workspace_id": "w1"}, db="db", kb="kb"
+            )
         )
     assert exc.value.status_code == 409
 
 
 def test_get_catalog_route_wraps_generic_exception_as_500(monkeypatch):
-    async def fake_get_catalog(user_id, db, kb):
+    async def fake_get_catalog(workspace_id, db, kb):
         raise RuntimeError("boom")
 
     monkeypatch.setattr(catalog_routes.ctrl, "get_catalog", fake_get_catalog)
     with pytest.raises(HTTPException) as exc:
         asyncio.run(
-            catalog_routes.get_catalog(user_token={"user_id": "u1"}, db="db", kb="kb")
+            catalog_routes.get_catalog(
+                workspace={"workspace_id": "w1"}, db="db", kb="kb"
+            )
         )
     assert exc.value.status_code == 500
 
 
 def test_save_catalog_route_awaits_controller_and_returns_value(monkeypatch):
-    async def fake_save_catalog(user_id, db, kb, payload):
-        assert user_id == "u1"
+    async def fake_save_catalog(workspace_id, db, kb, payload):
+        assert workspace_id == "w1"
         assert payload == "payload-obj"
         return {"ok": True}
 
     monkeypatch.setattr(catalog_routes.ctrl, "save_catalog", fake_save_catalog)
     result = asyncio.run(
         catalog_routes.save_catalog(
-            payload="payload-obj", user_token={"user_id": "u1"}, db="db", kb="kb"
+            payload="payload-obj", workspace={"workspace_id": "w1"}, db="db", kb="kb"
         )
     )
     assert result == {"ok": True}
 
 
 def test_save_catalog_route_wraps_generic_exception_as_500(monkeypatch):
-    async def fake_save_catalog(user_id, db, kb, payload):
+    async def fake_save_catalog(workspace_id, db, kb, payload):
         raise RuntimeError("boom")
 
     monkeypatch.setattr(catalog_routes.ctrl, "save_catalog", fake_save_catalog)
     with pytest.raises(HTTPException) as exc:
         asyncio.run(
             catalog_routes.save_catalog(
-                payload="payload-obj", user_token={"user_id": "u1"}, db="db", kb="kb"
+                payload="payload-obj",
+                workspace={"workspace_id": "w1"},
+                db="db",
+                kb="kb",
             )
         )
     assert exc.value.status_code == 500

@@ -26,19 +26,19 @@ class FakeDB:
         self.exec_results = list(exec_results or [])
         self.executed = []
 
-    def connected(self, user_id):
+    def connected(self, workspace_id):
         return True
 
-    def get_db_id(self, user_id):
+    def get_db_id(self, workspace_id):
         return "db1"
 
-    def get_schema(self, user_id):
+    def get_schema(self, workspace_id):
         return SCHEMA
 
-    def get_dialect(self, user_id):
+    def get_dialect(self, workspace_id):
         return "sqlite"
 
-    def execute(self, user_id, sql):
+    def execute(self, workspace_id, sql):
         self.executed.append(sql)
         if self.exec_results:
             return self.exec_results.pop(0)
@@ -51,13 +51,13 @@ class FakeKB:
     def __init__(self, catalog=None):
         self._catalog = catalog or {}
 
-    async def get_glossary(self, user_id, db_id):
+    async def get_glossary(self, workspace_id, db_id):
         return []
 
-    async def get_catalog(self, user_id, db_id):
+    async def get_catalog(self, workspace_id, db_id):
         return self._catalog
 
-    async def retrieve_similar(self, user_id, db_id, q, k=3):
+    async def retrieve_similar(self, workspace_id, db_id, q, k=3):
         return []
 
 
@@ -79,7 +79,7 @@ class FakeProviders:
     def __init__(self, provider):
         self._p = provider
 
-    def get(self, user_id):
+    def get(self, workspace_id):
         return self._p
 
 
@@ -105,7 +105,7 @@ def _sql_json(sql, restatement="r"):
 def _run(provider, db=None):
     return asyncio.run(
         run_query(
-            "u1",
+            "w1",
             db or FakeDB(),
             FakeKB(),
             CFG,
@@ -212,7 +212,7 @@ class WideFakeDB(FakeDB):
         super().__init__()
         self._schema = schema
 
-    def get_schema(self, user_id):
+    def get_schema(self, workspace_id):
         return self._schema
 
 
@@ -229,7 +229,7 @@ def test_schema_retry_adds_table_the_model_asked_for():
     )
     out = asyncio.run(
         run_query(
-            "u1",
+            "w1",
             db,
             FakeKB(),
             CFG,
@@ -272,7 +272,7 @@ def test_shortlist_pass_runs_on_big_schemas_and_boosts_picks():
     )
     out = asyncio.run(
         run_query(
-            "u1",
+            "w1",
             db,
             FakeKB(),
             CFG,
@@ -299,7 +299,7 @@ def test_shortlist_failure_falls_back_to_local_linking():
     )
     out = asyncio.run(
         run_query(
-            "u1",
+            "w1",
             db,
             FakeKB(),
             CFG,

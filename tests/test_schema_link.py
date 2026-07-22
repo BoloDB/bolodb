@@ -19,8 +19,8 @@ def small_schema():
             "distinct_values": {},
         },
         "orders": {
-            "columns": [{"name": "id"}, {"name": "user_id"}],
-            "foreign_keys": [{"column": "user_id", "references": "users.id"}],
+            "columns": [{"name": "id"}, {"name": "workspace_id"}],
+            "foreign_keys": [{"column": "workspace_id", "references": "users.id"}],
             "row_count": 50,
             "distinct_values": {},
         },

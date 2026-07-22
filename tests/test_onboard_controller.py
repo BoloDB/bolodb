@@ -1,7 +1,7 @@
 """Tests for the onboarding controller's ``save`` step (backend/app/
 controllers/onboard.py), which now routes every knowledge-base call through
 the (user, db)-scoped KnowledgeService — every ``kb.*`` call must carry
-``user_id`` as the first argument and be awaited."""
+``workspace_id`` as the first argument and be awaited."""
 
 import asyncio
 from types import SimpleNamespace
@@ -17,13 +17,13 @@ class DummyDB:
         self._connected = connected
         self._schema = schema or {}
 
-    def connected(self, user_id):
+    def connected(self, workspace_id):
         return self._connected
 
-    def get_db_id(self, user_id):
-        return f"db-{user_id}"
+    def get_db_id(self, workspace_id):
+        return f"db-{workspace_id}"
 
-    def get_schema(self, user_id):
+    def get_schema(self, workspace_id):
         return self._schema
 
 
@@ -35,20 +35,20 @@ class DummyKB:
         self.catalog_calls = []
         self.set_catalog_calls = []
 
-    async def set_glossary(self, user_id, db_id, terms):
-        self.glossary_calls.append((user_id, db_id, terms))
+    async def set_glossary(self, workspace_id, db_id, terms):
+        self.glossary_calls.append((workspace_id, db_id, terms))
 
-    async def add_verified(self, user_id, db_id, question, sql, restatement):
-        self.verified_calls.append((user_id, db_id, question, sql, restatement))
+    async def add_verified(self, workspace_id, db_id, question, sql, restatement):
+        self.verified_calls.append((workspace_id, db_id, question, sql, restatement))
 
-    async def catalog_is_empty(self, user_id, db_id):
-        self.catalog_calls.append((user_id, db_id))
+    async def catalog_is_empty(self, workspace_id, db_id):
+        self.catalog_calls.append((workspace_id, db_id))
         return self._catalog_empty
 
-    async def set_catalog(self, user_id, db_id, catalog):
-        self.set_catalog_calls.append((user_id, db_id, catalog))
+    async def set_catalog(self, workspace_id, db_id, catalog):
+        self.set_catalog_calls.append((workspace_id, db_id, catalog))
 
-    async def trust_level(self, user_id, db_id):
+    async def trust_level(self, workspace_id, db_id):
         return {"level": "Supervised", "verified": 0, "pct": 8, "note": ""}
 
 
@@ -69,25 +69,25 @@ def test_save_raises_409_when_not_connected():
     db = DummyDB(connected=False)
     kb = DummyKB()
     with pytest.raises(HTTPException) as exc:
-        asyncio.run(onboard_ctrl.save("u1", db, kb, _req()))
+        asyncio.run(onboard_ctrl.save("w1", db, kb, _req()))
     assert exc.value.status_code == 409
 
 
-def test_save_sets_glossary_with_user_id_and_db_id():
+def test_save_sets_glossary_with_workspace_id_and_db_id():
     db = DummyDB()
     kb = DummyKB()
     req = _req(
         glossary=[{"term": "Revenue", "maps_to": "orders.total", "sql_hint": ""}]
     )
-    asyncio.run(onboard_ctrl.save("u1", db, kb, req))
+    asyncio.run(onboard_ctrl.save("w1", db, kb, req))
     assert len(kb.glossary_calls) == 1
-    user_id, db_id, terms = kb.glossary_calls[0]
-    assert user_id == "u1"
-    assert db_id == "db-u1"
+    workspace_id, db_id, terms = kb.glossary_calls[0]
+    assert workspace_id == "w1"
+    assert db_id == "db-w1"
     assert terms == [{"term": "Revenue", "maps_to": "orders.total", "sql_hint": ""}]
 
 
-def test_save_adds_each_starter_as_verified_with_user_id():
+def test_save_adds_each_starter_as_verified_with_workspace_id():
     db = DummyDB()
     kb = DummyKB()
     req = _req(
@@ -104,18 +104,18 @@ def test_save_adds_each_starter_as_verified_with_user_id():
             },
         ]
     )
-    asyncio.run(onboard_ctrl.save("u1", db, kb, req))
+    asyncio.run(onboard_ctrl.save("w1", db, kb, req))
     assert len(kb.verified_calls) == 2
     assert kb.verified_calls[0] == (
-        "u1",
-        "db-u1",
+        "w1",
+        "db-w1",
         "How many orders?",
         "SELECT COUNT(*) FROM orders",
         "count",
     )
     assert kb.verified_calls[1] == (
-        "u1",
-        "db-u1",
+        "w1",
+        "db-w1",
         "Total revenue?",
         "SELECT SUM(x) FROM orders",
         "sum",
@@ -128,20 +128,20 @@ def test_save_seeds_catalog_backbone_when_catalog_empty(monkeypatch):
     monkeypatch.setattr(
         onboard_ctrl, "suggest_from_schema", lambda schema: {"joins": ["fake-join"]}
     )
-    asyncio.run(onboard_ctrl.save("u1", db, kb, _req()))
-    assert kb.catalog_calls == [("u1", "db-u1")]
+    asyncio.run(onboard_ctrl.save("w1", db, kb, _req()))
+    assert kb.catalog_calls == [("w1", "db-w1")]
     assert len(kb.set_catalog_calls) == 1
-    user_id, db_id, catalog = kb.set_catalog_calls[0]
-    assert user_id == "u1"
-    assert db_id == "db-u1"
+    workspace_id, db_id, catalog = kb.set_catalog_calls[0]
+    assert workspace_id == "w1"
+    assert db_id == "db-w1"
     assert catalog == {"joins": ["fake-join"]}
 
 
 def test_save_does_not_reseed_catalog_when_not_empty():
     db = DummyDB()
     kb = DummyKB(catalog_empty=False)
-    asyncio.run(onboard_ctrl.save("u1", db, kb, _req()))
-    assert kb.catalog_calls == [("u1", "db-u1")]
+    asyncio.run(onboard_ctrl.save("w1", db, kb, _req()))
+    assert kb.catalog_calls == [("w1", "db-w1")]
     assert kb.set_catalog_calls == []
 
 
@@ -149,11 +149,11 @@ def test_save_returns_trust_level_scoped_to_user_and_db():
     db = DummyDB()
 
     class TrustKB(DummyKB):
-        async def trust_level(self, user_id, db_id):
+        async def trust_level(self, workspace_id, db_id):
             return {"level": "Trusted", "verified": 9, "pct": 100, "note": "n"}
 
     kb = TrustKB()
-    result = asyncio.run(onboard_ctrl.save("u1", db, kb, _req()))
+    result = asyncio.run(onboard_ctrl.save("w1", db, kb, _req()))
     assert result == {
         "ok": True,
         "trust": {"level": "Trusted", "verified": 9, "pct": 100, "note": "n"},
