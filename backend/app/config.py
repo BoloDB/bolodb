@@ -22,6 +22,8 @@ CONFIG_FILE = CONFIG_DIR / "config.json"
 SECRET_FILE = CONFIG_DIR / ".secret"
 _DB_URL_KEY_FILE = CONFIG_DIR / "db_url.key"
 
+ACTIVITY_LOG_RETENTION_DAYS = int(os.environ.get("ACTIVITY_LOG_RETENTION_DAYS", "30"))
+
 DEFAULTS = {
     "openrouter_key": "",
     "last_db_url": "",
