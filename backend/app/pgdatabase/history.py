@@ -15,13 +15,16 @@ async def save_query(
     confidence,
     conversation_id=None,
     restatement="",
+    user_id=None,
 ):
-    uid = _to_uuid(workspace_id)
+    wid = _to_uuid(workspace_id)
+    uid = _to_uuid(user_id) if user_id else None
     conv_id = _to_uuid(conversation_id) if conversation_id else None
     async with async_session() as session:
         try:
             qh = QueryHistory(
-                workspace_id=uid,
+                workspace_id=wid,
+                user_id=uid,
                 question=question,
                 sql=sql,
                 result=result,
@@ -51,6 +54,7 @@ async def get_query_history(workspace_id: str, limit: int = 100):
             d = {
                 "id": row.id,
                 "workspace_id": row.workspace_id,
+                "user_id": row.user_id,
                 "question": row.question,
                 "sql": row.sql,
                 "result": row.result,

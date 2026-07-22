@@ -17,6 +17,8 @@ def serialize_doc(doc):
     out["_id"] = str(out.pop("id", ""))
     if "user_id" in out and out["user_id"] is not None:
         out["user_id"] = str(out["user_id"])
+    if "workspace_id" in out and out["workspace_id"] is not None:
+        out["workspace_id"] = str(out["workspace_id"])
     if "conversation_id" in out and out["conversation_id"] is not None:
         out["conversation_id"] = str(out["conversation_id"])
     for key in ("created_at", "updated_at", "timestamp", "connected_at"):
