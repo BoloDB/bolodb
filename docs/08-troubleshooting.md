@@ -8,7 +8,7 @@ technical knowledge; the second is for whoever maintains the deployment.
 
 ## Part A — For users
 
-### "No Gemini API key is configured…"
+### "No OpenRouter API key is configured…"
 
 The AI has no key to work with.
 **Fix:** open **Settings** (gear icon in the sidebar) → paste a key →
@@ -122,11 +122,11 @@ refresh=True)` where appropriate).
 
 ### Everything AI-related fails instantly with no network calls
 
-`GeminiProvider.complete()` fails fast when `api_key` is empty — before any
+`OpenRouterProvider.complete()` fails fast when `api_key` is empty — before any
 HTTP. Check `GET /api/health`: it reports
-`{"provider": {"name": "gemini", "ok": false, "error": "No Gemini API key configured"}}`
+`{"provider": {"name": "openrouter", "ok": false, "error": "No OpenRouter API key configured"}}`
 in that state. Key resolution order: value saved in Settings beats the
-`GEMINI_API_KEY` env var (`backend/app/config.py` → `load_config()`).
+`OPENROUTER_API_KEY` env var (`backend/app/config.py` → `load_config()`).
 
 ### Google returned 404 for the model
 
@@ -140,14 +140,14 @@ Google renames models.
 The key in `config.json` is encrypted with the per-install secret in
 `~/.bolodb/.secret` (`backend/app/config.py` → `_fernet()`). If `.secret` is
 deleted or the config is copied to another machine without it, the stored key
-can no longer be decrypted — Gemini will reject it as invalid.
+can no longer be decrypted — OpenRouter will reject it as invalid.
 **Fix:** re-enter the key in Settings (it gets re-encrypted with the current
 secret). When backing up `~/.bolodb`, keep `config.json` and `.secret`
 together.
 
 ### Old config from the multi-provider era
 
-Config files written before the Gemini-only switch (provider `ollama` /
+Config files written before the OpenRouter-only switch (provider `ollama` /
 `claude` / `openai` / `groq`) are migrated silently on load —
 `load_config()` coerces provider+model and drops old vendor keys. Covered by
 `tests/test_config.py::test_load_config_migrates_old_provider_config`.
@@ -159,7 +159,7 @@ pip install -r backend/requirements.txt
 pytest tests -q
 ```
 
-All AI tests use a fake HTTP client (`tests/test_gemini.py`) — the suite
+All AI tests use a fake HTTP client (`tests/test_openrouter.py`) — the suite
 needs **no network and no API key**. If you touched the pipeline, the most
 valuable file to keep green is `tests/test_query_pipeline.py`.
 
@@ -167,7 +167,7 @@ valuable file to keep green is `tests/test_query_pipeline.py`.
 
 | Check | Expect |
 |---|---|
-| `GET /api/health` | `provider.name == "gemini"`, `ok: true` when a valid key is set |
-| `GET /api/state` | `config.api_keys_set.gemini == "set"`, connection info |
-| `~/.bolodb/config.json` | `{"provider": "gemini", "model": "gemini-2.5-…", "api_keys": {"gemini": "…"}}` |
-| Backend log | no repeated `Gemini transient HTTP …` warnings (would mean quota pressure) |
+| `GET /api/health` | `provider.name == "openrouter"`, `ok: true` when a valid key is set |
+| `GET /api/state` | `config.api_keys_set.openrouter == "set"`, connection info |
+| `~/.bolodb/config.json` | `{"provider": "openrouter", "model": "openrouter-2.5-…", "api_keys": {"openrouter": "…"}}` |
+| Backend log | no repeated `OpenRouter transient HTTP …` warnings (would mean quota pressure) |

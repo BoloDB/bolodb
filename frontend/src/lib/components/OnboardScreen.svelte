@@ -1,41 +1,24 @@
 <script lang="ts">
-  import { glossary as defaultGlossary, starters as defaultStarters } from '$lib/data';
   import { apiCall } from '$lib/api';
-  import type { SchemaTable, DbInfo, GlossaryItem, StarterItem } from '$lib/types';
+  import type { SchemaTable, DbInfo } from '$lib/types';
   import ProfileStep from '$lib/components/ProfileStep.svelte';
-  import GlossaryStep from '$lib/components/GlossaryStep.svelte';
-  import StartersStep from '$lib/components/StartersStep.svelte';
+  import { appState } from '$lib/appState.svelte';
+  import LoadingScreen from '$lib/components/ui/LoadingScreen.svelte';
 
   let { onDone, dbInfo, schema, onChangeDb }:
     { onDone: (count: number) => void; dbInfo: DbInfo | null; schema: SchemaTable[] | null; onChangeDb?: () => void } = $props();
 
-  let step = $state('profile');
-  let realGlossary: GlossaryItem[] | null = $state(null);
-  let realStarters: StarterItem[] | null = $state(null);
-  let confirmedGlossary: any[] | null = $state(null);
-  let loadErr = $state('');
+  let saving = $state(false);
 
-  const stepIndex = $derived(step === 'profile' ? 0 : step === 'glossary' ? 1 : 2);
-
-  async function loadOnboardData() {
-    loadErr = '';
-    const errors: string[] = [];
+  async function finishOnboarding() {
+    saving = true;
     try {
-      const [g, s] = await Promise.allSettled([
-        apiCall('/api/onboard/glossary', {}),
-        apiCall('/api/onboard/starters', {})
-      ]);
-      realGlossary = g.status === 'fulfilled' ? (g.value.glossary || []) : defaultGlossary;
-      realStarters = s.status === 'fulfilled' ? (s.value.starters || []) : defaultStarters;
-      if (g.status === 'rejected') errors.push('glossary');
-      if (s.status === 'rejected') errors.push('starters');
-      if (errors.length) {
-        loadErr = `Failed to load ${errors.join(' and ')} — using built-in examples instead.`;
-      }
+      await apiCall('/api/onboard/save', { starters: [] });
+      onDone(0);
     } catch (e: any) {
-      loadErr = e.message || "Couldn't reach the AI — using built-in examples instead.";
-      realGlossary = defaultGlossary;
-      realStarters = defaultStarters;
+      console.error(e);
+      appState.showError("Failed to save onboarding data. Please try again.");
+      saving = false;
     }
   }
 </script>
@@ -57,25 +40,11 @@
     <span class="ob-name">Bolo<span style="color:var(--brand)">DB</span></span>
   </div>
 
-  <div class="ob-dots" data-testid="onboard-stepper">
-    {#each [0, 1, 2] as i}
-      <span class="dot" style="width:{i === stepIndex ? '26px' : '10px'};background:{i <= stepIndex ? 'var(--brand)' : 'var(--surface-3)'}"></span>
-    {/each}
-  </div>
-
-  {#if loadErr}
-    <div class="ob-err">
-      <b>AI not available:</b> {loadErr} Setup continues with example data — you can re-run it later from Settings.
-    </div>
-  {/if}
-
   <div class="ob-step">
-    {#if step === 'profile'}
-      <ProfileStep onNext={async () => { await loadOnboardData(); step = 'glossary'; }} {schema} />
-    {:else if step === 'glossary'}
-      <GlossaryStep glossaryItems={realGlossary} onNext={(g) => { confirmedGlossary = g; step = 'starters'; }} onBack={() => { step = 'profile'; }} />
-    {:else if step === 'starters'}
-      <StartersStep starterItems={realStarters} glossary={confirmedGlossary || []} {onDone} onBack={() => { step = 'glossary'; }} />
+    {#if saving}
+      <LoadingScreen variant="default" message="Preparing your workspace..." />
+    {:else}
+      <ProfileStep onNext={finishOnboarding} {schema} />
     {/if}
   </div>
 
@@ -124,29 +93,6 @@
     letter-spacing: -0.02em;
     color: var(--ink);
   }
-  .ob-dots {
-    display: flex;
-    gap: 8px;
-    margin-bottom: 44px;
-  }
-  .dot {
-    height: 6px;
-    border-radius: 99px;
-    transition: all 0.4s var(--ease);
-  }
-  .ob-err {
-    max-width: 560px;
-    width: 100%;
-    margin-bottom: 20px;
-    padding: 11px 15px;
-    background: var(--c-med-tint);
-    border: 1px solid var(--border-2);
-    border-radius: var(--radius-sm);
-    color: var(--med-ink);
-    font-size: 13px;
-    font-weight: 550;
-    line-height: 1.5;
-  }
   .ob-step {
     width: 100%;
     display: flex;
@@ -159,5 +105,13 @@
     font-size: 11px;
     letter-spacing: 0.1em;
     color: var(--faint);
+  }
+
+  /* ---- CSS variable mapping from dark mode colors to light mode rgb (rough approx for glowing) ---- */
+  :global(.light) .ob {
+    --glow-rgb: 0, 194, 255;
+  }
+  :global(.dark) .ob {
+    --glow-rgb: 0, 194, 255;
   }
 </style>

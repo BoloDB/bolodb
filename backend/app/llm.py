@@ -71,30 +71,6 @@ SQL_SCHEMA = {
     },
 }
 
-GLOSSARY_SCHEMA = {
-    "name": "glossary",
-    "schema": {
-        "type": "object",
-        "properties": {
-            "glossary": {
-                "type": "array",
-                "items": {
-                    "type": "object",
-                    "properties": {
-                        "term": {"type": "string"},
-                        "maps_to": {"type": "string"},
-                        "sql_hint": {"type": "string"},
-                    },
-                    "required": ["term", "maps_to", "sql_hint"],
-                    "additionalProperties": False,
-                },
-            }
-        },
-        "required": ["glossary"],
-        "additionalProperties": False,
-    },
-}
-
 STARTERS_SCHEMA = {
     "name": "starters",
     "schema": {
@@ -269,6 +245,7 @@ class OpenRouterProvider(LLMProvider):
                 "Set OPENROUTER_API_KEY in the server environment.",
                 detail="empty api_key",
             )
+        temperature = kwargs.get("temperature", 0.1)
         messages = []
         if system:
             messages.append({"role": "system", "content": system})
@@ -277,7 +254,7 @@ class OpenRouterProvider(LLMProvider):
         completion_kwargs = {
             "model": self.model,
             "messages": messages,
-            "temperature": 0.1,
+            "temperature": temperature if temperature is not None else 0.1,
             "max_tokens": 4096,
         }
         if json_mode and schema:
@@ -664,6 +641,7 @@ async def suggest_catalog(provider, schema_text):
         "Produce the catalog.",
         json_mode=True,
         schema=CATALOG_SCHEMA,
+        temperature=0.5,
     )
     obj = raw if isinstance(raw, dict) else parse_json(raw)
     return {
@@ -674,25 +652,13 @@ async def suggest_catalog(provider, schema_text):
     }
 
 
-async def generate_glossary(provider, schema_text):
-    system = (
-        "Answer in English\n"
-        f"You are a database analyst.\n{schema_text}\n\n"
-        "Identify the 3 most important BUSINESS TERMS a non-technical user of this database would say "
-        "(e.g. revenue, active customer, best seller) and map each to plain language + a short SQL hint.\n"
-        'Return ONLY JSON: {"glossary":[{"term":"...","maps_to":"<plain>","sql_hint":"<sql>"}]}'
-    )
-    raw = await provider.complete(
-        system,
-        "Produce the glossary.",
-        json_mode=True,
-        schema=GLOSSARY_SCHEMA,
-    )
-    obj = raw if isinstance(raw, dict) else parse_json(raw)
-    return obj.get("glossary", [])
-
-
 async def generate_starters(provider, schema_text, dialect):
+    log.info(
+        "generate_starters: dialect=%s schema_text len=%d, preview=%s",
+        dialect,
+        len(schema_text),
+        schema_text[:300],
+    )
     system = (
         "Answer in English\n"
         f"You are a database analyst. {dialect} database.\n{schema_text}\n\n"
@@ -705,6 +671,13 @@ async def generate_starters(provider, schema_text, dialect):
         "Produce starter questions.",
         json_mode=True,
         schema=STARTERS_SCHEMA,
+        temperature=0.7,
     )
     obj = raw if isinstance(raw, dict) else parse_json(raw)
-    return obj.get("starters", [])
+    starters = obj.get("starters", [])
+    log.info(
+        "generate_starters: got %d starters, response preview=%s",
+        len(starters),
+        str(starters)[:200],
+    )
+    return starters

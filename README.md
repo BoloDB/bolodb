@@ -23,33 +23,29 @@ The easiest and recommended way to run BoloDB is using Docker. This ensures all 
    docker compose up -d
    ```
 4. Open [http://localhost:5173](http://localhost:5173) in your browser.
-5. Add your Gemini API key, connect a database (or click "Try with sample data"), and start asking!
+5. Set the `OPENROUTER_API_KEY` environment variable in your docker-compose or `.env` file, connect a database (or click "Try with sample data"), and start asking!
 
 ## The AI engine
 
-BoloDB uses **Google Gemini** for all AI operations. You only need one thing:
-a Gemini API key — there's a free tier, and it takes about a minute:
+BoloDB uses **OpenRouter** (specifically the `deepseek/deepseek-v4-flash` model) for all AI operations. You only need one thing:
+an OpenRouter API key.
 
-1. Go to https://aistudio.google.com/app/api-keys (sign in with any Google account).
-2. Click **Create API key** and copy it.
-3. Paste it into BoloDB on the connect screen (or later in Settings).
+1. Go to https://openrouter.ai/keys.
+2. Click **Create Key** and copy it.
+3. Set it as the `OPENROUTER_API_KEY` environment variable for your deployment.
 
-Deployments can instead set the `GEMINI_API_KEY` environment variable.
-
-| Model (pick in Settings) | Best for |
+| Model | Best for |
 |---|---|
-| `gemini-2.5-flash-lite` | Cheapest & fastest — small, simple databases |
-| `gemini-2.5-flash` (default) | Best cost/accuracy balance for most uses |
-| `gemini-2.5-pro` | Most accurate — large schemas, hard questions |
+| `deepseek/deepseek-v4-flash` (default) | Best cost/accuracy balance for most uses |
 
-**Privacy:** what's sent to Google to generate SQL is your question plus the
+**Privacy:** what's sent to the AI to generate SQL is your question plus the
 context BoloDB builds around it: the database *structure* (table/column names,
 keys), a few sample values and sample rows per table, your confirmed
 business-term glossary, previously verified question→SQL examples, and the
 last couple of conversation turns. **The prompt never includes** bulk table
-contents, query results, or credentials — the Gemini API key travels only in
+contents, query results, or credentials — the OpenRouter API key travels only in
 the request's authentication header. See
-[docs/03-the-ai-layer-gemini.md](docs/03-the-ai-layer-gemini.md) for exactly
+[docs/03-the-ai-layer-openrouter.md](docs/03-the-ai-layer-openrouter.md) for exactly
 what's in every prompt.
 
 ## Database connection strings
@@ -67,7 +63,7 @@ enforces read-only itself — see
 
 ## How it works
 
-1. **Connect** a database and add your Gemini API key
+1. **Connect** a database and ensure your OpenRouter API key is set in the environment.
 2. **Onboard** (first time) — BoloDB profiles the tables, confirms business-term meanings with you, and runs a few starter questions for you to verify
 3. **Ask** questions in plain English. Every answer includes:
    - A plain-English restatement ("I summed completed orders for this month")
@@ -99,7 +95,7 @@ The test suite needs no network and no API key — all AI calls are faked.
 
 ## Privacy
 
-- All learned knowledge and user settings are stored locally (`~/.bolodb/`) and in the local MongoDB container volume. The Gemini API key is encrypted at rest.
+- All learned knowledge and user settings are stored locally (`~/.bolodb/`) and in the local MongoDB container volume. The API key is read from the environment and never stored on disk.
 - To generate SQL, the AI is sent your question plus context: the schema, a few sample values/rows per table, your confirmed glossary terms, verified question→SQL examples, and recent conversation turns. The prompt never includes bulk table data, query results, or credentials (the API key is used only as the request's authentication header).
 - Queries run strictly read-only.
 - No telemetry, no cloud sync.

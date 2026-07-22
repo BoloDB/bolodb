@@ -17,3 +17,4 @@ credentials.json
 *.pem
 *.key
 .credentials
+docker-compose.override.yml

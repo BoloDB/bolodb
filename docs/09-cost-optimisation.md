@@ -7,7 +7,7 @@ output, verified examples) also makes answers *better*.
 
 ## Where AI cost comes from
 
-Gemini bills per token, input and output separately. For BoloDB, a
+OpenRouter bills per token, input and output separately. For BoloDB, a
 question's cost ≈
 
 ```text
@@ -26,7 +26,7 @@ that implements it.
 |---|---|---|---|
 | 1 | **Schema linking** — only relevant tables are sent, not the whole database | Biggest single saving on input tokens; also *improves* accuracy | `backend/app/schema_link.py` → `link_relevant_tables()` ([chapter 4](04-schema-linking.md)) |
 | 2 | **Compact schema rendering** — one dense line per table instead of CREATE TABLE dumps | ~3–5× fewer tokens per table | `schema_link.py` → `compact_schema()` |
-| 3 | **Structured output** — the model is constrained to a JSON schema; it cannot ramble, apologise, or wrap answers in prose | Output tokens = exactly the fields we parse | `backend/app/llm.py` → `responseSchema` in `GeminiProvider._build_body()` |
+| 3 | **Structured output** — the model is constrained to a JSON schema; it cannot ramble, apologise, or wrap answers in prose | Output tokens = exactly the fields we parse | `backend/app/llm.py` → `responseSchema` in `OpenRouterProvider._build_body()` |
 | 4 | **Thinking off for simple tasks** — glossary, starters and Explain don't need reasoning tokens | Removes the invisible thinking cost on 3 of 4 operations | `llm.py` → `thinking_budget=0` call sites |
 | 5 | **Thinking left dynamic for SQL generation** — the model spends reasoning only when the question is hard | Pay for reasoning only where it buys accuracy (deliberate: experience > cost) | `llm.py` → `generate_sql()` (no `thinking_budget` override) |
 | 6 | **Output caps** — `maxOutputTokens: 4096`, temperature 0.1 | Bounds worst-case output cost | `llm.py` → `_build_body()` |
@@ -44,11 +44,11 @@ In Settings (persisted via `backend/app/config.py`):
 
 | Model | Relative cost | Guidance |
 |---|---|---|
-| `gemini-2.5-flash-lite` | lowest | Small schema, straightforward questions, high volume |
-| `gemini-2.5-flash` (default) | low | The right answer for almost everyone |
-| `gemini-2.5-pro` | highest | Big schemas, complex analytical questions |
+| `deepseek-v4-flash` | lowest | Small schema, straightforward questions, high volume |
+| `deepseek-v4-flash` (default) | low | The right answer for almost everyone |
+| `deepseek-v4-flash` | highest | Big schemas, complex analytical questions |
 
-Gemini's API also has a **free tier** — for evaluation and light usage the
+OpenRouter's API also has a **free tier** — for evaluation and light usage the
 cost is simply zero. Current pricing/quotas: https://ai.google.dev/pricing.
 
 ## What we deliberately do NOT do
@@ -60,13 +60,13 @@ cost is simply zero. Current pricing/quotas: https://ai.google.dev/pricing.
 - **We don't disable thinking for SQL generation.** Hard questions benefit;
   dynamic thinking means simple questions barely spend any.
 - **We don't retry non-transient errors.** An invalid key or a blocked
-  prompt fails fast with a clear message ([chapter 3](03-the-ai-layer-gemini.md)).
+  prompt fails fast with a clear message ([chapter 3](03-the-ai-layer-openrouter.md)).
 
 ## Ideas for later (not implemented)
 
-- **Context caching** for the schema block — Gemini can cache repeated
+- **Context caching** for the schema block — OpenRouter can cache repeated
   prompt prefixes at a discount; worth it once per-database question volume
-  is high. Would slot into `GeminiProvider._build_body()`.
+  is high. Would slot into `OpenRouterProvider._build_body()`.
 - **Semantic retrieval** (embeddings) instead of word-overlap for verified
   answers — better example reuse at the same token cost. Would replace
   `_similarity()` in `knowledge.py`.

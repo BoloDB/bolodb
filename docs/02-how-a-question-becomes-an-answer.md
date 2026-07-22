@@ -51,7 +51,7 @@ only the relevant ones.
   `employees` or `audit_log` score zero and are dropped.
 - Foreign keys are then followed so the chosen tables can be JOINed
   (details in [chapter 4](04-schema-linking.md)).
-- How many tables are allowed depends on the Gemini model configured —
+- How many tables are allowed depends on the OpenRouter model configured —
   `model_budget()` in the same file.
 - On big databases (30+ tables), a cheap AI pre-pass shortlists candidate
   tables from a names-only catalog first — "two-stage linking", chapter 4.
@@ -70,7 +70,7 @@ This is the loop that actually produces the answer. **Where:**
 
 Each iteration (at most 3, and no new attempt after 60 seconds):
 
-1. **Generate.** The Gemini AI is asked for the SQL.
+1. **Generate.** The OpenRouter AI is asked for the SQL.
    *Code:* `backend/app/llm.py` → `generate_sql()`; the exact prompt text is
    assembled in `build_sql_system_prompt()` in the same file — open it to see
    precisely what the AI is told. The AI must reply in a fixed JSON shape
@@ -120,7 +120,7 @@ product's core flywheel.
 ```text
  Question ─▶ [1] knowledge lookup      knowledge.py
              [2] schema linking        schema_link.py
-             [3] generate ◀────┐       llm.py (Gemini)
+             [3] generate ◀────┐       llm.py (OpenRouter)
                  validate      │       sqlvalidate.py
                  execute       │       database.py
                  (repair) ─────┘       repair.py

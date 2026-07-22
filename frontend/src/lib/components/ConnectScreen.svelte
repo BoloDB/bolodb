@@ -5,6 +5,7 @@
   import { appState } from "$lib/appState.svelte";
   import posthog from "posthog-js";
   import { onMount } from "svelte";
+  import LoadingScreen from '$lib/components/ui/LoadingScreen.svelte';
 
   let {
     onConnect,
@@ -124,6 +125,13 @@
 </script>
 
 <div class="ob">
+  {#if connecting}
+    <LoadingScreen
+      variant="connect"
+      message={connecting === 'sample' ? 'Building sample data…' : 'Connecting to database…'}
+      submessage={connecting === 'sample' ? 'Loading a realistic demo store for you' : 'Verifying credentials and mapping your schema'}
+    />
+  {/if}
   <div class="ob-logo">
     <svg width="26" height="26" viewBox="0 0 256 256" fill="none">
       <path d="M 52 44 Q 52 30 66 30 L 190 30 Q 204 30 204 44 L 204 138 Q 204 152 190 152 L 116 152 L 88 176 L 92 152 L 66 152 Q 52 152 52 138 Z" stroke="var(--brand)" stroke-width="6" fill="none" />
@@ -237,6 +245,7 @@
     padding: 48px 24px 40px;
     min-height: 100vh;
     box-sizing: border-box;
+    position: relative;
     background: radial-gradient(1000px 600px at 50% -10%, rgba(var(--glow-rgb), 0.1) 0%, transparent 60%), var(--bg);
   }
   .ob-logo { display: flex; align-items: center; gap: 10px; margin-bottom: 44px; }

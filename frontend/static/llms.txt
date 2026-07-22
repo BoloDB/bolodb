@@ -1,6 +1,6 @@
 # BoloDB
 
-> BoloDB is an open-source text-to-SQL platform. Ask your database questions in plain English and get instant, verified SQL-backed answers powered by Google Gemini. Works with PostgreSQL, MySQL, SQL Server, SQLite, and any SQL database via connection string.
+> BoloDB is an open-source text-to-SQL platform. Ask your database questions in plain English and get instant, verified SQL-backed answers powered by OpenRouter. Works with PostgreSQL, MySQL, SQL Server, SQLite, and any SQL database via connection string.
 
 BoloDB was built for teams who want the speed of AI answers with the safety of verified SQL. Every query is read-only, every answer shows the generated SQL and a confidence score (High/Medium/Low), and business users can help train the model by verifying correct answers.
 
@@ -8,9 +8,9 @@ BoloDB was built for teams who want the speed of AI answers with the safety of v
 - **Type**: Open-source SaaS (self-hostable or hosted)
 - **License**: MIT
 - **Repository**: https://github.com/HAAHIT/bolodb
-- **Tech stack**: SvelteKit + FastAPI + PostgreSQL + Google Gemini
+- **Tech stack**: SvelteKit + FastAPI + PostgreSQL + OpenRouter
 - **Supported databases**: PostgreSQL, MySQL, SQL Server, SQLite, DuckDB
-- **Pricing**: Free (open source); users provide their own free Google Gemini API key
+- **Pricing**: Free (open source); users provide their own free OpenRouter API key
 - **Data privacy**: Only schema and question are sent to the AI — never actual row data. Queries run read-only.
 
 ## Docs and pages
@@ -24,5 +24,5 @@ BoloDB was built for teams who want the speed of AI answers with the safety of v
 - **What data leaves my machine?** Only your database schema (table/column names) and the question you ask. Actual row data stays on your database.
 - **Is my database safe?** Yes — every query is read-only and BoloDB won't execute writes.
 - **How accurate is BoloDB?** Every answer includes a confidence score. Users can verify correct answers to improve future results.
-- **What LLM does it use?** Google Gemini (gemini-2.5-flash, flash-lite, and pro tiers selectable by the user).
+- **What LLM does it use?** OpenRouter (deepseek-v4-flash, flash-lite, and pro tiers selectable by the user).
 - **Can I self-host?** Yes — everything is MIT-licensed and Docker-composable.

@@ -48,11 +48,17 @@
 {:else}
   <div style="display:flex;flex-direction:column;gap:2px;padding:0;margin-bottom:12px">
     {#if artifacts.length === 0}
-      <!-- Before the first stream event arrives the card would otherwise be
-           an empty box — show an explicit working state instead. -->
-      <div style="display:flex;align-items:center;gap:10px;padding:8px 14px;color:var(--muted);font-size:13px;font-weight:500">
-        <Spinner />
-        <span>Analyzing your question…</span>
+      <!-- Before the first stream event arrives show an animated thinking state -->
+      <div class="thinking-init">
+        <div class="thinking-init-row">
+          <Spinner />
+          <span class="thinking-init-label">Analyzing your question</span>
+          <span class="thinking-dots"><span>.</span><span>.</span><span>.</span></span>
+        </div>
+        <div class="thinking-skel-rows">
+          <div class="skel thinking-skel" style="width:72%;height:10px"></div>
+          <div class="skel thinking-skel" style="width:52%;height:10px;animation-delay:.18s"></div>
+        </div>
       </div>
     {/if}
     {#each artifacts as artifact, i}
@@ -180,3 +186,52 @@
     {/each}
   </div>
 {/if}
+
+<style>
+  .thinking-init {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 10px 14px;
+  }
+  .thinking-init-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    color: var(--muted);
+    font-size: 13px;
+    font-weight: 500;
+  }
+  .thinking-init-label {
+    color: var(--ink-2);
+    font-weight: 600;
+  }
+  /* animated ellipsis dots */
+  .thinking-dots {
+    display: inline-flex;
+    gap: 1px;
+    color: var(--brand);
+    font-weight: 700;
+  }
+  .thinking-dots span {
+    animation: dotFade 1.2s ease-in-out infinite;
+    opacity: 0;
+  }
+  .thinking-dots span:nth-child(1) { animation-delay: 0s; }
+  .thinking-dots span:nth-child(2) { animation-delay: 0.2s; }
+  .thinking-dots span:nth-child(3) { animation-delay: 0.4s; }
+  @keyframes dotFade {
+    0%, 60%, 100% { opacity: 0; }
+    30%            { opacity: 1; }
+  }
+  /* skeleton shimmer rows */
+  .thinking-skel-rows {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding-left: 26px;
+  }
+  .thinking-skel {
+    border-radius: 6px;
+  }
+</style>

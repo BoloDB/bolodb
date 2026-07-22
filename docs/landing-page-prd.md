@@ -266,7 +266,7 @@ implementation detail in the build plan.
 
 ### 7.7 Final CTA & footer
 - **LP-F-07.1 (M) Closing CTA.** Full-bleed aurora panel: "Ask your first
-  question in a minute.", the ~1-minute Gemini-key value prop, "Start for free" →
+  question in a minute.", the ~1-minute OpenRouter-key value prop, "Start for free" →
   `/signup`, secondary "Try with sample data".
 - **LP-F-07.2 (M) Footer.** Product links, docs, GitHub (OSS), license,
   "No telemetry. No cloud sync." reassurance.
@@ -286,7 +286,7 @@ implementation detail in the build plan.
   placeholder copy in the build plan and leave swap markers.
 - **CR-2 (M)** **Claims accuracy review.** Every privacy/security claim
   ("read-only", "only schema + question sent", "data stays yours", "no
-  telemetry") must be verified against `docs/03-the-ai-layer-gemini.md`,
+  telemetry") must be verified against `docs/03-the-ai-layer-openrouter.md`,
   `docs/05-safety-validation-and-self-repair.md`, and README before launch.
 - **CR-3 (S)** Any social proof (logos, quotes, numbers) must be real and
   approved, or omitted. No fabricated testimonials or metrics.

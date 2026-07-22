@@ -10,7 +10,7 @@ you just ask questions the way you'd ask a colleague:
 >
 > "Which product category brings in the most revenue?"
 
-BoloDB translates the question into SQL using Google's Gemini AI, runs it
+BoloDB translates the question into SQL using OpenRouter AI, runs it
 against your database, and shows you:
 
 1. **The answer** — a table of results (and the raw SQL, one tap away).
@@ -36,7 +36,7 @@ against your database, and shows you:
   the AI matches your wording to real data), your confirmed **glossary
   terms**, previously **verified question→SQL examples**, and the last couple
   of conversation turns. The prompt **never** includes bulk table contents,
-  query results, or credentials — your Gemini API key is used only as the
+  query results, or credentials — your OpenRouter API key is used only as the
   request's authentication header. See chapter 3 for the exact prompt
   contents.
 
@@ -66,7 +66,7 @@ more answers.
 
 ## What happens the first time you connect (onboarding)
 
-1. **Set up the AI** — paste a free Google Gemini API key
+1. **Set up the AI** — paste a free OpenRouter API key
    (get one at https://aistudio.google.com/app/api-keys). Screen:
    `frontend/src/lib/components/ConnectScreen.svelte`.
 2. **Connect a database** — or click *"Try with sample data"* to explore a
@@ -91,13 +91,13 @@ After onboarding you land in the chat screen
  FastAPI backend (backend/app)
     │
     ├── controllers/query.py ── the question→answer pipeline (the heart)
-    ├── llm.py ──────────────── the ONLY file that talks to Google Gemini
+    ├── llm.py ──────────────── the ONLY file that talks to OpenRouter
     ├── schema_link.py ──────── picks which tables the AI sees
     ├── sqlvalidate.py ──────── checks generated SQL against the real schema
     ├── repair.py ───────────── auto-fixes SQL that fails, with AI feedback
     ├── database.py ─────────── connects to YOUR database, read-only execution
     ├── knowledge.py ────────── remembers verified answers + glossary (SQLite)
-    └── config.py ───────────── settings: Gemini key + model (~/.bolodb/)
+    └── config.py ───────────── settings: OpenRouter key + model (~/.bolodb/)
 ```
 
 The next chapter walks a single question through this whole pipeline with
