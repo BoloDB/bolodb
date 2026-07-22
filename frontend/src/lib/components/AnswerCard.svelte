@@ -9,6 +9,7 @@
   import ResultChart from '$lib/components/charts/ResultChart.svelte';
   import Thinking from '$lib/components/Thinking.svelte';
   import Flywheel from '$lib/components/Flywheel.svelte';
+  import SaveQueryDialog from '$lib/components/SaveQueryDialog.svelte';
   import { detectChartData } from '$lib/components/charts/chartUtils';
 
   let { turn, onVerify, isLatest, liveArtifacts, onRegenerate, onEditPrompt }:
@@ -27,6 +28,7 @@
   let editing = $state(false);
   let editValue = $state('');
   let copyFeedback = $state<'response' | 'prompt' | null>(null);
+  let showSaveDialog = $state(false);
 
   const hasChartData = $derived(
     detectChartData(turn.columns || [], (turn.rows || []).map(r => r.map(String))) !== null
@@ -295,6 +297,11 @@
       <button class="tb-btn" onclick={() => onRegenerate?.(turn.id)} title="Regenerate">
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none"><path d="M1 4v6h6M23 20v-6h-6" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"/><path d="M20.5 6.5A9 9 0 004.9 9M3.5 17.5A9 9 0 0019.1 15" stroke="currentColor" stroke-width="2.1" stroke-linecap="round"/></svg>
       </button>
+      {#if turn.sql}
+      <button class="tb-btn" onclick={() => showSaveDialog = true} title="Save to Dashboard">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none"><path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M17 21v-8H7v8M7 3v5h8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
+      {/if}
       <button class="tb-btn" onclick={copyResponse} title="Copy response" style="position:relative">
         {#if copyFeedback === 'response'}
           <span class="tb-copied" aria-live="polite">Copied!</span>
@@ -313,6 +320,10 @@
     </div>
   {/if}
 </div>
+
+{#if showSaveDialog}
+  <SaveQueryDialog {turn} onClose={() => showSaveDialog = false} />
+{/if}
 
 <style>
   .tb-btn {
