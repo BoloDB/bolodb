@@ -2,6 +2,7 @@
   import { apiCall } from '$lib/api';
   import type { SchemaTable, DbInfo } from '$lib/types';
   import ProfileStep from '$lib/components/ProfileStep.svelte';
+  import { appState } from '$lib/appState.svelte';
   import LoadingScreen from '$lib/components/ui/LoadingScreen.svelte';
 
   let { onDone, dbInfo, schema, onChangeDb }:
@@ -12,11 +13,11 @@
   async function finishOnboarding() {
     saving = true;
     try {
-      await apiCall('/api/onboard/save', { glossary: [], starters: [] });
+      await apiCall('/api/onboard/save', { starters: [] });
       onDone(0);
     } catch (e: any) {
       console.error(e);
-      // We don't have a UI for this error right now, but this step shouldn't fail.
+      appState.showError("Failed to save onboarding data. Please try again.");
       saving = false;
     }
   }

@@ -4,6 +4,7 @@ import asyncio
 import logging
 from backend.app.semantic import suggest_from_schema
 from backend.app.llm import generate_starters
+from backend.app.pgdatabase.models import VerifiedQA
 
 log = logging.getLogger(__name__)
 
@@ -21,7 +22,10 @@ async def save(user_id, db, kb, req_data):
     if not db.connected(user_id):
         raise HTTPException(409, "No database connected")
     db_id = db.get_db_id(user_id)
-    await kb.set_glossary(user_id, db_id, [g.model_dump() for g in req_data.glossary])
+    if req_data.glossary is not None:
+        await kb.set_glossary(
+            user_id, db_id, [g.model_dump() for g in req_data.glossary]
+        )
     for s in req_data.starters:
         await kb.add_verified(
             user_id,
@@ -60,14 +64,22 @@ async def generate_starters_async(user_id, db, kb, providers):
         # Filter out starters that failed to execute
         valid_starters = [s for s in starters if not s.get("error")]
 
-        for s in valid_starters:
-            await kb.add_verified(
-                user_id,
-                db_id,
-                s["question"],
-                s["sql"],
-                s["restatement"],
-            )
+        async with kb._session_factory() as session:
+            for s in valid_starters:
+                session.add(
+                    VerifiedQA(
+                        user_id=user_id,
+                        db_id=db_id,
+                        question=s["question"],
+                        sql=s["sql"],
+                        restatement=s["restatement"],
+                    )
+                )
+            try:
+                await session.commit()
+            except Exception:
+                await session.rollback()
+                raise
 
         # Return the generated list of questions
         return {"starters": [s["question"] for s in valid_starters]}

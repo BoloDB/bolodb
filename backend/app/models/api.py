@@ -56,7 +56,7 @@ class StarterItem(BaseModel):
 
 
 class SaveOnboardReq(BaseModel):
-    glossary: list[GlossaryItem] = []
+    glossary: list[GlossaryItem] | None = None
     starters: list[StarterItem] = []
 
 

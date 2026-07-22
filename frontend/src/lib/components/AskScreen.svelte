@@ -473,6 +473,7 @@
     abortController?.abort();
     convLoadSeq++;
     loading = false;
+    convLoading = false;
     turns = [];
     activeConversationId = null;
     onActiveConversationChange(null);
