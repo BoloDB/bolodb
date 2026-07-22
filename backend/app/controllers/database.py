@@ -28,6 +28,7 @@ async def connect(db, kb, cfg, req_data, workspace_id=None):
                 dialect=result["dialect"],
                 db_id=result["db_id"],
                 table_count=result["tables"],
+                alias_name=getattr(req_data, "alias_name", None),
             )
         except Exception as e:
             logger.warning("Failed to save recent connection: %s", e)
@@ -77,12 +78,12 @@ async def connect_sample(db, kb, cfg, workspace_id=None):
     return result
 
 
-async def disconnect(workspace_id, db, cfg):
-    db.disconnect(workspace_id)
+async def disconnect(workspace_id, db, cfg, db_id=None):
+    db.disconnect(workspace_id, db_id)
     return {"ok": True}
 
 
-async def get_schema(workspace_id, db, refresh):
-    if not db.connected(workspace_id):
+async def get_schema(workspace_id, db, refresh, db_id=None):
+    if not db.connected(workspace_id, db_id):
         raise HTTPException(409, "No database connected")
-    return db.get_schema(workspace_id, refresh=refresh)
+    return db.get_schema(workspace_id, db_id=db_id, refresh=refresh)

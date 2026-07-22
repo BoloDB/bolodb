@@ -14,7 +14,7 @@ import backend.app.pgdatabase as mdb
 log = logging.getLogger(__name__)
 
 
-async def get_state(user_id, workspace_id, db, cfg, kb):
+async def get_state(user_id, workspace_id, db_id, db, cfg, kb):
     """
     Assemble the user's connection, configuration, onboarding, and knowledge state.
 
@@ -30,29 +30,25 @@ async def get_state(user_id, workspace_id, db, cfg, kb):
     config.pop("last_db_url", None)
     user = await mdb.get_user_by_id(user_id)
     s = {
-        "connected": db.connected(workspace_id) if workspace_id else False,
+        "connected": db.connected(workspace_id, db_id) if workspace_id else False,
         "config": config,
         "openrouter_ready": bool(os.environ.get("OPENROUTER_API_KEY")),
         "tour_completed": user.get("tour_completed", False) if user else False,
     }
-    if workspace_id and db.connected(workspace_id):
+    if workspace_id and db.connected(workspace_id, db_id):
+        actual_db_id = db_id or db.get_db_id(workspace_id, db_id)
         s["database"] = {
-            "url": db.get_info(workspace_id)["url"],
-            "dialect": db.get_dialect(workspace_id),
-            "db_id": db.get_info(workspace_id)["db_id"],
-            "tables": db.get_info(workspace_id)["tables"],
-            "has_knowledge": (
-                await kb.count_verified(workspace_id, db.get_db_id(workspace_id))
-            )
-            > 0,
+            "url": db.get_info(workspace_id, actual_db_id)["url"],
+            "dialect": db.get_dialect(workspace_id, actual_db_id),
+            "db_id": actual_db_id,
+            "tables": db.get_info(workspace_id, actual_db_id)["tables"],
+            "has_knowledge": (await kb.count_verified(workspace_id, actual_db_id)) > 0,
         }
-        s["trust"] = await kb.trust_level(workspace_id, db.get_db_id(workspace_id))
-        s["glossary"] = await kb.get_glossary(workspace_id, db.get_db_id(workspace_id))
+        s["trust"] = await kb.trust_level(workspace_id, actual_db_id)
+        s["glossary"] = await kb.get_glossary(workspace_id, actual_db_id)
         s["starters"] = [
             v["question"]
-            for v in (await kb.get_verified(workspace_id, db.get_db_id(workspace_id)))[
-                :6
-            ]
+            for v in (await kb.get_verified(workspace_id, actual_db_id))[:6]
         ]
     return s
 

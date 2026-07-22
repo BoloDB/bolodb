@@ -65,7 +65,9 @@ def _failure_payload(message, tables=None):
     }
 
 
-async def run_query(workspace_id, db, kb, cfg, providers, session_log, req_data):
+async def run_query(
+    workspace_id, db, kb, cfg, providers, session_log, req_data, db_id=None
+):
     """
     Generate, validate, and execute SQL for a user's question, with confidence scoring and repair attempts.
 
@@ -84,7 +86,7 @@ async def run_query(workspace_id, db, kb, cfg, providers, session_log, req_data)
     Raises:
         HTTPException: If no database is connected or the question is empty.
     """
-    if not db.connected(workspace_id):
+    if not db.connected(workspace_id, db_id=db_id):
         raise HTTPException(409, "No database connected")
     q = req_data.question.strip()
     if not q:
@@ -92,15 +94,15 @@ async def run_query(workspace_id, db, kb, cfg, providers, session_log, req_data)
     context = req_data.context
 
     # Step 1 — user knowledge: confirmed term meanings + similar verified answers.
-    db_id = db.get_db_id(workspace_id)
+    db_id = db_id or db.get_db_id(workspace_id)
     glossary = await kb.get_glossary(workspace_id, db_id)
     catalog = await kb.get_catalog(workspace_id, db_id)
     retrieved = await kb.retrieve_similar(workspace_id, db_id, q, k=3)
 
     # Step 2 — schema linking: budget for the configured model, then pick tables.
     budget = model_budget()
-    full_schema = db.get_schema(workspace_id)
-    dialect = db.get_dialect(workspace_id)
+    full_schema = db.get_schema(workspace_id, db_id=db_id)
+    dialect = db.get_dialect(workspace_id, db_id=db_id)
     context_tables = (
         extract_table_names_from_prev_query(context[-1].sql, dialect)
         if context
@@ -158,7 +160,7 @@ async def run_query(workspace_id, db, kb, cfg, providers, session_log, req_data)
         )
 
     async def _execute(sql):
-        return await run_in_threadpool(db.execute, workspace_id, sql)
+        return await run_in_threadpool(db.execute, workspace_id, sql, db_id=db_id)
 
     def _on_failure(sql, errors):
         nonlocal linked
@@ -221,9 +223,9 @@ async def run_query(workspace_id, db, kb, cfg, providers, session_log, req_data)
     return out
 
 
-async def explain(workspace_id, db, providers, req_data):
+async def explain(workspace_id, db, providers, req_data, db_id=None):
     """Translate a SQL query into plain English (trust feature)."""
-    if not db.connected(workspace_id):
+    if not db.connected(workspace_id, db_id=db_id):
         raise HTTPException(409, "No database connected")
     sql = (req_data.sql or "").strip()
     if not sql:
@@ -236,7 +238,7 @@ async def explain(workspace_id, db, providers, req_data):
         raise HTTPException(502, e.user_message)
 
 
-async def feedback(workspace_id, db, kb, session_log, req_data):
+async def feedback(workspace_id, db, kb, session_log, req_data, db_id=None):
     """
     Record feedback for a query and update verified knowledge when the feedback is positive.
 
@@ -253,7 +255,7 @@ async def feedback(workspace_id, db, kb, session_log, req_data):
     Raises:
         HTTPException: If no database is connected for the user.
     """
-    if not db.connected(workspace_id):
+    if not db.connected(workspace_id, db_id=db_id):
         raise HTTPException(409, "No database connected")
     session_log.log_feedback(req_data.query_id, req_data.verdict, req_data.reason)
     if req_data.verdict == "correct":
@@ -278,7 +280,7 @@ async def feedback(workspace_id, db, kb, session_log, req_data):
     return out
 
 
-async def verify(workspace_id, db, kb, req_data):
+async def verify(workspace_id, db, kb, req_data, db_id=None):
     """Mark a question and its SQL explanation as verified.
 
     Parameters:
@@ -293,7 +295,7 @@ async def verify(workspace_id, db, kb, req_data):
     Raises:
         HTTPException: If no database is connected for the user.
     """
-    if not db.connected(workspace_id):
+    if not db.connected(workspace_id, db_id=db_id):
         raise HTTPException(409, "No database connected")
     await kb.add_verified(
         workspace_id,
@@ -308,7 +310,7 @@ async def verify(workspace_id, db, kb, req_data):
     }
 
 
-async def execute(workspace_id, db, req_data):
+async def execute(workspace_id, db, req_data, db_id=None):
     """
     Execute the requested SQL statement against the user's connected database.
 
@@ -323,7 +325,7 @@ async def execute(workspace_id, db, req_data):
     Raises:
         HTTPException: If no database is connected or the SQL execution returns an error.
     """
-    if not db.connected(workspace_id):
+    if not db.connected(workspace_id, db_id=db_id):
         raise HTTPException(409, "No database connected")
     res = await run_in_threadpool(db.execute, workspace_id, req_data.sql)
     if "error" in res:
@@ -409,7 +411,9 @@ def _build_checks(verdict, schema=None):
 # ── Streaming query controller ────────────────────────────────────
 
 
-async def run_query_stream(workspace_id, db, kb, cfg, providers, session_log, req_data):
+async def run_query_stream(
+    workspace_id, db, kb, cfg, providers, session_log, req_data, db_id=None
+):
     """
     Stream the SQL generation, validation, execution, confidence, and result events for a question.
 
@@ -426,7 +430,7 @@ async def run_query_stream(workspace_id, db, kb, cfg, providers, session_log, re
         dict: Progress, error, or final-result event. The final result includes generated SQL,
             execution data, confidence information, and the recorded query identifier.
     """
-    if not db.connected(workspace_id):
+    if not db.connected(workspace_id, db_id=db_id):
         yield {"kind": "error", "message": "No database connected"}
         return
     q = req_data.question.strip()
@@ -441,7 +445,7 @@ async def run_query_stream(workspace_id, db, kb, cfg, providers, session_log, re
     catalog = await kb.get_catalog(workspace_id, dbid)
     retrieved = await kb.retrieve_similar(workspace_id, dbid, q, k=3)
     budget = model_budget()
-    full_schema = db.get_schema(workspace_id)
+    full_schema = db.get_schema(workspace_id, db_id=db_id)
     context_tables = (
         extract_table_names_from_prev_query(
             context[-1].sql, db.get_dialect(workspace_id)
