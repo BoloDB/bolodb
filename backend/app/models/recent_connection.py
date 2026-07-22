@@ -1,5 +1,6 @@
 import uuid
 from datetime import datetime
+from typing import Optional
 
 from sqlalchemy import String, Integer, Text, UniqueConstraint, DateTime, ForeignKey
 from sqlalchemy.dialects.postgresql import UUID as PgUUID
@@ -20,6 +21,7 @@ class RecentConnection(Base):
     )
     db_url: Mapped[str] = mapped_column(Text, nullable=False)
     display_url: Mapped[str] = mapped_column(String, nullable=False)
+    alias_name: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     dialect: Mapped[str] = mapped_column(String, nullable=False)
     db_id: Mapped[str] = mapped_column(String, nullable=False)
     table_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)

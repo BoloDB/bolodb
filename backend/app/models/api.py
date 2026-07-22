@@ -7,6 +7,7 @@ class ConfigUpdate(BaseModel):
 
 class ConnectReq(BaseModel):
     db_url: str
+    alias_name: str | None = None
 
 
 class ContextTurn(BaseModel):

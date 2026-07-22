@@ -113,7 +113,7 @@ def _decrypt_connection_url(value):
 
 
 async def save_recent_connection(
-    workspace_id, db_url, display_url, dialect, db_id, table_count
+    workspace_id, db_url, display_url, dialect, db_id, table_count, alias_name=None
 ):
     wid = _to_uuid(workspace_id)
     encrypted_url = _encrypt_connection_url(db_url)
@@ -129,6 +129,7 @@ async def save_recent_connection(
                     dialect=dialect,
                     db_id=db_id,
                     table_count=table_count,
+                    alias_name=alias_name,
                 )
                 .on_conflict_do_update(
                     index_elements=["workspace_id", "db_id"],
@@ -137,6 +138,9 @@ async def save_recent_connection(
                         display_url=display_url,
                         dialect=dialect,
                         table_count=table_count,
+                        alias_name=alias_name
+                        if alias_name is not None
+                        else RecentConnection.alias_name,
                         connected_at=func.now(),
                     ),
                 )
@@ -164,6 +168,7 @@ async def get_recent_connections(workspace_id: str, limit: int = 5):
                 "id": row.id,
                 "workspace_id": row.workspace_id,
                 "display_url": row.display_url,
+                "alias_name": row.alias_name,
                 "dialect": row.dialect,
                 "db_id": row.db_id,
                 "table_count": row.table_count,
@@ -211,6 +216,7 @@ async def get_recent_connection_by_db_id(
             "workspace_id": conn.workspace_id,
             "db_url": conn.db_url,
             "display_url": conn.display_url,
+            "alias_name": conn.alias_name,
             "dialect": conn.dialect,
             "db_id": conn.db_id,
             "table_count": conn.table_count,
@@ -219,3 +225,27 @@ async def get_recent_connection_by_db_id(
         if "db_url" in d:
             d["db_url"] = _decrypt_connection_url(d["db_url"])
         return serialize_doc(d)
+
+
+async def update_recent_connection_alias(
+    workspace_id: str, connection_id: str, alias_name: str | None
+) -> bool:
+    try:
+        wid = _to_uuid(workspace_id)
+        cid = _to_uuid(connection_id)
+    except (ValueError, TypeError):
+        return False
+    from sqlalchemy import update
+
+    async with async_session() as session:
+        try:
+            result = await session.execute(
+                update(RecentConnection)
+                .where(RecentConnection.id == cid, RecentConnection.workspace_id == wid)
+                .values(alias_name=alias_name)
+            )
+            await session.commit()
+            return result.rowcount > 0
+        except Exception:
+            await session.rollback()
+            raise
