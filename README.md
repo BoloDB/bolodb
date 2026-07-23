@@ -14,16 +14,26 @@ non-technical readers, with code pointers for developers at every step.
 
 ## Quick Start (Docker)
 
-The easiest and recommended way to run BoloDB is using Docker. This ensures all services (FastAPI Backend, SvelteKit Frontend, Nginx, and MongoDB) run seamlessly.
+The easiest and recommended way to run BoloDB is using Docker. This ensures all services (FastAPI Backend, SvelteKit Frontend, and Nginx) run seamlessly.
 
 1. Install [Docker Desktop](https://www.docker.com/products/docker-desktop/) (Windows/Mac) or Docker Engine (Linux).
 2. Open a terminal in the project directory.
-3. Start the application:
+3. Copy `.env.example` to `.env` and fill in required secrets.
+4. Start the application:
+
+   **Production / Coolify preview** (static frontend baked into nginx):
    ```bash
-   docker compose up -d
+   docker compose up --build -d
    ```
-4. Open [http://localhost:5173](http://localhost:5173) in your browser.
-5. Set the `OPENROUTER_API_KEY` environment variable in your docker-compose or `.env` file, connect a database (or click "Try with sample data"), and start asking!
+   Open [http://localhost](http://localhost).
+
+   **Local development** (Vite HMR):
+   ```bash
+   docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build
+   ```
+   Open [http://localhost:8080](http://localhost:8080) (nginx) or [http://localhost:5174](http://localhost:5174) (Vite).
+
+5. Set the `OPENROUTER_API_KEY` environment variable in your `.env` file, connect a database (or click "Try with sample data"), and start asking!
 
 ## The AI engine
 
@@ -78,10 +88,14 @@ The full pipeline, step by step with code pointers:
 ## Useful Docker Commands
 
 ```bash
-docker compose up -d           # Start the application in the background
-docker compose logs -f         # View live logs from all services
-docker compose down            # Stop all services
-docker compose build --no-cache # Rebuild all images from scratch
+# Production / Coolify
+docker compose up -d --build
+docker compose logs -f
+docker compose down
+
+# Local development (Vite HMR)
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build
+docker compose -f docker-compose.yml -f docker-compose.dev.yml down
 ```
 
 ## Running tests

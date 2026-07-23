@@ -33,39 +33,20 @@ services:
     networks:
       - bolodb-net
 
-  # ── Frontend: Svelte (Vite) dev server ──
-  frontend:
-    build:
-      context: ./frontend
-      dockerfile: DOCKERFILE.dev
-    # volumes:
-    #   - ./frontend:/app
-    #   - /app/node_modules
-    expose:
-      - "5173"
-    environment:
-      - BACKEND_URL=http://backend:4321
-      - PUBLIC_POSTHOG_PROJECT_TOKEN=${PUBLIC_POSTHOG_PROJECT_TOKEN}
-      - PUBLIC_POSTHOG_HOST=${PUBLIC_POSTHOG_HOST:-https://us.i.posthog.com}
-      - VITE_SUPABASE_URL=${SUPABASE_URL:?SUPABASE_URL must be set}
-      - VITE_SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY:?SUPABASE_ANON_KEY must be set}
-    depends_on:
-      backend:
-        condition: service_healthy
-    networks:
-      - bolodb-net
-
-  # ── Nginx: Reverse proxy + Vite dev server ──
+  # ── Nginx: static frontend + /api reverse proxy ──
+  # Production / Coolify: no separate Vite container. Frontend is baked
+  # into this image at build time (see nginx/DOCKERFILE).
   nginx:
     build:
-      context: ./nginx
-      dockerfile: DOCKERFILE
+      context: .
+      dockerfile: nginx/DOCKERFILE
+      args:
+        PUBLIC_POSTHOG_PROJECT_TOKEN: ${PUBLIC_POSTHOG_PROJECT_TOKEN:-}
+        PUBLIC_POSTHOG_HOST: ${PUBLIC_POSTHOG_HOST:-https://us.i.posthog.com}
     restart: unless-stopped
     ports:
       - "80:80"
     depends_on:
-      frontend:
-        condition: service_started
       backend:
         condition: service_healthy
     networks:
