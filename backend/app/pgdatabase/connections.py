@@ -53,6 +53,12 @@ def _build_recent_connection_cipher():
                     "is not encrypted. Re-run with RECENT_CONNECTIONS_MASTER_KEY unset "
                     "to regenerate, or set RECENT_CONNECTIONS_KEY directly."
                 )
+        elif persisted.startswith("v1:"):
+            raise RuntimeError(
+                "The connections key file is encrypted with a master key, but "
+                "RECENT_CONNECTIONS_MASTER_KEY is not set. Set it to the master key "
+                "the file was written with, or set RECENT_CONNECTIONS_KEY directly."
+            )
         else:
             loaded_secret = persisted
         key = base64.urlsafe_b64encode(hashlib.sha256(loaded_secret.encode()).digest())
@@ -90,9 +96,13 @@ def _encrypt_connection_url(db_url):
 
 
 def _decrypt_connection_url(value):
+    # A missing or unusable key configuration must not short-circuit the legacy
+    # and plaintext paths below — rows written before the current key scheme are
+    # still readable through them, and that migration path is the whole point of
+    # the fallbacks. Hence RuntimeError is caught alongside the Fernet errors.
     try:
         return _recent_connection_cipher().decrypt(value.encode()).decode()
-    except (InvalidToken, ValueError, TypeError):
+    except (InvalidToken, ValueError, TypeError, RuntimeError):
         pass
     jwt_secret = os.getenv("JWT_SECRET")
     if jwt_secret:

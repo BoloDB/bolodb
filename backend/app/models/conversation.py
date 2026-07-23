@@ -47,6 +47,9 @@ class QueryHistory(Base):
     result: Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True)
     confidence: Mapped[str] = mapped_column(String, nullable=False, default="low")
     restatement: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    # The model's chart choice for this result. Null for turns recorded before
+    # charts were part of the SQL generation output.
+    chart: Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True)
     conversation_id: Mapped[Optional[uuid.UUID]] = mapped_column(
         PgUUID(as_uuid=True),
         ForeignKey("conversations.id", ondelete="SET NULL"),

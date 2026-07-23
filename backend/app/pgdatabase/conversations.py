@@ -169,6 +169,7 @@ async def get_conversation(workspace_id: str, conversation_id: str):
                 "result_truncated": truncated,
                 "confidence": turn.confidence,
                 "restatement": turn.restatement,
+                "chart": turn.chart,
                 "conversation_id": turn.conversation_id,
                 "timestamp": turn.timestamp,
             }

@@ -16,6 +16,7 @@ async def save_query(
     conversation_id=None,
     restatement="",
     user_id=None,
+    chart=None,
 ):
     wid = _to_uuid(workspace_id)
     uid = _to_uuid(user_id) if user_id else None
@@ -30,6 +31,7 @@ async def save_query(
                 result=result,
                 confidence=confidence,
                 restatement=restatement,
+                chart=chart,
                 conversation_id=conv_id,
             )
             session.add(qh)

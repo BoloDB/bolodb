@@ -31,8 +31,8 @@ async def connect(db, kb, cfg, req_data, workspace_id=None, user_id=None):
                 table_count=result["tables"],
                 alias_name=getattr(req_data, "alias_name", None),
             )
-        except Exception as e:
-            logger.warning("Failed to save recent connection: %s", e)
+        except Exception:
+            logger.exception("Failed to save recent connection")
         await log_activity(
             workspace_id,
             user_id,
@@ -81,8 +81,8 @@ async def connect_sample(db, kb, cfg, workspace_id=None, user_id=None):
                 db_id=result["db_id"],
                 table_count=result["tables"],
             )
-        except Exception as e:
-            logger.warning("Failed to save recent connection: %s", e)
+        except Exception:
+            logger.exception("Failed to save recent connection")
         await log_activity(
             workspace_id,
             user_id,

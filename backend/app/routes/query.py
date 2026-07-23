@@ -79,6 +79,7 @@ async def query(
                     confidence=conf_str,
                     conversation_id=conversation_id,
                     restatement=out.get("restatement", ""),
+                    chart=out.get("chart"),
                 )
                 if conversation_id:
                     await mdb.touch_conversation(conversation_id)

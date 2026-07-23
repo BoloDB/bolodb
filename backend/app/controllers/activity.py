@@ -78,3 +78,28 @@ async def get_workspace_activity(
             }
             for log, email in rows
         ]
+
+
+# The UI route caps a page at 100 rows; an export should cover the whole
+# retention window, so it pages through instead of taking a single big limit.
+EXPORT_PAGE_SIZE = 500
+EXPORT_MAX_ROWS = 50_000
+
+
+async def iter_workspace_activity(workspace_id: str, event_type: str = None):
+    """Yield every retained activity row for a workspace, newest first."""
+    offset = 0
+    while offset < EXPORT_MAX_ROWS:
+        batch = await get_workspace_activity(
+            workspace_id,
+            limit=EXPORT_PAGE_SIZE,
+            offset=offset,
+            event_type=event_type,
+        )
+        if not batch:
+            return
+        for row in batch:
+            yield row
+        if len(batch) < EXPORT_PAGE_SIZE:
+            return
+        offset += EXPORT_PAGE_SIZE

@@ -85,6 +85,7 @@ async def run_repair_loop(
             "ok": bool,            # True if a candidate passed all checks
             "sql": str,            # the accepted SQL, or the last attempt on failure
             "restatement": str,
+            "chart": dict | None,  # the generator's chart choice, if it made one
             "result": dict | None, # execute() output when ok and an executor was given
             "attempts": [ {"sql", "stage", "errors"?}, ... ],
         }
@@ -130,6 +131,7 @@ async def run_repair_loop(
                 "sql": sql,
                 "restatement": last.get("restatement", ""),
                 "assumptions": last.get("assumptions", []),
+                "chart": last.get("chart"),
                 "result": result,
                 "attempts": attempts,
             }
@@ -140,6 +142,7 @@ async def run_repair_loop(
             "sql": sql,
             "restatement": last.get("restatement", ""),
             "assumptions": last.get("assumptions", []),
+            "chart": last.get("chart"),
             "result": None,
             "attempts": attempts,
         }
@@ -149,6 +152,7 @@ async def run_repair_loop(
         "sql": (last.get("sql") or "").strip(),
         "restatement": last.get("restatement", ""),
         "assumptions": last.get("assumptions", []),
+        "chart": last.get("chart"),
         "result": None,
         "attempts": attempts,
     }

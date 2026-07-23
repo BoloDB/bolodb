@@ -1,5 +1,5 @@
-import uuid
 import re
+import secrets
 from datetime import datetime, timedelta, timezone
 from fastapi import HTTPException
 from sqlalchemy import select, func
@@ -16,6 +16,32 @@ def slugify(text: str) -> str:
     text = text.lower()
     text = re.sub(r"[^a-z0-9]+", "-", text)
     return text.strip("-")
+
+
+# Crockford base32: no I, L, O or U, so a code survives being read aloud or
+# copied by hand without the 1/I and 0/O confusions.
+_CODE_ALPHABET = "0123456789ABCDEFGHJKMNPQRSTVWXYZ"
+
+
+def generate_invite_code() -> str:
+    """A short, human-readable invite code in the form BOLO-XXXX-XXXX."""
+    body = "".join(secrets.choice(_CODE_ALPHABET) for _ in range(8))
+    return f"BOLO-{body[:4]}-{body[4:]}"
+
+
+def normalize_invite_code(token: str) -> str:
+    """Canonicalise a pasted code so casing, spaces and stray hyphens still match.
+
+    Only applied to codes in our own format — legacy UUID tokens are left as
+    typed, since they are lowercase and hyphen-significant.
+    """
+    if not token:
+        return ""
+    stripped = token.strip()
+    compact = re.sub(r"[\s-]+", "", stripped).upper()
+    if not compact.startswith("BOLO") or len(compact) != 12:
+        return stripped
+    return f"BOLO-{compact[4:8]}-{compact[8:]}"
 
 
 async def list_workspaces(user_id: str):
@@ -183,7 +209,7 @@ async def invite_user(workspace_id: str, email: str, role: str, inviter_id: str)
             if member.scalar_one_or_none():
                 raise HTTPException(400, "User is already a member")
 
-        token = str(uuid.uuid4())
+        token = generate_invite_code()
         expires = datetime.now(timezone.utc) + timedelta(days=7)
 
         # Query existing invite for this workspace + email
@@ -364,6 +390,7 @@ async def get_invites(user_email: str):
 
 async def accept_invite(token: str, user_id: str, user_email: str):
     uid = _to_uuid(user_id)
+    token = normalize_invite_code(token)
     async with async_session() as session:
         result = await session.execute(
             select(WorkspaceInvite).where(

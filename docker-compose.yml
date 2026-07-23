@@ -12,6 +12,8 @@ services:
       - bolodb-app-data:/app/data
     environment:
       - JWT_SECRET=${JWT_SECRET:?JWT_SECRET must be set}
+      - RECENT_CONNECTIONS_MASTER_KEY=${RECENT_CONNECTIONS_MASTER_KEY:?RECENT_CONNECTIONS_MASTER_KEY must be set}
+      - RECENT_CONNECTIONS_KEY=${RECENT_CONNECTIONS_KEY:-}
       - OPENROUTER_API_KEY=${OPENROUTER_API_KEY:?OPENROUTER_API_KEY must be set}
       - DATABASE_URL=${DATABASE_URL:? Database URL must be set}
       - PYTHONUNBUFFERED=1

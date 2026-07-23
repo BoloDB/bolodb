@@ -1,3 +1,5 @@
+import logging
+
 from fastapi import APIRouter, Depends, HTTPException
 from backend.app.dependencies import (
     get_current_workspace,
@@ -11,6 +13,7 @@ from backend.app.models.api import ConnectReq
 import backend.app.controllers.database as ctrl
 import backend.app.pgdatabase as mdb
 
+log = logging.getLogger(__name__)
 router = APIRouter()
 
 
@@ -90,7 +93,16 @@ async def reconnect(
     db_id = request_body.get("db_id", "")
     if not db_id:
         raise HTTPException(400, "db_id is required")
-    conn = await mdb.get_recent_connection_by_db_id(workspace["workspace_id"], db_id)
+    try:
+        conn = await mdb.get_recent_connection_by_db_id(
+            workspace["workspace_id"], db_id
+        )
+    except RuntimeError:
+        log.exception("Could not decrypt stored connection for db_id=%s", db_id)
+        raise HTTPException(
+            409,
+            "Saved credentials could not be decrypted — please re-add this connection.",
+        )
     if not conn or not conn.get("db_url"):
         raise HTTPException(404, "Saved connection not found")
     req = ConnectReq(db_url=conn["db_url"])

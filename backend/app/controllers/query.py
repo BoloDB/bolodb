@@ -17,7 +17,14 @@ import time
 from fastapi import HTTPException
 from fastapi.concurrency import run_in_threadpool
 
-from backend.app.llm import LLMError, explain_sql, generate_sql, shortlist_tables
+from backend.app.llm import (
+    DEFAULT_CHART,
+    LLMError,
+    explain_sql,
+    generate_sql,
+    parse_chart_spec,
+    shortlist_tables,
+)
 from backend.app.repair import run_repair_loop, schema_validator
 from backend.app.schema_link import (
     compact_schema,
@@ -52,6 +59,7 @@ def _failure_payload(message, tables=None):
         "sql": "",
         "restatement": "",
         "assumptions": [],
+        "chart": dict(DEFAULT_CHART),
         "confidence": "low",
         "confidence_reason": message,
         "based_on_verified": False,
@@ -265,6 +273,7 @@ async def run_query(
         "sql": loop_result["sql"],
         "restatement": loop_result["restatement"],
         "assumptions": loop_result.get("assumptions", []),
+        "chart": parse_chart_spec(loop_result.get("chart")),
         "confidence": confidence,
         "confidence_reason": reason,
         "based_on_verified": based,
@@ -553,6 +562,7 @@ async def run_query_stream(
     max_iterations = _MAX_ATTEMPTS
     feedback = ""
     last_restatement = ""
+    last_chart = dict(DEFAULT_CHART)
     exec_result = None
     exec_elapsed = 0
 
@@ -602,12 +612,14 @@ async def run_query_stream(
         sql = (gen_result.get("sql") or "").strip()
         restatement = (gen_result.get("restatement") or "").strip()
         last_restatement = restatement
+        last_chart = parse_chart_spec(gen_result.get("chart"))
 
         if not sql:
             yield {"kind": "error", "message": "Model returned empty SQL"}
             return
 
         yield {"kind": "sql", "attempt": attempt, "sql": sql}
+        yield {"kind": "chart", "attempt": attempt, "chart": last_chart}
 
         verdict = validate_sql(
             sql, full_schema, _db_get_dialect(db, workspace_id, db_id)
@@ -715,6 +727,7 @@ async def run_query_stream(
         "answered": True,
         "sql": sql,
         "restatement": last_restatement,
+        "chart": last_chart,
         "confidence": confidence,
         "confidence_reason": reason,
         "based_on_verified": based,
@@ -755,6 +768,7 @@ async def run_query_stream(
                 confidence=conf_str,
                 conversation_id=conversation_id,
                 restatement=out.get("restatement", ""),
+                chart=out.get("chart"),
             )
             if conversation_id:
                 await mdb.touch_conversation(conversation_id)

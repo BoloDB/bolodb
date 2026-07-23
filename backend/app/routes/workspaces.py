@@ -1,4 +1,9 @@
+import csv
+import io
+import json
+
 from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import StreamingResponse
 from backend.app.dependencies import get_current_user, require_role
 from backend.app.models.workspace_api import (
     WorkspaceCreate,
@@ -110,4 +115,57 @@ async def get_activity_log(
 ):
     return await activity_ctrl.get_workspace_activity(
         workspace["workspace_id"], limit, offset, event_type
+    )
+
+
+@router.get("/api/workspaces/{workspace_id}/activity/export")
+async def export_activity_log(
+    workspace_id: str,
+    event_type: str = Query(None),
+    workspace=Depends(require_role("admin")),
+):
+    async def rows():
+        buf = io.StringIO()
+        writer = csv.writer(buf)
+
+        def flush():
+            buf.seek(0)
+            chunk = buf.read()
+            buf.seek(0)
+            buf.truncate(0)
+            return chunk
+
+        writer.writerow(
+            [
+                "timestamp",
+                "actor_email",
+                "event_type",
+                "resource_type",
+                "resource_id",
+                "details",
+            ]
+        )
+        yield flush()
+
+        async for a in activity_ctrl.iter_workspace_activity(
+            workspace["workspace_id"], event_type
+        ):
+            created = a.get("created_at")
+            writer.writerow(
+                [
+                    created.isoformat() if created else "",
+                    a.get("actor_email") or "",
+                    a.get("event_type") or "",
+                    a.get("resource_type") or "",
+                    a.get("resource_id") or "",
+                    json.dumps(a.get("metadata_") or {}, default=str),
+                ]
+            )
+            yield flush()
+
+    filename = f"activity-{workspace_id}.csv"
+    return StreamingResponse(
+        rows(),
+        media_type="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )

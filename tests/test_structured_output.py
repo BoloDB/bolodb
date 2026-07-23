@@ -2,7 +2,13 @@
 
 import asyncio
 
-from backend.app.llm import SQL_SCHEMA, generate_sql, parse_sql_output
+from backend.app.llm import (
+    DEFAULT_CHART,
+    SQL_SCHEMA,
+    generate_sql,
+    parse_chart_spec,
+    parse_sql_output,
+)
 
 
 # --- parse_sql_output -------------------------------------------------------
@@ -12,7 +18,12 @@ def test_parse_dict_input_normalized():
     out = parse_sql_output(
         {"sql": "SELECT 1", "restatement": "one", "assumptions": ["a"]}
     )
-    assert out == {"sql": "SELECT 1", "restatement": "one", "assumptions": ["a"]}
+    assert out == {
+        "sql": "SELECT 1",
+        "restatement": "one",
+        "assumptions": ["a"],
+        "chart": DEFAULT_CHART,
+    }
 
 
 def test_parse_plain_json_text():
@@ -48,12 +59,22 @@ def test_blank_assumptions_string_is_empty_list():
 def test_non_object_json_yields_defaults():
     # A JSON array isn't a valid response object -> safe defaults, no raise.
     out = parse_sql_output("[1, 2, 3]")
-    assert out == {"sql": "", "restatement": "", "assumptions": []}
+    assert out == {
+        "sql": "",
+        "restatement": "",
+        "assumptions": [],
+        "chart": DEFAULT_CHART,
+    }
 
 
 def test_garbage_text_yields_defaults():
     out = parse_sql_output("the model said no")
-    assert out == {"sql": "", "restatement": "", "assumptions": []}
+    assert out == {
+        "sql": "",
+        "restatement": "",
+        "assumptions": [],
+        "chart": DEFAULT_CHART,
+    }
 
 
 def test_non_string_sql_is_stringified():
@@ -63,7 +84,68 @@ def test_non_string_sql_is_stringified():
 
 
 def test_empty_dict_defaults():
-    assert parse_sql_output({}) == {"sql": "", "restatement": "", "assumptions": []}
+    assert parse_sql_output({}) == {
+        "sql": "",
+        "restatement": "",
+        "assumptions": [],
+        "chart": DEFAULT_CHART,
+    }
+
+
+# --- chart spec -------------------------------------------------------------
+
+
+def test_chart_spec_kept_when_valid():
+    out = parse_sql_output(
+        {
+            "sql": "x",
+            "restatement": "y",
+            "chart": {
+                "type": "line",
+                "x_axis": "month",
+                "y_axis": "revenue",
+                "title": "Revenue by month",
+                "reason": "a measure over time",
+            },
+        }
+    )
+    assert out["chart"] == {
+        "type": "line",
+        "x_axis": "month",
+        "y_axis": "revenue",
+        "title": "Revenue by month",
+        "reason": "a measure over time",
+    }
+
+
+def test_chart_type_is_lowercased():
+    assert parse_chart_spec({"type": "BAR"})["type"] == "bar"
+
+
+def test_unknown_chart_type_falls_back_to_table():
+    # A hallucinated type must not break rendering — a table always works.
+    assert parse_chart_spec({"type": "sankey", "x_axis": "a"}) == DEFAULT_CHART
+
+
+def test_missing_chart_falls_back_to_table():
+    assert parse_sql_output({"sql": "x", "restatement": "y"})["chart"] == DEFAULT_CHART
+
+
+def test_non_dict_chart_falls_back_to_table():
+    assert parse_chart_spec("line") == DEFAULT_CHART
+    assert parse_chart_spec(None) == DEFAULT_CHART
+
+
+def test_chart_axis_fields_coerced_to_strings():
+    spec = parse_chart_spec({"type": "bar", "x_axis": 7, "y_axis": "  total  "})
+    assert spec["x_axis"] == ""  # non-string dropped rather than stringified
+    assert spec["y_axis"] == "total"
+
+
+def test_chart_default_is_not_shared_between_calls():
+    first = parse_chart_spec({})
+    first["type"] = "mutated"
+    assert parse_chart_spec({})["type"] == "table"
 
 
 # --- SQL_SCHEMA -------------------------------------------------------------
@@ -73,9 +155,19 @@ def test_schema_shape():
     assert SQL_SCHEMA["name"] == "sql_result"
     schema = SQL_SCHEMA["schema"]
     assert schema["type"] == "object"
-    assert set(schema["required"]) == {"sql", "restatement", "assumptions"}
+    assert set(schema["required"]) == {"sql", "restatement", "assumptions", "chart"}
     assert schema["additionalProperties"] is False
     assert schema["properties"]["assumptions"]["type"] == "array"
+    chart = schema["properties"]["chart"]
+    assert chart["type"] == "object"
+    assert chart["properties"]["type"]["enum"] == [
+        "table",
+        "bar",
+        "line",
+        "area",
+        "pie",
+        "number",
+    ]
 
 
 # --- generate_sql wiring ----------------------------------------------------
