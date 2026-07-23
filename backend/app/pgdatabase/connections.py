@@ -20,7 +20,7 @@ _CONNECTIONS_KEY_FILE = CONFIG_DIR / "connections.key"
 
 
 def _recent_connections_master_cipher():
-    master = os.getenv("RECENT_CONNECTIONS_MASTER_KEY") or os.getenv("JWT_SECRET")
+    master = os.getenv("RECENT_CONNECTIONS_MASTER_KEY")
     if not master:
         return None
     master_key = base64.urlsafe_b64encode(hashlib.sha256(master.encode()).digest())
@@ -70,8 +70,7 @@ def _build_recent_connection_cipher():
     else:
         raise RuntimeError(
             "No encryption key configured for recent connections. Set "
-            "RECENT_CONNECTIONS_KEY or RECENT_CONNECTIONS_MASTER_KEY (or "
-            "both) in the environment, or set JWT_SECRET for migration."
+            "RECENT_CONNECTIONS_KEY or RECENT_CONNECTIONS_MASTER_KEY in the environment."
         )
     return Fernet(key)
 
