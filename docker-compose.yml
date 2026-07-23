@@ -43,7 +43,7 @@ services:
         PUBLIC_POSTHOG_HOST: ${PUBLIC_POSTHOG_HOST:-https://us.i.posthog.com}
     restart: unless-stopped
     ports:
-      - "80:80"
+      - "8080:8080"
     depends_on:
       backend:
         condition: service_healthy
