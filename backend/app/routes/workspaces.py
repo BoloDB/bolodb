@@ -5,6 +5,7 @@ import json
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
 from backend.app.dependencies import get_current_user, require_role
+from backend.app.pgdatabase import get_user_by_id
 from backend.app.models.workspace_api import (
     WorkspaceBulkInviteCreate,
     WorkspaceCreate,
@@ -157,7 +158,9 @@ async def resend_invite(
 
 @router.get("/api/workspaces/invites/me")
 async def get_invites(user=Depends(get_current_user)):
-    email = user.get("email")
+    user_id = user.get("user_id", user.get("sub"))
+    user_details = await get_user_by_id(user_id)
+    email = user_details.get("email") if user_details else None
     if not email:
         return []
     return await ctrl.get_invites(email)
@@ -166,9 +169,10 @@ async def get_invites(user=Depends(get_current_user)):
 @router.post("/api/workspaces/invites/{token}/accept")
 async def accept_invite(token: str, user=Depends(get_current_user)):
     user_id = user.get("user_id", user.get("sub"))
-    email = user.get("email")
+    user_details = await get_user_by_id(user_id)
+    email = user_details.get("email") if user_details else None
     if not email:
-        raise HTTPException(400, "User email not found in token")
+        raise HTTPException(400, "User email not found")
     return await ctrl.accept_invite(token, user_id, email)
 
 
