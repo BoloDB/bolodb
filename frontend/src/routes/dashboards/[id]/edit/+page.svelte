@@ -1,8 +1,8 @@
 <script lang="ts">
   import { page } from '$app/stores';
-  import { onMount, onDestroy } from 'svelte';
   import { apiCall } from '$lib/api';
   import { goto } from '$app/navigation';
+  import { appState } from '$lib/appState.svelte';
   import DashboardEditor from '$lib/components/DashboardEditor.svelte';
 
   let dashboardId = $derived($page.params.id);
@@ -10,26 +10,33 @@
   let panelData: Record<string, any> = $state({});
   let savedQueries: any[] = $state([]);
   let loading = $state(true);
+  let nameDraft = $state('');
+  let descDraft = $state('');
+  let savingMeta = $state(false);
 
   $effect(() => {
-    if (dashboardId) {
-      loadDashboard();
-    }
+    if (dashboardId) loadDashboard();
   });
+
+  function dashKey(d: any) {
+    return d?._id || d?.id;
+  }
 
   async function loadDashboard() {
     loading = true;
     try {
       const [dashRes, sqsRes] = await Promise.all([
         apiCall(`/api/dashboards/${dashboardId}`),
-        apiCall('/api/saved-queries')
+        apiCall('/api/saved-queries'),
       ]);
       dashboard = dashRes;
+      nameDraft = dashRes.name || '';
+      descDraft = dashRes.description || '';
       savedQueries = sqsRes.saved_queries || [];
       await fetchDashboardData();
     } catch (e) {
       console.error(e);
-      alert('Failed to load dashboard');
+      appState.showError('Failed to load dashboard');
       goto('/dashboards');
     } finally {
       loading = false;
@@ -38,30 +45,46 @@
 
   async function fetchDashboardData() {
     try {
-      const results = await apiCall(`/api/dashboards/${dashboardId}/data`);
-      panelData = results;
+      panelData = await apiCall(`/api/dashboards/${dashboardId}/data`);
     } catch (e) {
-      console.error("Failed to load panel data", e);
+      console.error('Failed to load panel data', e);
+    }
+  }
+
+  async function saveMeta() {
+    savingMeta = true;
+    try {
+      await apiCall(
+        `/api/dashboards/${dashboardId}`,
+        { name: nameDraft.trim() || 'Untitled Dashboard', description: descDraft.trim() },
+        'PATCH',
+      );
+      dashboard = { ...dashboard, name: nameDraft, description: descDraft };
+      appState.showToast({ title: 'Saved', body: 'Dashboard details updated.' });
+    } catch (e: any) {
+      appState.showError(e.message || 'Failed to update dashboard');
+    } finally {
+      savingMeta = false;
     }
   }
 
   async function saveDashboard(updates: any[]) {
     try {
       await apiCall(`/api/dashboards/${dashboardId}/panels/batch`, { updates }, 'PATCH');
-      alert('Dashboard saved!');
+      appState.showToast({ title: 'Layout saved', body: 'Panel positions updated.' });
     } catch (e) {
       console.error(e);
-      alert('Failed to save positions');
+      appState.showError('Failed to save panel positions');
     }
   }
 
   async function addPanel(panelConfig: any) {
     try {
       await apiCall(`/api/dashboards/${dashboardId}/panels`, panelConfig, 'POST');
-      await loadDashboard(); // reload to get new ID and data
+      await loadDashboard();
     } catch (e) {
       console.error(e);
-      alert('Failed to add panel');
+      appState.showError('Failed to add panel');
     }
   }
 
@@ -69,147 +92,113 @@
     if (!confirm('Remove this panel?')) return;
     try {
       await apiCall(`/api/dashboards/${dashboardId}/panels/${panelId}`, undefined, 'DELETE');
-      dashboard.panels = dashboard.panels.filter((p: any) => p.id !== panelId);
+      dashboard.panels = dashboard.panels.filter(
+        (p: any) => (p.id || p._id) !== panelId,
+      );
     } catch (e) {
       console.error(e);
-      alert('Failed to remove panel');
+      appState.showError('Failed to remove panel');
     }
   }
 </script>
 
-<div class="dash-layout edit-mode-bg">
+<div class="page">
   {#if loading && !dashboard}
-    <div class="loading-state">
-      <div class="spinner"></div>
-    </div>
+    <div class="loading"><div class="spinner"></div></div>
   {:else if dashboard}
-    <div class="dash-header glass-panel">
-      <div class="dash-header-left">
-        <div class="dash-icon-hero">✏️</div>
-        <div class="dash-title-stack">
-          <h1>Editing: {dashboard.name}</h1>
-          <p>Drag, drop, and configure your panels below.</p>
+    <header class="page-header">
+      <div class="meta">
+        <a href="/dashboards/{dashKey(dashboard)}" class="back">← Done editing</a>
+        <div class="meta-fields">
+          <input class="name-input" bind:value={nameDraft} placeholder="Dashboard name" />
+          <input class="desc-input" bind:value={descDraft} placeholder="Optional description" />
         </div>
       </div>
-      <div class="dash-header-actions">
-        <a href="/dashboards/{dashboard._id || dashboard.id}" class="btn-primary-glow">Done Editing</a>
-      </div>
-    </div>
+      <button class="btn primary" onclick={saveMeta} disabled={savingMeta}>
+        {savingMeta ? 'Saving…' : 'Save details'}
+      </button>
+    </header>
 
-    <div class="dash-content-full" style="padding: 32px 48px;">
-      <DashboardEditor
-        {dashboard}
-        {panelData}
-        {savedQueries}
-        onSave={saveDashboard}
-        onAdd={addPanel}
-        onRemove={deletePanel}
-      />
-    </div>
+    <DashboardEditor
+      {dashboard}
+      {panelData}
+      {savedQueries}
+      onSave={saveDashboard}
+      onAdd={addPanel}
+      onRemove={deletePanel}
+    />
   {/if}
 </div>
 
 <style>
-  /* Base Layout */
-  .dash-layout {
-    display: flex;
-    flex-direction: column;
-    height: 100vh;
-    background: var(--bg);
-    overflow-y: auto;
+  .page {
+    min-height: 100vh;
+    background:
+      radial-gradient(rgba(var(--brand-rgb), 0.05) 1px, transparent 1px),
+      var(--bg);
+    background-size: 22px 22px;
+    padding: 28px 48px 64px;
+    box-sizing: border-box;
   }
-
-  .edit-mode-bg {
-    background-image: radial-gradient(rgba(var(--brand-rgb), 0.05) 1px, transparent 1px);
-    background-size: 24px 24px;
-    background-color: var(--bg);
-  }
-
-  /* Glassmorphism Header */
-  .dash-header {
+  .page-header {
     display: flex;
     justify-content: space-between;
-    align-items: center;
-    padding: 24px 48px;
-    border-bottom: 1px solid var(--border);
-    position: sticky;
-    top: 0;
-    z-index: 50;
-  }
-
-  .glass-panel {
-    background: rgba(var(--surface-rgb), 0.85);
-    backdrop-filter: blur(16px);
-    -webkit-backdrop-filter: blur(16px);
-  }
-
-  .dash-header-left {
-    display: flex;
-    align-items: center;
-    gap: 20px;
-  }
-
-  .dash-icon-hero {
-    font-size: 32px;
-    background: linear-gradient(135deg, #f59e0b, #d97706);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 56px;
-    height: 56px;
-    border-radius: 16px;
-    background-color: rgba(245, 158, 11, 0.1);
-    box-shadow: 0 4px 12px rgba(245, 158, 11, 0.2);
-  }
-
-  .dash-title-stack h1 {
-    margin: 0;
-    font-size: 24px;
-    font-weight: 700;
-    letter-spacing: -0.5px;
-    color: var(--ink);
-  }
-
-  .dash-title-stack p {
-    margin: 4px 0 0;
-    font-size: 14px;
-    color: var(--muted);
-  }
-
-  .dash-header-actions {
-    display: flex;
-    align-items: center;
+    align-items: flex-end;
     gap: 16px;
+    margin-bottom: 24px;
+    flex-wrap: wrap;
+    padding-bottom: 18px;
+    border-bottom: 1px solid var(--border);
   }
-
-  /* Modern Buttons */
-  .btn-primary-glow {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    padding: 10px 20px;
-    font-size: 14px;
+  .back {
+    display: inline-block;
+    font-size: 13px;
     font-weight: 600;
-    color: white;
-    background: linear-gradient(135deg, var(--ok-ink), #10b981);
-    border: none;
-    border-radius: 8px;
-    cursor: pointer;
-    box-shadow: 0 4px 14px rgba(16, 185, 129, 0.4);
-    transition: all 0.2s ease;
+    color: var(--muted);
     text-decoration: none;
+    margin-bottom: 10px;
   }
-
-  .btn-primary-glow:hover {
-    transform: translateY(-1px);
-    box-shadow: 0 6px 20px rgba(16, 185, 129, 0.5);
+  .back:hover { color: var(--brand); }
+  .meta-fields { display: flex; flex-direction: column; gap: 8px; min-width: min(520px, 100%); }
+  .name-input, .desc-input {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 10px 12px;
+    color: var(--ink);
+    outline: none;
   }
-
-  .loading-state {
-    display: flex;
-    justify-content: center;
-    padding: 64px;
+  .name-input {
+    font-size: 20px;
+    font-weight: 750;
+    letter-spacing: -0.02em;
+  }
+  .desc-input { font-size: 14px; color: var(--ink-2); }
+  .name-input:focus, .desc-input:focus {
+    border-color: var(--brand);
+    box-shadow: 0 0 0 3px var(--ring);
+  }
+  .btn.primary {
+    background: var(--brand);
+    color: var(--on-brand);
+    border: none;
+    border-radius: 10px;
+    padding: 10px 16px;
+    font-size: 13.5px;
+    font-weight: 650;
+    cursor: pointer;
+  }
+  .btn.primary:disabled { opacity: 0.6; cursor: not-allowed; }
+  .loading { display: grid; place-items: center; padding: 80px; }
+  .spinner {
+    width: 28px; height: 28px;
+    border: 2.5px solid var(--border-2);
+    border-top-color: var(--brand);
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  @media (max-width: 720px) {
+    .page { padding: 20px 16px 48px; }
   }
 </style>

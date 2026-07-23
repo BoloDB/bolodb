@@ -6,350 +6,282 @@
 
   let dashboards = $state<any[]>([]);
   let loading = $state(true);
-  // let loading = $state(true);
+  let creating = $state(false);
+  let error = $state('');
+
+  const canEdit = $derived(
+    appState.activeWorkspace?.role === 'admin' ||
+      appState.activeWorkspace?.role === 'owner',
+  );
 
   onMount(async () => {
+    if (!appState.isLoaded) await appState.init(false);
     await fetchDashboards();
   });
 
   async function fetchDashboards() {
     loading = true;
+    error = '';
     try {
       const res = await apiCall('/api/dashboards');
-      if (res.dashboards) {
-        dashboards = res.dashboards;
-      }
-    } catch (e) {
+      dashboards = res.dashboards || [];
+    } catch (e: any) {
       console.error(e);
+      error = e.message || 'Failed to load dashboards';
     } finally {
       loading = false;
     }
   }
 
+  function dashId(d: any) {
+    return d._id || d.id;
+  }
+
   async function createDashboard() {
+    creating = true;
     try {
-      const res = await apiCall('/api/dashboards', {
-        name: 'Untitled Dashboard',
-        description: ''
-      }, 'POST');
+      const res = await apiCall(
+        '/api/dashboards',
+        { name: 'Untitled Dashboard', description: '' },
+        'POST',
+      );
       await fetchDashboards();
-      goto(`/dashboards/${res._id || res.id}/edit`);
+      goto(`/dashboards/${dashId(res)}/edit`);
     } catch (e: any) {
       console.error(e);
       appState.showError(e.message || 'Failed to create dashboard.');
+    } finally {
+      creating = false;
     }
   }
 </script>
 
-<div class="dash-layout">
-  <div class="dash-header glass-panel">
-    <div class="dash-header-left">
-      <div class="dash-icon-hero">📊</div>
-      <div class="dash-title-stack">
-        <h1>Dashboards</h1>
-        <p>Analytics, charts, and metrics for your workspace</p>
-      </div>
+<div class="page">
+  <header class="page-header">
+    <div>
+      <p class="eyebrow">Analytics</p>
+      <h1>Dashboards</h1>
+      <p class="sub">
+        Build live charts from saved queries in
+        <strong>{appState.activeWorkspace?.name || 'your workspace'}</strong>.
+      </p>
     </div>
-    <div class="dash-header-actions">
-      <button class="btn-secondary" onclick={() => goto('/chat')}>Back to Chat</button>
-      {#if appState.activeWorkspace?.role === 'admin' || appState.activeWorkspace?.role === 'owner'}
-        <button class="btn-primary-glow" onclick={createDashboard}>
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="margin-right:8px">
-            <line x1="12" y1="5" x2="12" y2="19"></line>
-            <line x1="5" y1="12" x2="19" y2="12"></line>
-          </svg>
-          New Dashboard
+    <div class="actions">
+      <button class="btn ghost" onclick={() => goto('/chat')}>Back to chat</button>
+      {#if canEdit}
+        <button class="btn primary" onclick={createDashboard} disabled={creating}>
+          {creating ? 'Creating…' : 'New dashboard'}
         </button>
       {/if}
     </div>
-  </div>
+  </header>
 
-  <div class="dash-content">
-    {#if loading}
-      <div class="loading-state">
-        <div class="spinner"></div>
+  {#if error}
+    <div class="banner error">{error}</div>
+  {/if}
+
+  {#if loading}
+    <div class="loading"><div class="spinner"></div></div>
+  {:else if dashboards.length === 0}
+    <div class="empty">
+      <div class="empty-icon" aria-hidden="true">
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></svg>
       </div>
-    {:else if dashboards.length === 0}
-      <div class="empty-state glass-panel">
-        <div class="empty-icon">📈</div>
-        <h3>No dashboards yet</h3>
-        <p>Get started by creating your first dashboard to visualize data.</p>
-        {#if appState.activeWorkspace?.role === 'admin' || appState.activeWorkspace?.role === 'owner'}
-          <button class="btn-primary-glow" style="margin-top:20px" onclick={createDashboard}>
-            Create Dashboard
-          </button>
-        {/if}
-      </div>
-    {:else}
-      <div class="dash-grid">
-        {#each dashboards as dash}
-          <a href="/dashboards/{dash._id || dash.id}" class="dash-card group">
-            <div class="card-icon">📊</div>
-            <div class="card-content">
-              <h3>{dash.name}</h3>
-              <p>{dash.description || 'No description provided.'}</p>
-            </div>
-            <div class="card-footer">
-              <span>Updated {new Date(dash.updated_at).toLocaleDateString()}</span>
-              <div class="card-arrow group-hover-arrow">→</div>
-            </div>
-          </a>
-        {/each}
-      </div>
-    {/if}
-  </div>
+      <h3>No dashboards yet</h3>
+      <p>Create a dashboard, save queries from chat, then pin them as chart panels.</p>
+      {#if canEdit}
+        <button class="btn primary" onclick={createDashboard} disabled={creating}>
+          Create dashboard
+        </button>
+      {:else}
+        <p class="muted">Ask a workspace admin to create the first dashboard.</p>
+      {/if}
+    </div>
+  {:else}
+    <div class="grid">
+      {#each dashboards as dash}
+        <a href="/dashboards/{dashId(dash)}" class="card">
+          <div class="card-top">
+            <span class="badge">Dashboard</span>
+            <span class="arrow">→</span>
+          </div>
+          <h3>{dash.name}</h3>
+          <p>{dash.description || 'No description'}</p>
+          <div class="card-meta">
+            Updated {dash.updated_at ? new Date(dash.updated_at).toLocaleDateString() : '—'}
+          </div>
+        </a>
+      {/each}
+    </div>
+  {/if}
 </div>
 
-
-
 <style>
-  /* Base Layout */
-  .dash-layout {
-    display: flex;
-    flex-direction: column;
-    height: 100vh;
-    background: var(--bg);
-    overflow-y: auto;
+  .page {
+    min-height: 100vh;
+    background:
+      radial-gradient(900px 420px at 10% -10%, rgba(var(--brand-rgb), 0.08), transparent 60%),
+      var(--bg);
+    padding: 40px 48px 64px;
+    box-sizing: border-box;
   }
-
-  /* Glassmorphism Header */
-  .dash-header {
+  .page-header {
     display: flex;
     justify-content: space-between;
-    align-items: center;
-    padding: 32px 48px;
-    border-bottom: 1px solid var(--border);
-    position: sticky;
-    top: 0;
-    z-index: 10;
+    align-items: flex-end;
+    gap: 24px;
+    margin-bottom: 36px;
+    flex-wrap: wrap;
   }
-
-  .glass-panel {
-    background: rgba(var(--surface-rgb), 0.7);
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
-  }
-
-  .dash-header-left {
-    display: flex;
-    align-items: center;
-    gap: 20px;
-  }
-
-  .dash-icon-hero {
-    font-size: 32px;
-    background: linear-gradient(135deg, var(--brand), #8b5cf6);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 56px;
-    height: 56px;
-    border-radius: 16px;
-    background-color: rgba(var(--brand-rgb), 0.1);
-    box-shadow: 0 4px 12px rgba(var(--brand-rgb), 0.2);
-  }
-
-  .dash-title-stack h1 {
-    margin: 0;
-    font-size: 28px;
+  .eyebrow {
+    margin: 0 0 6px;
+    font-size: 11px;
     font-weight: 700;
-    letter-spacing: -0.5px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--faint);
+  }
+  h1 {
+    margin: 0;
+    font-size: 32px;
+    font-weight: 800;
+    letter-spacing: -0.03em;
     color: var(--ink);
   }
-
-  .dash-title-stack p {
-    margin: 4px 0 0;
+  .sub {
+    margin: 8px 0 0;
     font-size: 15px;
     color: var(--muted);
-  }
-
-  .dash-header-actions {
-    display: flex;
-    align-items: center;
-    gap: 16px;
-  }
-
-  /* Modern Buttons */
-  .btn-primary-glow {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    padding: 10px 20px;
-    font-size: 14px;
-    font-weight: 600;
-    color: white;
-    background: linear-gradient(135deg, var(--brand), #6366f1);
-    border: none;
-    border-radius: 8px;
-    cursor: pointer;
-    box-shadow: 0 4px 14px rgba(var(--brand-rgb), 0.4);
-    transition: all 0.2s ease;
-  }
-
-  .btn-primary-glow:hover {
-    transform: translateY(-1px);
-    box-shadow: 0 6px 20px rgba(var(--brand-rgb), 0.5);
-  }
-
-  .btn-primary-glow:disabled {
-    opacity: 0.6;
-    cursor: not-allowed;
-    transform: none;
-    box-shadow: none;
-  }
-
-  .btn-secondary {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    padding: 10px 20px;
-    font-size: 14px;
-    font-weight: 600;
-    color: var(--ink);
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    cursor: pointer;
-    transition: all 0.2s ease;
-  }
-
-  .btn-secondary:hover {
-    background: var(--border);
-  }
-
-  /* Content Area */
-  .dash-content {
-    flex: 1;
-    padding: 48px;
-    max-width: 1400px;
-    margin: 0 auto;
-    width: 100%;
-  }
-
-  /* Grid & Cards */
-  .dash-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
-    gap: 24px;
-  }
-
-  .dash-card {
-    display: flex;
-    flex-direction: column;
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 16px;
-    padding: 24px;
-    text-decoration: none;
-    color: inherit;
-    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-    position: relative;
-    overflow: hidden;
-  }
-
-  .dash-card::before {
-    content: '';
-    position: absolute;
-    top: 0; left: 0; right: 0;
-    height: 4px;
-    background: linear-gradient(90deg, var(--brand), #8b5cf6);
-    opacity: 0;
-    transition: opacity 0.3s ease;
-  }
-
-  .dash-card:hover {
-    transform: translateY(-4px);
-    box-shadow: 0 12px 24px rgba(0, 0, 0, 0.08);
-    border-color: transparent;
-  }
-
-  .dash-card:hover::before {
-    opacity: 1;
-  }
-
-  .card-icon {
-    font-size: 24px;
-    margin-bottom: 16px;
-    background: rgba(var(--brand-rgb), 0.1);
-    width: 48px;
-    height: 48px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    border-radius: 12px;
-  }
-
-  .card-content {
-    flex: 1;
-  }
-
-  .card-content h3 {
-    margin: 0 0 8px;
-    font-size: 18px;
-    font-weight: 600;
-    color: var(--ink);
-  }
-
-  .card-content p {
-    margin: 0 0 24px;
-    font-size: 14px;
-    color: var(--muted);
+    max-width: 520px;
     line-height: 1.5;
   }
-
-  .card-footer {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding-top: 16px;
-    border-top: 1px solid var(--border);
-    font-size: 13px;
+  .sub strong { color: var(--ink-2); font-weight: 650; }
+  .actions { display: flex; gap: 10px; flex-wrap: wrap; }
+  .btn {
+    border: none;
+    border-radius: 10px;
+    padding: 10px 16px;
+    font-size: 13.5px;
+    font-weight: 650;
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+  .btn.primary { background: var(--brand); color: var(--on-brand); }
+  .btn.primary:hover { filter: brightness(1.05); }
+  .btn.primary:disabled { opacity: 0.6; cursor: not-allowed; }
+  .btn.ghost {
+    background: transparent;
     color: var(--muted);
+    border: 1px solid var(--border);
   }
-
-  .group-hover-arrow {
-    transform: translateX(-10px);
-    opacity: 0;
-    transition: all 0.3s ease;
-    color: var(--brand);
-    font-weight: bold;
-    font-size: 16px;
+  .btn.ghost:hover { color: var(--ink); border-color: var(--border-2); }
+  .banner.error {
+    background: var(--c-low-tint);
+    color: var(--c-low-ink);
+    border: 1px solid #ebc6bd;
+    padding: 12px 14px;
+    border-radius: 10px;
+    margin-bottom: 20px;
+    font-size: 14px;
   }
-
-  .dash-card:hover .group-hover-arrow {
-    transform: translateX(0);
-    opacity: 1;
+  .loading { display: grid; place-items: center; padding: 80px; }
+  .spinner {
+    width: 28px; height: 28px;
+    border: 2.5px solid var(--border-2);
+    border-top-color: var(--brand);
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
   }
-
-  /* Empty State */
-  .empty-state {
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .empty {
+    max-width: 480px;
+    margin: 48px auto;
     text-align: center;
-    padding: 80px 40px;
-    border-radius: 24px;
-    border: 2px dashed var(--border);
-    max-width: 500px;
-    margin: 40px auto;
+    padding: 48px 32px;
+    background: var(--surface);
+    border: 1.5px dashed var(--border);
+    border-radius: 18px;
   }
-
   .empty-icon {
-    font-size: 48px;
-    margin-bottom: 24px;
-    opacity: 0.8;
+    width: 56px; height: 56px;
+    margin: 0 auto 16px;
+    border-radius: 14px;
+    display: grid; place-items: center;
+    background: var(--brand-tint);
+    color: var(--brand);
   }
-
-  .empty-state h3 {
-    font-size: 20px;
-    font-weight: 600;
-    margin-bottom: 12px;
+  .empty h3 { margin: 0 0 8px; font-size: 18px; color: var(--ink); }
+  .empty p { margin: 0 0 20px; color: var(--muted); font-size: 14.5px; line-height: 1.55; }
+  .muted { color: var(--muted); font-size: 13.5px; }
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 18px;
+    max-width: 1200px;
+  }
+  .card {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 22px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    text-decoration: none;
+    color: inherit;
+    box-shadow: var(--shadow-sm);
+    transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
+  }
+  .card:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow);
+    border-color: rgba(var(--brand-rgb), 0.35);
+  }
+  .card-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .badge {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--brand);
+    background: var(--brand-tint);
+    padding: 4px 8px;
+    border-radius: 999px;
+  }
+  .arrow {
+    color: var(--brand);
+    opacity: 0;
+    transform: translateX(-6px);
+    transition: all 0.18s ease;
+  }
+  .card:hover .arrow { opacity: 1; transform: none; }
+  .card h3 {
+    margin: 4px 0 0;
+    font-size: 17px;
+    font-weight: 700;
     color: var(--ink);
+    letter-spacing: -0.02em;
   }
-
-  .empty-state p {
-    font-size: 15px;
+  .card p {
+    margin: 0;
+    font-size: 13.5px;
     color: var(--muted);
-    margin-bottom: 0;
+    line-height: 1.45;
+    flex: 1;
   }
-
+  .card-meta {
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid var(--border);
+    font-size: 12.5px;
+    color: var(--faint);
+  }
+  @media (max-width: 720px) {
+    .page { padding: 28px 18px 48px; }
+    h1 { font-size: 26px; }
+  }
 </style>
