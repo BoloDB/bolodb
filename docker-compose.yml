@@ -44,6 +44,8 @@ services:
     restart: unless-stopped
     expose:
       - "8080"
+    labels:  # <--- ADD THIS
+      - "traefik.http.services.${COOLIFY_CONTAINER_NAME:-nginx}.loadbalancer.server.port=8080"
     depends_on:
       backend:
         condition: service_healthy
