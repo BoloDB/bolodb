@@ -74,6 +74,52 @@ async def update_panels_batch(dashboard_id: str, updates: list):
 
 # --- Execution ---
 
+_NUMERIC_TYPES = ("integer", "float", "numeric", "number")
+
+
+def _normalize_columns(columns, rows):
+    """
+    Return columns as [{"name", "type_name"}] whatever shape they were stored in.
+
+    Saved queries persist `columns` as a plain list of names (that is what the
+    chat turn carries), while a fresh execution only knows the names too. The
+    dashboard renderer picks its value axis by type, so infer the type from the
+    values actually returned rather than handing back bare strings.
+    """
+    out = []
+    for col in columns or []:
+        if isinstance(col, dict):
+            name = col.get("name")
+            type_name = col.get("type_name")
+        else:
+            name = col
+            type_name = None
+        if name is None:
+            continue
+        if not type_name:
+            type_name = _infer_type(name, rows)
+        out.append({"name": name, "type_name": type_name})
+    return out
+
+
+def _infer_type(name, rows):
+    for row in (rows or [])[:20]:
+        val = row.get(name) if isinstance(row, dict) else None
+        if val is None or val == "":
+            continue
+        if isinstance(val, bool):
+            return "string"
+        if isinstance(val, int):
+            return "integer"
+        if isinstance(val, float):
+            return "float"
+        try:
+            float(str(val).replace(",", "").strip())
+            return "float"
+        except (TypeError, ValueError):
+            return "string"
+    return "string"
+
 
 async def execute_dashboard_queries(workspace_id: str, dashboard_id: str, db_manager):
     dash = await mdb_dash.get_dashboard(workspace_id, dashboard_id)
@@ -106,18 +152,14 @@ async def execute_dashboard_queries(workspace_id: str, dashboard_id: str, db_man
                     return {"id": sq_key, "error": data["error"]}
 
                 # Charts assume array of objects keyed by column name
-                res = {
+                rows = data.get("rows", [])[:500]
+                # Trust the live result's column list — a saved query's stored
+                # columns can be stale if the underlying SQL was edited.
+                return {
                     "id": sq_key,
-                    "rows": data.get("rows", [])[:500],
-                    "columns": [
-                        {"name": c, "type_name": "string"}
-                        for c in data.get("columns", [])
-                    ],
+                    "rows": rows,
+                    "columns": _normalize_columns(data.get("columns", []), rows),
                 }
-                # Overwrite type_name with original if it exists
-                if sq.get("columns"):
-                    res["columns"] = sq["columns"]
-                return res
         except Exception as e:
             log.warning(f"Dashboard panel query failed sq_id={sq_id}: {e}")
             return {"id": sq_key, "error": str(e)}

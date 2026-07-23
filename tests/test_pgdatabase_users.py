@@ -25,6 +25,10 @@ def _fake_user(**overrides):
         email_verified=False,
         tour_completed=False,
         created_at=None,
+        first_name=None,
+        last_name=None,
+        avatar_url=None,
+        metadata_={},
     )
     defaults.update(overrides)
     return SimpleNamespace(**defaults)

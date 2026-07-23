@@ -98,11 +98,29 @@ def test_get_state_strips_last_db_url_from_public_config(monkeypatch):
     assert "last_db_url" not in state["config"]
 
 
+def _stub_recent_connection(monkeypatch, conn=None):
+    """The connected path looks up the stored connection for its alias.
+
+    It is a real DB call keyed by workspace UUID, so it has to be stubbed out
+    for these controller-level tests.
+    """
+
+    async def fake_get_recent_connection_by_db_id(workspace_id, db_id):
+        return conn
+
+    monkeypatch.setattr(
+        system_ctrl.mdb,
+        "get_recent_connection_by_db_id",
+        fake_get_recent_connection_by_db_id,
+    )
+
+
 def test_get_state_connected_scopes_kb_calls_to_user_and_db(monkeypatch):
     async def fake_get_user_by_id(user_id):
         return {"tour_completed": False}
 
     monkeypatch.setattr(system_ctrl.mdb, "get_user_by_id", fake_get_user_by_id)
+    _stub_recent_connection(monkeypatch, {"alias_name": "Prod"})
     db = DummyDB(connected=True, info={"url": "u", "db_id": "db-1", "tables": 5})
     kb = DummyKB(count=8)
 
@@ -122,6 +140,7 @@ def test_get_state_has_knowledge_false_when_no_verified(monkeypatch):
         return {"tour_completed": False}
 
     monkeypatch.setattr(system_ctrl.mdb, "get_user_by_id", fake_get_user_by_id)
+    _stub_recent_connection(monkeypatch)
     db = DummyDB(connected=True)
     kb = DummyKB(count=0)
     state = asyncio.run(system_ctrl.get_state("u1", "w1", "db1", db, {}, kb))

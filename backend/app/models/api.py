@@ -40,6 +40,8 @@ class FeedbackReq(BaseModel):
 class RawSQLReq(BaseModel):
     sql: str
     conversation_id: str | None = None
+    # Re-running SQL that is already in history shouldn't create a duplicate entry.
+    save_history: bool = True
 
 
 class GlossaryItem(BaseModel):

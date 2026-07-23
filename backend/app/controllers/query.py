@@ -396,7 +396,7 @@ async def execute(workspace_id, db, req_data, db_id=None):
     """
     if not _is_connected(db, workspace_id, db_id):
         raise HTTPException(409, "No database connected")
-    res = await run_in_threadpool(db.execute, workspace_id, req_data.sql)
+    res = await run_in_threadpool(db.execute, workspace_id, req_data.sql, db_id)
     if "error" in res:
         raise HTTPException(400, res["error"])
     return res

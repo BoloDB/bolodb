@@ -31,7 +31,6 @@
       verifiedCount={appState.verifiedCount}
       onVerify={(apiCount) => appState.verify(apiCount)}
       onUpdateStarters={(s) => appState.starters = s}
-      toast={appState.toast}
       realSchema={appState.realSchema}
       dbInfo={appState.dbInfo}
       starters={appState.starters}

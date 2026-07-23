@@ -1,6 +1,7 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { untrack } from 'svelte';
   import * as echarts from 'echarts';
+  import { parseNumeric } from '$lib/components/charts/chartUtils';
 
   let { panel, data } = $props();
 
@@ -13,19 +14,29 @@
     return v || fallback;
   }
 
-  onMount(() => {
-    if (panel.visualization_type !== 'table' && panel.visualization_type !== 'number' && chartDom) {
-      chart = echarts.init(chartDom);
-      updateChart();
-    }
+  /**
+   * Panel data arrives after mount, so the chart node only enters the DOM once
+   * the fetch resolves — initialising in onMount left every panel blank. Bind
+   * the lifecycle to the node itself instead.
+   */
+  $effect(() => {
+    if (!chartDom) return;
+    const instance = echarts.init(chartDom);
+    chart = instance;
+    // Untracked so a data refresh updates the chart instead of recreating it.
+    untrack(updateChart);
 
-    const handleResize = () => chart?.resize();
+    const handleResize = () => instance.resize();
     window.addEventListener('resize', handleResize);
+    // Grid panels resize without the window changing size.
+    const observer = new ResizeObserver(() => instance.resize());
+    observer.observe(chartDom);
 
     return () => {
       window.removeEventListener('resize', handleResize);
-      chart?.dispose();
-      chart = null;
+      observer.disconnect();
+      instance.dispose();
+      if (chart === instance) chart = null;
     };
   });
 
@@ -34,6 +45,22 @@
       updateChart();
     }
   });
+
+  /** Columns may be stored as bare names or as {name, type_name} objects. */
+  function columnName(col: any): string {
+    return typeof col === 'string' ? col : (col?.name ?? '');
+  }
+
+  function isNumericColumn(col: any, rows: any[]): boolean {
+    if (typeof col !== 'string') {
+      const t = col?.type_name;
+      if (t === 'integer' || t === 'float' || t === 'numeric' || t === 'number') return true;
+    }
+    const name = columnName(col);
+    const sample = rows.slice(0, 20).map((r) => r?.[name]).filter((v) => v != null && v !== '');
+    if (!sample.length) return false;
+    return sample.every((v) => parseNumeric(String(v)) !== null);
+  }
 
   function updateChart() {
     if (!chart || !data || !data.rows || data.rows.length === 0) return;
@@ -44,24 +71,23 @@
     const border = cssVar('--border', '#e3e8e5');
     const brand = cssVar('--brand', '#1b9e6b');
 
-    let xAxisCol = data.columns[0]?.name;
-    let yAxisCol = data.columns.find(
-      (c: any) =>
-        c.type_name === 'integer' ||
-        c.type_name === 'float' ||
-        c.type_name === 'numeric' ||
-        c.type_name === 'number',
-    )?.name;
+    const columns: any[] = data.columns || [];
+    const names = columns.map(columnName).filter(Boolean);
+    if (!names.length) return;
 
-    if (panel.viz_config?.x_axis) xAxisCol = panel.viz_config.x_axis;
-    if (panel.viz_config?.y_axis) yAxisCol = panel.viz_config.y_axis;
+    let xAxisCol = names[0];
+    let yAxisCol = columnName(columns.find((c) => isNumericColumn(c, data.rows)));
 
-    if (!yAxisCol && data.columns.length > 1) {
-      yAxisCol = data.columns[1]?.name;
-    }
+    // The saved axes win, but only when the result still has those columns —
+    // an edited query can drop them, and a missing key charts as all-undefined.
+    if (names.includes(panel.viz_config?.x_axis)) xAxisCol = panel.viz_config.x_axis;
+    if (names.includes(panel.viz_config?.y_axis)) yAxisCol = panel.viz_config.y_axis;
 
-    const xAxisData = data.rows.map((r: any) => r[xAxisCol]);
-    const seriesData = data.rows.map((r: any) => r[yAxisCol]);
+    if (!yAxisCol) yAxisCol = names.find((n) => n !== xAxisCol) || names[0];
+    if (xAxisCol === yAxisCol) xAxisCol = names.find((n) => n !== yAxisCol) || names[0];
+
+    const xAxisData = data.rows.map((r: any) => String(r[xAxisCol] ?? ''));
+    const seriesData = data.rows.map((r: any) => parseNumeric(String(r[yAxisCol] ?? '')));
 
     let option: any = {
       color: [brand],
@@ -79,7 +105,10 @@
           {
             type: 'pie',
             radius: ['42%', '68%'],
-            data: data.rows.map((r: any) => ({ name: r[xAxisCol], value: r[yAxisCol] })),
+            data: data.rows.map((r: any) => ({
+              name: String(r[xAxisCol] ?? ''),
+              value: parseNumeric(String(r[yAxisCol] ?? '')),
+            })),
             emphasis: {
               itemStyle: {
                 shadowBlur: 10,
@@ -176,6 +205,8 @@
           <div class="state"><p class="muted">No data</p></div>
         {/if}
       </div>
+    {:else if !data.rows?.length}
+      <div class="state"><p class="muted">No rows returned</p></div>
     {:else}
       <div bind:this={chartDom} class="chart-dom" data-panel={panelId} data-query={queryKey}></div>
     {/if}

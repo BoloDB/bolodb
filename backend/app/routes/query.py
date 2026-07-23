@@ -210,25 +210,31 @@ async def execute(
         ):
             conversation_id = None
         try:
-            await mdb.save_query(
-                workspace_id=workspace_id,
-                user_id=user_id,
-                question=req.sql,
-                sql=req.sql,
-                result=(out.get("rows") or [])[:MAX_SAVED_ROWS],
-                confidence="High",
-                conversation_id=conversation_id,
-                restatement="Direct SQL execution",
-            )
-            if conversation_id:
-                await mdb.touch_conversation(conversation_id)
+            if req.save_history:
+                await mdb.save_query(
+                    workspace_id=workspace_id,
+                    user_id=user_id,
+                    question=req.sql,
+                    sql=req.sql,
+                    result=(out.get("rows") or [])[:MAX_SAVED_ROWS],
+                    confidence="High",
+                    conversation_id=conversation_id,
+                    restatement="Direct SQL execution",
+                )
+                if conversation_id:
+                    await mdb.touch_conversation(conversation_id)
             await log_activity(
                 workspace_id,
                 user_id,
                 "query.executed",
                 "query",
                 None,
-                {"is_raw_sql": True, "db_id": db_id, "confidence": "High"},
+                {
+                    "is_raw_sql": True,
+                    "db_id": db_id,
+                    "confidence": "High",
+                    "is_rerun": not req.save_history,
+                },
             )
         except Exception:
             log.warning("Failed to persist direct SQL history", exc_info=True)

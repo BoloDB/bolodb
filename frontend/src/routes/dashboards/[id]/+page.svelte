@@ -12,6 +12,8 @@
   let loading = $state(true);
   let error = $state('');
   let pollInterval: ReturnType<typeof setInterval> | undefined;
+  let refreshing = $state(false);
+  let lastRefreshed: Date | null = $state(null);
 
   const canEdit = $derived(
     appState.activeWorkspace?.role === 'admin' ||
@@ -48,10 +50,14 @@
   }
 
   async function fetchDashboardData() {
+    refreshing = true;
     try {
       panelData = await apiCall(`/api/dashboards/${dashboardId}/data`);
+      lastRefreshed = new Date();
     } catch (e) {
       console.error('Failed to load panel data', e);
+    } finally {
+      refreshing = false;
     }
   }
 </script>
@@ -73,6 +79,14 @@
         {/if}
       </div>
       <div class="actions">
+        {#if lastRefreshed}
+          <span class="refreshed">
+            Updated {lastRefreshed.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+          </span>
+        {/if}
+        <button class="btn ghost" onclick={fetchDashboardData} disabled={refreshing}>
+          {refreshing ? 'Refreshing…' : 'Refresh'}
+        </button>
         {#if canEdit}
           <a href="/dashboards/{dashKey(dashboard)}/edit" class="btn primary">Edit dashboard</a>
         {/if}
@@ -137,7 +151,9 @@
     color: var(--ink);
   }
   .sub { margin: 6px 0 0; color: var(--muted); font-size: 14.5px; }
-  .actions { display: flex; gap: 10px; }
+  .actions { display: flex; gap: 10px; align-items: center; }
+  .refreshed { font-size: 12px; color: var(--faint); font-weight: 550; }
+  .btn:disabled { opacity: 0.6; cursor: default; }
   .btn {
     display: inline-flex;
     align-items: center;

@@ -5,7 +5,6 @@
     Turn,
     SchemaTable,
     DbInfo,
-    Toast,
     ThinkingArtifact,
     StreamEvent,
     Conversation,
@@ -15,7 +14,6 @@
   import AppShell from "$lib/components/AppShell.svelte";
   import AnswerCard from "$lib/components/AnswerCard.svelte";
   import SettingsTab from "$lib/components/SettingsTab.svelte";
-  import TrustToast from "$lib/components/TrustToast.svelte";
   import Spinner from '$lib/components/ui/Spinner.svelte';
   import LoadingScreen from '$lib/components/ui/LoadingScreen.svelte';
   import SlashCommandMenu from "$lib/components/ui/SlashCommandMenu.svelte";
@@ -28,7 +26,6 @@
     verifiedCount,
     onVerify,
     onUpdateStarters,
-    toast,
     realSchema,
     dbInfo,
     starters,
@@ -38,7 +35,6 @@
     verifiedCount: number;
     onVerify: (count?: number) => void;
     onUpdateStarters: (s: string[]) => void;
-    toast: Toast | null;
     realSchema: SchemaTable[] | null;
     dbInfo: DbInfo | null;
     starters: string[];
@@ -70,6 +66,8 @@
   let conversationTrigger = $state(0);
   let activeConversationId: string | null = $state(null);
   let abortController: AbortController | null = $state(null);
+  /** Turn ids whose SQL is being re-executed right now. */
+  let rerunning = $state<Set<string>>(new Set());
   let showScrollBtn = $state(false);
   let lastTurnCount = 0;
   let convLoadSeq = 0;
@@ -434,6 +432,43 @@
     requeryAt(idx, turns[idx].question);
   }
 
+  /**
+   * Re-run the SQL a turn already has, without going back to the model. Same
+   * question, fresh rows — the point is to refresh a result for free rather
+   * than spend tokens regenerating identical SQL.
+   */
+  async function rerunSql(turnId: string) {
+    const turn = turns.find((t) => t.id === turnId);
+    if (!turn?.sql || rerunning.has(turnId)) return;
+    rerunning = new Set([...rerunning, turnId]);
+    try {
+      const data = await apiCall("/api/execute", {
+        sql: turn.sql,
+        save_history: false,
+      });
+      turns = turns.map((t) =>
+        t.id === turnId
+          ? {
+              ...t,
+              columns: data.columns || [],
+              rows: rowsToArrays(data.columns || [], data.rows || []),
+              executionError: null,
+              resultTruncated: false,
+              lastRunAt: new Date().toISOString(),
+            }
+          : t,
+      );
+    } catch (e: any) {
+      appState.showError(
+        e?.message || "Couldn't re-run this query against your database.",
+      );
+    } finally {
+      const next = new Set(rerunning);
+      next.delete(turnId);
+      rerunning = next;
+    }
+  }
+
   function editAndRequery(turnId: string, newQuestion: string) {
     const idx = turns.findIndex((t) => t.id === turnId);
     if (idx === -1) return;
@@ -622,6 +657,8 @@
                 liveArtifacts={t.thinking ? currentArtifacts : undefined}
                 onRegenerate={regenerate}
                 onEditPrompt={editAndRequery}
+                onRerun={rerunSql}
+                rerunning={rerunning.has(t.id)}
               />
             {/each}
           {/if}
@@ -666,7 +703,6 @@
         </div>
       </div>
 
-      {#if toast}<TrustToast {toast} />{/if}
     {:else}
       <SettingsTab
         {dbInfo}

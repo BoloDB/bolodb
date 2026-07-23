@@ -9,6 +9,7 @@
   import { goto } from '$app/navigation';
   import type { Snippet } from 'svelte';
   import Sidebar from '$lib/components/Sidebar.svelte';
+  import InviteBell from '$lib/components/ui/InviteBell.svelte';
   import { apiCall, listDatabases } from '$lib/api';
   import { appState } from '$lib/appState.svelte';
   import type { DbInfo, SchemaTable } from '$lib/types';
@@ -200,6 +201,7 @@
             </div>
           {/if}
         </div>
+        <InviteBell />
       </div>
     {/if}
 
