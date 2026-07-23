@@ -14,6 +14,9 @@ class AppState {
   theme = $state("dark");
   openrouterReady = $state(false);
   activeConversationId = $state<string | null>(null);
+  // Set while a database switch is in flight, so any screen showing results can
+  // put up a loading state — the switch is triggered from the shared shell.
+  switchingDatabase = $state(false);
   workspaces = $state<any[]>([]);
   activeWorkspace = $state<any | null>(null);
   invites = $state<any[]>([]);
@@ -177,8 +180,9 @@ class AppState {
           dbId,
         );
     }
+    this.switchingDatabase = true;
     try {
-      const res = await apiCall("/api/reconnect", { db_id: dbId });
+      await apiCall("/api/reconnect", { db_id: dbId });
       const s = await apiCall("/api/state");
       if (s.database) {
         this.dbInfo = s.database;
@@ -186,11 +190,20 @@ class AppState {
       if (s.starters) {
         this.starters = s.starters;
       }
+      this.activeConversationId = null;
       this.realSchema = null;
       this.fetchSchemaAsync(true);
-    } catch (e) {
+      return true;
+    } catch (e: any) {
       console.error("Failed to switch DB:", e);
-      this.showError("Failed to switch database. It may have been deleted.");
+      // The backend explains *why* (unreachable, undecryptable credentials, no
+      // longer present); a generic message would hide all of that.
+      this.showError(
+        e?.message || "Failed to switch database. It may have been deleted.",
+      );
+      return false;
+    } finally {
+      this.switchingDatabase = false;
     }
   }
 

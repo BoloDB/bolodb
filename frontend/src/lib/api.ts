@@ -285,6 +285,37 @@ export async function getWorkspaceActivity(
   );
 }
 
+/**
+ * Download the workspace activity log as CSV.
+ *
+ * Goes through fetch rather than a plain link because the endpoint needs the
+ * workspace header and session cookie that `apiCall` attaches.
+ */
+export async function downloadWorkspaceActivity(
+  workspaceId: string,
+): Promise<void> {
+  const headers: Record<string, string> = { "X-Workspace-Id": workspaceId };
+  const r = await fetch(`/api/workspaces/${workspaceId}/activity/export`, {
+    credentials: "include",
+    headers,
+  });
+  if (!r.ok) {
+    const data = await r.json().catch(() => ({}));
+    const error: any = new Error(data.detail || `Request failed: ${r.status}`);
+    error.status = r.status;
+    throw error;
+  }
+  const blob = await r.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `activity-${new Date().toISOString().slice(0, 10)}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
 // --- Databases ---
 
 export async function listDatabases(): Promise<any[]> {

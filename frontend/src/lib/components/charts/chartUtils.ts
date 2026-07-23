@@ -98,6 +98,89 @@ export function detectChartData(
   return best;
 }
 
+/** A chart the model asked for, resolved against the columns actually returned. */
+export interface ChartPlan {
+  type: "bar" | "pie" | "line" | "area" | "number";
+  labelKey: string;
+  valueKey: string;
+  data: { label: string; value: number }[];
+  title: string;
+}
+
+/**
+ * Resolve the model's chart choice against real result columns.
+ *
+ * The model picks from the SQL it wrote, so its axis names normally match. When
+ * they don't — a renamed alias, a repaired query — we fall back to the
+ * positional heuristic rather than rendering nothing.
+ */
+export function planChart(
+  spec:
+    | { type?: string; x_axis?: string; y_axis?: string; title?: string }
+    | null
+    | undefined,
+  columns: string[],
+  rows: string[][],
+): ChartPlan | null {
+  const type = spec?.type;
+  if (!type || type === "table") return null;
+  if (!columns?.length || !rows?.length) return null;
+
+  const findCol = (name?: string) => {
+    if (!name) return -1;
+    const target = name.trim().toLowerCase();
+    return columns.findIndex((c) => c.trim().toLowerCase() === target);
+  };
+
+  if (type === "number") {
+    const valIdx = findCol(spec?.y_axis);
+    const idx = valIdx >= 0 ? valIdx : 0;
+    const value = parseNumeric(String(rows[0]?.[idx] ?? ""));
+    if (value === null) return null;
+    return {
+      type: "number",
+      labelKey: "",
+      valueKey: columns[idx],
+      data: [{ label: columns[idx], value }],
+      title: spec?.title || "",
+    };
+  }
+
+  if (type !== "bar" && type !== "pie" && type !== "line" && type !== "area") {
+    return null;
+  }
+
+  let labelIdx = findCol(spec?.x_axis);
+  let valueIdx = findCol(spec?.y_axis);
+
+  if (labelIdx < 0 || valueIdx < 0 || labelIdx === valueIdx) {
+    const detected = detectChartData(columns, rows);
+    if (!detected) return null;
+    labelIdx = columns.indexOf(detected.labelKey);
+    valueIdx = columns.indexOf(detected.valueKey);
+    if (labelIdx < 0 || valueIdx < 0) return null;
+  }
+
+  const data = rows
+    .map((r) => {
+      const value = parseNumeric(String(r?.[valueIdx] ?? ""));
+      return value === null
+        ? null
+        : { label: String(r?.[labelIdx] ?? ""), value };
+    })
+    .filter((d): d is { label: string; value: number } => d !== null);
+
+  if (!data.length) return null;
+
+  return {
+    type,
+    labelKey: columns[labelIdx],
+    valueKey: columns[valueIdx],
+    data,
+    title: spec?.title || "",
+  };
+}
+
 export const CHART_COLORS = [
   "var(--brand)",
   "#6366f1",
