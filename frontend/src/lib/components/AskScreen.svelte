@@ -604,7 +604,7 @@
     }
   });
 </script>
-
+<svelte:window onclick={handleWindowClick} />
 <div class="app-root">
   <Sidebar
     activeTab={tab}
@@ -625,7 +625,7 @@
     onClose={() => (mobileNavOpen = false)}
   />
 
-  <svelte:window onclick={handleWindowClick} />
+
 
   {#if mobileNavOpen}
     <button
