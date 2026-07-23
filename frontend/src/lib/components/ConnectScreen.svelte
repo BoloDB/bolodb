@@ -27,6 +27,7 @@
   let connecting: string | null = $state(null);
   let error = $state("");
   let recentConnections: any[] = $state([]);
+  let loadingConnections = $state(true);
   let reconnecting: string | null = $state(null);
 
   let editingAliasId = $state<string | null>(null);
@@ -50,11 +51,14 @@
   }
 
   async function loadRecentConnections() {
+    loadingConnections = true;
     try {
       const data = await apiCall("/api/connections");
       recentConnections = data.connections || [];
     } catch (e) {
       console.error("Failed to load recent connections:", e);
+    } finally {
+      loadingConnections = false;
     }
   }
 
@@ -176,7 +180,27 @@
     <!-- Existing Sources -->
     <div class="existing-sources">
       <h2>Workspace Databases</h2>
-      {#if recentConnections.length > 0}
+      {#if loadingConnections}
+        <div class="sources-loading" aria-live="polite" aria-busy="true">
+          <div class="sources-loading-visual">
+            <div class="pulse-ring"></div>
+            <div class="pulse-ring delay"></div>
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <ellipse cx="12" cy="6" rx="7" ry="3"/>
+              <path d="M5 6v6c0 1.66 3.13 3 7 3s7-1.34 7-3V6M5 12v6c0 1.66 3.13 3 7 3s7-1.34 7-3v-6"/>
+            </svg>
+          </div>
+          <div class="sources-loading-copy">
+            <div class="shimmer-line w-60"></div>
+            <div class="shimmer-line w-40"></div>
+          </div>
+          <div class="skeleton-cards">
+            <div class="skeleton-card"></div>
+            <div class="skeleton-card"></div>
+          </div>
+          <p class="sources-loading-text">Loading workspace databases…</p>
+        </div>
+      {:else if recentConnections.length > 0}
         <div class="sources-grid">
           {#each recentConnections as conn}
             <div class="source-card">
@@ -638,5 +662,83 @@
     gap: 6px;
     justify-content: center;
     margin: 4px 0 0;
+  }
+
+  /* Loading State Styles */
+  .sources-loading {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 64px 24px;
+    background: var(--surface-1);
+    border: 1px dashed var(--border);
+    border-radius: 12px;
+    gap: 24px;
+  }
+  .sources-loading-visual {
+    position: relative;
+    width: 64px;
+    height: 64px;
+    display: grid;
+    place-items: center;
+    color: var(--brand);
+  }
+  .pulse-ring {
+    position: absolute;
+    inset: 0;
+    border-radius: 50%;
+    border: 2px solid var(--brand);
+    animation: pulseOut 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  }
+  .pulse-ring.delay {
+    animation-delay: 1s;
+  }
+  @keyframes pulseOut {
+    0% { transform: scale(0.6); opacity: 1; }
+    100% { transform: scale(1.5); opacity: 0; }
+  }
+  .sources-loading-copy {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+    max-width: 200px;
+  }
+  .shimmer-line {
+    height: 12px;
+    border-radius: 6px;
+    background: linear-gradient(90deg, var(--surface-2) 25%, var(--surface-3) 50%, var(--surface-2) 75%);
+    background-size: 400% 100%;
+    animation: shimmer 1.5s infinite;
+  }
+  .shimmer-line.w-60 { width: 60%; }
+  .shimmer-line.w-40 { width: 40%; }
+  @keyframes shimmer {
+    0% { background-position: 100% 0; }
+    100% { background-position: -100% 0; }
+  }
+  .skeleton-cards {
+    display: flex;
+    gap: 16px;
+    width: 100%;
+    max-width: 400px;
+    margin-top: 16px;
+  }
+  .skeleton-card {
+    flex: 1;
+    height: 60px;
+    border-radius: 8px;
+    background: linear-gradient(90deg, var(--surface-2) 25%, var(--surface-3) 50%, var(--surface-2) 75%);
+    background-size: 400% 100%;
+    animation: shimmer 1.5s infinite;
+  }
+  .sources-loading-text {
+    margin: 0;
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--muted);
   }
 </style>
