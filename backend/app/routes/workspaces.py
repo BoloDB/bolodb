@@ -4,6 +4,7 @@ from backend.app.models.workspace_api import (
     WorkspaceCreate,
     WorkspaceMemberRoleUpdate,
     WorkspaceInviteCreate,
+    WorkspaceUpdate,
 )
 import backend.app.controllers.workspaces as ctrl
 import backend.app.controllers.activity as activity_ctrl
@@ -29,6 +30,17 @@ async def get_workspace(workspace_id: str, user=Depends(get_current_user)):
     return await ctrl.get_workspace(workspace_id, user_id)
 
 
+@router.patch("/api/workspaces/{workspace_id}")
+async def update_workspace(
+    workspace_id: str,
+    req: WorkspaceUpdate,
+    workspace=Depends(require_role("admin")),
+):
+    return await ctrl.update_workspace(
+        workspace["workspace_id"], req.name, actor_id=workspace["user_id"]
+    )
+
+
 @router.get("/api/workspaces/{workspace_id}/members")
 async def list_members(workspace_id: str, workspace=Depends(require_role("member"))):
     return await ctrl.list_members(workspace["workspace_id"])
@@ -52,7 +64,13 @@ async def update_member_role(
     req: WorkspaceMemberRoleUpdate,
     workspace=Depends(require_role("admin")),
 ):
-    return await ctrl.update_member_role(workspace["workspace_id"], user_id, req.role)
+    return await ctrl.update_member_role(
+        workspace["workspace_id"],
+        user_id,
+        req.role,
+        actor_id=workspace["user_id"],
+        actor_role=workspace["role"],
+    )
 
 
 @router.delete("/api/workspaces/{workspace_id}/members/{user_id}")

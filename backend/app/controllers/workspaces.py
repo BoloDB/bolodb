@@ -45,24 +45,18 @@ async def create_workspace(user_id: str, name: str):
     base_slug = slugify(name) or "workspace"
 
     max_attempts = 10
-    counter = 1
     slug = base_slug
 
     for attempt in range(max_attempts):
         async with async_session() as session:
             try:
-                # Check slug uniqueness inside session
                 if attempt > 0:
-                    slug = f"{base_slug}-{counter}"
-                    counter += 1
+                    slug = f"{base_slug}-{attempt}"
 
                 exists = await session.execute(
                     select(Workspace).where(Workspace.slug == slug)
                 )
                 if exists.scalar_one_or_none():
-                    if attempt == 0:
-                        slug = f"{base_slug}-{counter}"
-                        counter += 1
                     continue
 
                 workspace = Workspace(name=name, slug=slug, created_by=uid)
@@ -90,10 +84,9 @@ async def create_workspace(user_id: str, name: str):
                 }
             except IntegrityError:
                 await session.rollback()
-                slug = f"{base_slug}-{counter}"
-                counter += 1
+                continue
 
-    raise HTTPException(400, "Could not generate unique workspace slug")
+    raise HTTPException(500, "Could not generate a unique workspace slug")
 
 
 async def get_workspace(workspace_id: str, user_id: str):
@@ -117,7 +110,9 @@ async def get_workspace(workspace_id: str, user_id: str):
         }
 
 
-async def update_workspace(workspace_id: str, name: str | None):
+async def update_workspace(
+    workspace_id: str, name: str | None, actor_id: str | None = None
+):
     wid = _to_uuid(workspace_id)
     async with async_session() as session:
         try:
@@ -126,24 +121,21 @@ async def update_workspace(workspace_id: str, name: str | None):
             stmt = update(Workspace).where(Workspace.id == wid)
             values = {}
             if name is not None:
-                values["name"] = name
+                values["name"] = name.strip()
             if values:
                 stmt = stmt.values(**values)
                 result = await session.execute(stmt)
                 await session.commit()
 
-                # Fetch current user_id somehow? update_workspace is currently not getting user_id.
-                # Let's fix that. Wait, I should not break the signature if I can't.
-                # It's fine, actor_id=None
                 await log_activity(
                     workspace_id,
-                    None,
+                    actor_id,
                     "workspace.updated",
                     "workspace",
                     workspace_id,
                     values,
                 )
-                return {"ok": result.rowcount > 0}
+                return {"ok": result.rowcount > 0, "name": values.get("name")}
             return {"ok": True}
         except Exception:
             await session.rollback()
@@ -248,11 +240,22 @@ async def invite_user(workspace_id: str, email: str, role: str, inviter_id: str)
             raise HTTPException(400, "Could not process invite")
 
 
-async def update_member_role(workspace_id: str, target_user_id: str, role: str):
+async def update_member_role(
+    workspace_id: str,
+    target_user_id: str,
+    role: str,
+    actor_id: str | None = None,
+    actor_role: str = "admin",
+):
     wid = _to_uuid(workspace_id)
     tuid = _to_uuid(target_user_id)
     if role not in ["admin", "member"]:
         raise HTTPException(400, "Invalid role")
+
+    role_rank = {"member": 1, "admin": 2, "owner": 3}
+    actor_rank = role_rank.get(actor_role, 0)
+    if actor_rank < role_rank["admin"]:
+        raise HTTPException(403, "Insufficient permissions")
 
     async with async_session() as session:
         result = await session.execute(
@@ -264,8 +267,16 @@ async def update_member_role(workspace_id: str, target_user_id: str, role: str):
         if not member:
             raise HTTPException(404, "Member not found")
 
+        target_rank = role_rank.get(member.role, 0)
+        # Callers may only modify members strictly below their own rank.
+        if target_rank >= actor_rank:
+            raise HTTPException(
+                403, "Cannot change the role of a member at or above your own level"
+            )
+        if role_rank.get(role, 0) >= actor_rank:
+            raise HTTPException(403, "Cannot assign a role at or above your own level")
+
         if member.role == "owner" and role != "owner":
-            # Check if there are other owners
             owners_count = await session.scalar(
                 select(func.count())
                 .select_from(WorkspaceMember)
@@ -283,7 +294,7 @@ async def update_member_role(workspace_id: str, target_user_id: str, role: str):
         await session.commit()
         await log_activity(
             workspace_id,
-            None,
+            actor_id,
             "member.role_updated",
             "member",
             target_user_id,
@@ -327,12 +338,14 @@ async def remove_member(workspace_id: str, target_user_id: str):
 
 async def get_invites(user_email: str):
     async with async_session() as session:
+        now = datetime.now(timezone.utc)
         result = await session.execute(
             select(WorkspaceInvite, Workspace.name)
             .join(Workspace, WorkspaceInvite.workspace_id == Workspace.id)
             .where(
                 WorkspaceInvite.email == user_email,
                 WorkspaceInvite.accepted_at.is_(None),
+                WorkspaceInvite.expires_at > now,
             )
         )
         rows = result.all()
