@@ -73,17 +73,24 @@ def _failure_payload(message, tables=None):
     }
 
 
-def _is_connected(db, workspace_id, db_id=None):
-    if db_id is not None:
-        try:
-            return db.connected(workspace_id, db_id=db_id)
-        except TypeError:
-            pass
-        try:
-            return db.connected(workspace_id, db_id)
-        except TypeError:
-            pass
-    return db.connected(workspace_id)
+async def _resolve_db_id(db, workspace_id, db_id=None):
+    """The database this request runs against, or None if there isn't one.
+
+    Two jobs, both of which every entry point below needs:
+
+    - Restore the connection if this process doesn't hold one. Engines live in
+      process memory, so a restart or a request served by a different worker
+      leaves none; `ensure_connection` re-establishes it from the credentials
+      stored against the workspace rather than failing the request.
+    - Resolve `X-Db-Id` to a concrete id *once*, so everything downstream —
+      schema, execution, knowledge, logging — agrees on which database this is.
+      Reading `db.get_db_id(workspace_id)` separately further down is what let
+      knowledge and query logs drift onto the workspace default while the SQL
+      ran against the selected database.
+    """
+    from backend.app.controllers.database import ensure_connection
+
+    return await ensure_connection(db, workspace_id, db_id)
 
 
 def _db_get_schema(db, workspace_id, db_id=None):
@@ -154,7 +161,8 @@ async def run_query(
     Raises:
         HTTPException: If no database is connected or the question is empty.
     """
-    if not _is_connected(db, workspace_id, db_id):
+    db_id = await _resolve_db_id(db, workspace_id, db_id)
+    if not db_id:
         raise HTTPException(409, "No database connected")
     q = req_data.question.strip()
     if not q:
@@ -162,7 +170,6 @@ async def run_query(
     context = req_data.context
 
     # Step 1 — user knowledge: confirmed term meanings + similar verified answers.
-    db_id = db_id or db.get_db_id(workspace_id)
     glossary = await kb.get_glossary(workspace_id, db_id)
     catalog = await kb.get_catalog(workspace_id, db_id)
     retrieved = await kb.retrieve_similar(workspace_id, db_id, q, k=3)
@@ -294,14 +301,17 @@ async def run_query(
 
 async def explain(workspace_id, db, providers, req_data, db_id=None):
     """Translate a SQL query into plain English (trust feature)."""
-    if not _is_connected(db, workspace_id, db_id):
+    db_id = await _resolve_db_id(db, workspace_id, db_id)
+    if not db_id:
         raise HTTPException(409, "No database connected")
     sql = (req_data.sql or "").strip()
     if not sql:
         raise HTTPException(400, "Empty SQL")
     try:
         return await explain_sql(
-            providers.get(workspace_id), sql, db.get_dialect(workspace_id)
+            providers.get(workspace_id),
+            sql,
+            _db_get_dialect(db, workspace_id, db_id),
         )
     except LLMError as e:
         raise HTTPException(502, e.user_message)
@@ -324,27 +334,28 @@ async def feedback(workspace_id, db, kb, session_log, req_data, db_id=None):
     Raises:
         HTTPException: If no database is connected for the user.
     """
-    if not _is_connected(db, workspace_id, db_id):
+    db_id = await _resolve_db_id(db, workspace_id, db_id)
+    if not db_id:
         raise HTTPException(409, "No database connected")
     session_log.log_feedback(req_data.query_id, req_data.verdict, req_data.reason)
+    # Verified knowledge belongs to the database the answer was checked against.
+    # Writing it under the workspace default instead would teach the wrong
+    # database this SQL is correct, and hand back that database's trust score.
     if req_data.verdict == "correct":
         await kb.add_verified(
             workspace_id,
-            db.get_db_id(workspace_id),
+            db_id,
             req_data.question,
             req_data.sql,
             req_data.restatement,
         )
     out = {
         "ok": True,
-        "trust": await kb.trust_level(workspace_id, db.get_db_id(workspace_id)),
+        "trust": await kb.trust_level(workspace_id, db_id),
     }
     if req_data.verdict == "correct":
         out["starters"] = [
-            v["question"]
-            for v in (await kb.get_verified(workspace_id, db.get_db_id(workspace_id)))[
-                :6
-            ]
+            v["question"] for v in (await kb.get_verified(workspace_id, db_id))[:6]
         ]
     return out
 
@@ -364,18 +375,19 @@ async def verify(workspace_id, db, kb, req_data, db_id=None):
     Raises:
         HTTPException: If no database is connected for the user.
     """
-    if not _is_connected(db, workspace_id, db_id):
+    db_id = await _resolve_db_id(db, workspace_id, db_id)
+    if not db_id:
         raise HTTPException(409, "No database connected")
     await kb.add_verified(
         workspace_id,
-        db.get_db_id(workspace_id),
+        db_id,
         req_data.question,
         req_data.sql,
         req_data.restatement,
     )
     return {
         "ok": True,
-        "trust": await kb.trust_level(workspace_id, db.get_db_id(workspace_id)),
+        "trust": await kb.trust_level(workspace_id, db_id),
     }
 
 
@@ -394,7 +406,8 @@ async def execute(workspace_id, db, req_data, db_id=None):
     Raises:
         HTTPException: If no database is connected or the SQL execution returns an error.
     """
-    if not _is_connected(db, workspace_id, db_id):
+    db_id = await _resolve_db_id(db, workspace_id, db_id)
+    if not db_id:
         raise HTTPException(409, "No database connected")
     res = await run_in_threadpool(db.execute, workspace_id, req_data.sql, db_id)
     if "error" in res:
@@ -507,7 +520,8 @@ async def run_query_stream(
         dict: Progress, error, or final-result event. The final result includes generated SQL,
             execution data, confidence information, and the recorded query identifier.
     """
-    if not _is_connected(db, workspace_id, db_id):
+    db_id = await _resolve_db_id(db, workspace_id, db_id)
+    if not db_id:
         yield {"kind": "error", "message": "No database connected"}
         return
     q = req_data.question.strip()
@@ -517,10 +531,12 @@ async def run_query_stream(
     context = req_data.context
     query_start = time.monotonic()
 
-    dbid = db.get_db_id(workspace_id)
-    glossary = await kb.get_glossary(workspace_id, dbid)
-    catalog = await kb.get_catalog(workspace_id, dbid)
-    retrieved = await kb.retrieve_similar(workspace_id, dbid, q, k=3)
+    # Knowledge is scoped to the database being queried. Reading it from the
+    # workspace default while the SQL runs against the selected database fed
+    # the model another database's glossary, catalog and verified examples.
+    glossary = await kb.get_glossary(workspace_id, db_id)
+    catalog = await kb.get_catalog(workspace_id, db_id)
+    retrieved = await kb.retrieve_similar(workspace_id, db_id, q, k=3)
     budget = model_budget()
     full_schema = _db_get_schema(db, workspace_id, db_id)
     context_tables = (
@@ -738,7 +754,7 @@ async def run_query_stream(
     }
     if "error" in exec_result:
         out["execution_error"] = exec_result["error"]
-    out["query_id"] = session_log.log_query(db.get_db_id(workspace_id), q, out)
+    out["query_id"] = session_log.log_query(db_id, q, out)
 
     # Persist to query history so the dashboard and history reflect streamed
     # queries too (the /api/query/stream route can't save after the response
