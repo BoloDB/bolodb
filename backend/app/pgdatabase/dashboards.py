@@ -145,6 +145,16 @@ async def update_panel(workspace_id: str, dashboard_id: str, panel_id: str, **kw
             if not d.scalar_one_or_none():
                 return False
 
+            if kwargs.get("saved_query_id"):
+                sq = await session.execute(
+                    select(SavedQuery.id).where(
+                        SavedQuery.id == kwargs["saved_query_id"],
+                        SavedQuery.workspace_id == wid,
+                    )
+                )
+                if not sq.scalar_one_or_none():
+                    raise ValueError("Saved query not found in workspace")
+
             kwargs["updated_at"] = _utcnow()
             result = await session.execute(
                 update(DashboardPanel)
