@@ -5,17 +5,15 @@
     Turn,
     SchemaTable,
     DbInfo,
-    Toast,
     ThinkingArtifact,
     StreamEvent,
     Conversation,
     ConversationTurn,
   } from "$lib/types";
-  import Sidebar from "$lib/components/Sidebar.svelte";
+  import { page } from "$app/state";
+  import AppShell from "$lib/components/AppShell.svelte";
   import AnswerCard from "$lib/components/AnswerCard.svelte";
-  import DashboardTab from "$lib/components/DashboardTab.svelte";
   import SettingsTab from "$lib/components/SettingsTab.svelte";
-  import TrustToast from "$lib/components/TrustToast.svelte";
   import Spinner from '$lib/components/ui/Spinner.svelte';
   import LoadingScreen from '$lib/components/ui/LoadingScreen.svelte';
   import SlashCommandMenu from "$lib/components/ui/SlashCommandMenu.svelte";
@@ -28,7 +26,6 @@
     verifiedCount,
     onVerify,
     onUpdateStarters,
-    toast,
     realSchema,
     dbInfo,
     starters,
@@ -38,7 +35,6 @@
     verifiedCount: number;
     onVerify: (count?: number) => void;
     onUpdateStarters: (s: string[]) => void;
-    toast: Toast | null;
     realSchema: SchemaTable[] | null;
     dbInfo: DbInfo | null;
     starters: string[];
@@ -46,24 +42,22 @@
     onActiveConversationChange?: (id: string | null) => void;
   } = $props();
 
-  const dbLabel = $derived(
-    dbInfo
-      ? (dbInfo.url || "").split("/").pop() || dbInfo.dialect || "your database"
-      : "your database",
-  );
-  const tableCount = $derived(dbInfo ? dbInfo.tables || 0 : 0);
   let turns: Turn[] = $state([]);
   let input = $state("");
-  let tab = $state<"ask" | "dash" | "settings">("ask");
-  let userEmail = $state("");
+  // ?tab=settings lets the sidebar land directly on Settings when coming back
+  // from a route that isn't /chat.
+  let tab = $state<"ask" | "settings">(
+    page.url.searchParams.get("tab") === "settings" ? "settings" : "ask",
+  );
   let openCatalogTrigger = $state(0);
 
-  onMount(async () => {
+  onMount(() => {
     appState.fetchStartersAsync();
-    try {
-      const res = await apiCall("/api/auth/me");
-      userEmail = res?.content?.email || "";
-    } catch {}
+    // Arriving from another route (the sidebar on /dashboards, say) carries the
+    // conversation to open in the URL, since that screen has no feed to load it
+    // into itself.
+    const requested = page.url.searchParams.get('conversation');
+    if (requested) handleConversationSelect(requested);
   });
 
   const suggestionChips = $derived(
@@ -77,11 +71,38 @@
   let conversationTrigger = $state(0);
   let activeConversationId: string | null = $state(null);
   let abortController: AbortController | null = $state(null);
+  /** Turn ids whose SQL is being re-executed right now. */
+  let rerunning = $state<Set<string>>(new Set());
   let showScrollBtn = $state(false);
   let lastTurnCount = 0;
   let convLoadSeq = 0;
   let convLoading = $state(false); // true only while fetching a past conversation
-  let mobileNavOpen = $state(false);
+
+  // The database can be switched from the shared shell on any screen, so the
+  // feed reacts to the active database changing rather than to the click.
+  let lastDbId: string | null = null;
+  $effect(() => {
+    const id = dbInfo?.db_id ?? null;
+    if (lastDbId !== null && id !== lastDbId) {
+      abortController?.abort();
+      turns = [];
+      activeConversationId = null;
+      onActiveConversationChange(null);
+    }
+    lastDbId = id;
+  });
+
+  /**
+   * Adopt a database change as already-seen, so the effect above treats it as
+   * the current state rather than as a switch to clear the feed over. Opening a
+   * conversation recorded against another database switches to it deliberately;
+   * without this, the effect fired straight afterwards and wiped the turns that
+   * had just been restored — which is why past conversations opened blank.
+   */
+  function acknowledgeDbId(id: string | null) {
+    lastDbId = id;
+  }
+
 
   const trust = $derived(trustFor(verifiedCount));
 
@@ -323,6 +344,7 @@
           rows: rowsToArrays(data.columns || [], data.rows || []),
           confidence: data.confidence || "medium",
           reason: data.confidence_reason || "",
+          chart: data.chart || null,
           basedOn: data.based_on_verified || false,
           query_id: data.query_id || id,
           executionError: data.execution_error || null,
@@ -426,6 +448,43 @@
     requeryAt(idx, turns[idx].question);
   }
 
+  /**
+   * Re-run the SQL a turn already has, without going back to the model. Same
+   * question, fresh rows — the point is to refresh a result for free rather
+   * than spend tokens regenerating identical SQL.
+   */
+  async function rerunSql(turnId: string) {
+    const turn = turns.find((t) => t.id === turnId);
+    if (!turn?.sql || rerunning.has(turnId)) return;
+    rerunning = new Set([...rerunning, turnId]);
+    try {
+      const data = await apiCall("/api/execute", {
+        sql: turn.sql,
+        save_history: false,
+      });
+      turns = turns.map((t) =>
+        t.id === turnId
+          ? {
+              ...t,
+              columns: data.columns || [],
+              rows: rowsToArrays(data.columns || [], data.rows || []),
+              executionError: null,
+              resultTruncated: false,
+              lastRunAt: new Date().toISOString(),
+            }
+          : t,
+      );
+    } catch (e: any) {
+      appState.showError(
+        e?.message || "Couldn't re-run this query against your database.",
+      );
+    } finally {
+      const next = new Set(rerunning);
+      next.delete(turnId);
+      rerunning = next;
+    }
+  }
+
   function editAndRequery(turnId: string, newQuestion: string) {
     const idx = turns.findIndex((t) => t.id === turnId);
     if (idx === -1) return;
@@ -503,6 +562,7 @@
       })),
       confidence: (t.confidence || 'medium').toLowerCase() as "high" | "medium" | "low",
       reason: '',
+      chart: t.chart || null,
       basedOn: false,
       query_id: t._id,
       executionError: null,
@@ -513,9 +573,6 @@
 
   async function handleConversationSelect(convId: string) {
     if (convId === activeConversationId) return;
-    // Cancel any in-flight query stream and stamp this load so that when two
-    // conversations are clicked in quick succession, only the latest click's
-    // response is applied (otherwise the slower fetch would win).
     abortController?.abort();
     const seq = ++convLoadSeq;
     loading = true;
@@ -524,6 +581,17 @@
     try {
       const conv = await getConversation(convId);
       if (seq !== convLoadSeq) return;
+
+      // Auto-switch database if the conversation belongs to a different one
+      if (conv.database_id && dbInfo?.db_id !== conv.database_id) {
+        const switched = await appState.switchDatabase(conv.database_id, {
+          keepConversation: true,
+        });
+        if (seq !== convLoadSeq) return;
+        if (!switched) return; // switchDatabase already explained why
+        acknowledgeDbId(conv.database_id);
+      }
+
       activeConversationId = conv._id;
       onActiveConversationChange(conv._id);
       const loaded: Turn[] = [];
@@ -549,73 +617,19 @@
     e.preventDefault();
     ask();
   }
-
-  // Close mobile nav when viewport leaves mobile breakpoint
-  onMount(() => {
-    if (typeof window !== 'undefined') {
-      const mediaQuery = window.matchMedia('(max-width: 768px)');
-      const handleMediaChange = (e: MediaQueryListEvent | MediaQueryList) => {
-        if (!e.matches) {
-          mobileNavOpen = false;
-        }
-      };
-      // Initial check
-      handleMediaChange(mediaQuery);
-      // Listen for changes
-      mediaQuery.addEventListener('change', handleMediaChange);
-      return () => mediaQuery.removeEventListener('change', handleMediaChange);
-    }
-  });
 </script>
-
-<div class="app-root">
-  <Sidebar
-    activeTab={tab}
-    onTab={(t) => (tab = t)}
-    {verifiedCount}
-    schema={realSchema}
-    {dbInfo}
-    {conversationTrigger}
-    {activeConversationId}
-    onConversationSelect={handleConversationSelect}
-    onNewChat={handleNewConversation}
-    {userEmail}
-    theme={appState.theme}
-    onToggleTheme={() => appState.toggleTheme()}
-    onLogout={() => appState.logout()}
-    mobileOpen={mobileNavOpen}
-    onClose={() => (mobileNavOpen = false)}
-  />
-
-  {#if mobileNavOpen}
-    <button
-      class="nav-backdrop"
-      aria-label="Close menu"
-      onclick={() => (mobileNavOpen = false)}
-    ></button>
-  {/if}
-
-  <main class="main">
-    <!-- mobile top bar: hamburger + brand (mobile only) -->
-    <div class="mobile-topbar">
-      <button class="hamburger" aria-label="Open menu" onclick={() => (mobileNavOpen = true)}>
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M4 6h16M4 12h16M4 18h16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
-      </button>
-      <span class="mobile-brand">Bolo<span style="color:var(--brand)">DB</span></span>
-    </div>
+<AppShell
+  activeTab={tab}
+  onTab={(t) => (tab = t as "ask" | "settings")}
+  {dbInfo}
+  {verifiedCount}
+  {realSchema}
+  {conversationTrigger}
+  {activeConversationId}
+  onConversationSelect={handleConversationSelect}
+  onNewChat={handleNewConversation}
+>
     {#if tab === "ask"}
-      <!-- db header -->
-      <div class="db-header">
-        <div class="db-info">
-          <span class="db-icon">🗄</span>
-          <div style="display:flex;flex-direction:column">
-            <span class="db-name mono">{dbLabel}</span>
-            <span class="db-sub">{tableCount > 0 ? `${tableCount} table${tableCount === 1 ? "" : "s"} · ` : ""}read-only</span>
-          </div>
-        </div>
-        <button class="switch-db" onclick={onDisconnect}>⇄ Switch DB</button>
-      </div>
-
       <!-- feed -->
       <div bind:this={feedRef} onscroll={onFeedScroll} class="feed">
         {#if convLoading}
@@ -623,6 +637,12 @@
             message="Opening conversation…"
             submessage="Fetching your previous results"
             variant="default"
+          />
+        {:else if appState.switchingDatabase}
+          <LoadingScreen
+            message="Switching database…"
+            submessage="Connecting securely to your data"
+            variant="connect"
           />
         {:else}
         <div class="feed-inner">
@@ -658,6 +678,8 @@
                 liveArtifacts={t.thinking ? currentArtifacts : undefined}
                 onRegenerate={regenerate}
                 onEditPrompt={editAndRequery}
+                onRerun={rerunSql}
+                rerunning={rerunning.has(t.id)}
               />
             {/each}
           {/if}
@@ -702,9 +724,6 @@
         </div>
       </div>
 
-      {#if toast}<TrustToast {toast} />{/if}
-    {:else if tab === "dash"}
-      <DashboardTab {verifiedCount} {dbInfo} />
     {:else}
       <SettingsTab
         {dbInfo}
@@ -714,57 +733,9 @@
         {openCatalogTrigger}
       />
     {/if}
-  </main>
-</div>
+</AppShell>
 
 <style>
-  .app-root {
-    display: flex;
-    height: 100%;
-    overflow: hidden;
-  }
-  .main {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
-    position: relative;
-    min-width: 0;
-  }
-  .db-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 14px;
-    padding: 12px 24px;
-    border-bottom: 1px solid var(--border);
-    background: var(--card-2);
-  }
-  .db-info { display: flex; align-items: center; gap: 10px; }
-  .db-icon {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 30px;
-    height: 30px;
-    border-radius: 9px;
-    background: var(--surface-2);
-    font-size: 13px;
-  }
-  .db-name { font-size: 12.5px; font-weight: 600; color: var(--ink); }
-  .db-sub { font-size: 11px; color: var(--faint); }
-  .switch-db {
-    background: transparent;
-    border: 1px solid var(--border-2);
-    color: var(--muted);
-    font-size: 12px;
-    font-weight: 600;
-    padding: 6px 13px;
-    border-radius: 99px;
-    cursor: pointer;
-    transition: all 0.15s;
-  }
-  .switch-db:hover { color: var(--ink); border-color: var(--muted); }
   .feed { flex: 1; overflow-y: auto; padding: 36px 32px 20px; position: relative; }
   .feed-inner { max-width: 760px; margin: 0 auto; }
   .empty {
@@ -910,58 +881,7 @@
     color: var(--faint);
   }
 
-  /* mobile top bar — hidden on desktop */
-  .mobile-topbar {
-    display: none;
-    align-items: center;
-    gap: 12px;
-    padding: 10px 16px;
-    border-bottom: 1px solid var(--border);
-    background: var(--card-2);
-  }
-  .hamburger {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 38px;
-    height: 38px;
-    border-radius: 10px;
-    border: 1px solid var(--border-2);
-    background: transparent;
-    color: var(--ink);
-    cursor: pointer;
-  }
-  .mobile-brand {
-    font-weight: 800;
-    font-size: 15px;
-    letter-spacing: -0.02em;
-    color: var(--ink);
-  }
-  .nav-backdrop {
-    position: fixed;
-    inset: 0;
-    z-index: 55;
-    border: none;
-    padding: 0;
-    background: rgba(0, 0, 0, 0.45);
-    cursor: pointer;
-    animation: fadeIn 0.2s ease both;
-  }
-  @media (min-width: 769px) {
-    .nav-backdrop {
-      display: none;
-      pointer-events: none;
-    }
-  }
-  @keyframes fadeIn {
-    from { opacity: 0; }
-    to { opacity: 1; }
-  }
-
   @media (max-width: 768px) {
-    .mobile-topbar { display: flex; }
-    .db-header { padding: 10px 16px; }
-    .switch-db { padding: 6px 11px; }
     .feed { padding: 20px 16px 16px; }
     .empty { padding-top: 6vh; }
     .empty-title { font-size: clamp(1.5rem, 7vw, 2rem); }

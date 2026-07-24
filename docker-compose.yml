@@ -1,86 +1,69 @@
-# ──────────────────────────────────────────────
-#  BoloDB  ·  Docker Compose
-# ──────────────────────────────────────────────
-#  Usage:
-#    docker compose up --build        # build & start
-#    docker compose up --build -d     # detached
-#    docker compose down              # stop & remove
-# ──────────────────────────────────────────────
-
 services:
   # ── Backend: FastAPI / Uvicorn ──
   backend:
     build:
       context: .
       dockerfile: backend/DOCKERFILE
-    container_name: bolodb-backend
     restart: unless-stopped
-    ports:
-      - "4321:4321"
+    expose:
+      - "4321"
     volumes:
-      - bolodb-data:/home/bolodb/.bolodb
-      - ./data:/app/data
+      # The generated sample database is a regenerable cache; the volume keeps
+      # it across restarts so it isn't rebuilt each time, but nothing here is
+      # state that has to survive — all real data lives in Postgres.
+      - bolodb-app-data:/app/data
     environment:
       - JWT_SECRET=${JWT_SECRET:?JWT_SECRET must be set}
+      # Stable secret that encrypts saved connection URLs. Never written to
+      # disk, so it must be supplied here and kept constant across deploys.
+      - RECENT_CONNECTIONS_KEY=${RECENT_CONNECTIONS_KEY:?RECENT_CONNECTIONS_KEY must be set}
       - OPENROUTER_API_KEY=${OPENROUTER_API_KEY:?OPENROUTER_API_KEY must be set}
       - DATABASE_URL=${DATABASE_URL:? Database URL must be set}
       - PYTHONUNBUFFERED=1
       - RUNNING_IN_DOCKER=true
-      # - OLLAMA_URL=http://host.docker.internal:11434
+      - SKIP_DB_LOCK=true
       - SUPABASE_URL=${SUPABASE_URL:?SUPABASE_URL must be set}
       - SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY:?SUPABASE_ANON_KEY must be set}
       - SUPABASE_JWT_SECRET=${SUPABASE_JWT_SECRET:?SUPABASE_JWT_SECRET must be set}
       - MYEMAILVERIFIER_API_KEY=${MYEMAILVERIFIER_API_KEY}
       - RESEND_API_KEY=${RESEND_API_KEY}
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import httpx; httpx.get('http://localhost:4321/api/health', timeout=3).raise_for_status()\" || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      # Migrations run before the server binds, and a database that needs the
+      # whole history takes longer than a few seconds — don't call the
+      # container unhealthy while it is still migrating.
+      start_period: 90s
     extra_hosts:
       - "host.docker.internal:host-gateway"
     networks:
       - bolodb-net
 
-  # ── Frontend: Svelte (Vite) dev server ──
-  frontend:
-    build:
-      context: ./frontend
-      dockerfile: DOCKERFILE.dev
-    container_name: bolodb-frontend
-    volumes:
-      - ./frontend:/app
-      - /app/node_modules
-    ports:
-      - "5173:5173"
-    environment:
-      - BACKEND_URL=http://backend:4321
-      - PUBLIC_POSTHOG_PROJECT_TOKEN=${PUBLIC_POSTHOG_PROJECT_TOKEN}
-      - PUBLIC_POSTHOG_HOST=${PUBLIC_POSTHOG_HOST:-https://us.i.posthog.com}
-      - VITE_SUPABASE_URL=${SUPABASE_URL:?SUPABASE_URL must be set}
-      - VITE_SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY:?SUPABASE_ANON_KEY must be set}
-    depends_on:
-      backend:
-        condition: service_healthy
-    networks:
-      - bolodb-net
-
-  # ── Nginx: Reverse proxy + Vite dev server ──
+  # ── Nginx: static frontend + /api reverse proxy ──
   nginx:
     build:
-      context: ./nginx
-      dockerfile: DOCKERFILE
-    container_name: bolodb-nginx
+      context: .
+      dockerfile: nginx/DOCKERFILE
+      args:
+        PUBLIC_POSTHOG_PROJECT_TOKEN: ${PUBLIC_POSTHOG_PROJECT_TOKEN:-}
+        PUBLIC_POSTHOG_HOST: ${PUBLIC_POSTHOG_HOST:-https://us.i.posthog.com}
     restart: unless-stopped
     expose:
-      - '80'
+      - "8080"
+    labels:  # <--- ADD THIS
+      - "traefik.http.services.${COOLIFY_CONTAINER_NAME:-nginx}.loadbalancer.server.port=8080"
     depends_on:
-      frontend:
-        condition: service_started
       backend:
         condition: service_healthy
     networks:
       - bolodb-net
 
 volumes:
-  bolodb-data:
   bolodb-postgres-data:
   bolodb-postgres-wal:
+  bolodb-app-data:
 
 networks:
   bolodb-net:

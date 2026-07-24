@@ -1,7 +1,12 @@
 import logging
 
 from fastapi import APIRouter, Depends, Request, HTTPException
-from backend.app.dependencies import get_current_user, get_db, get_kb, get_providers
+from backend.app.dependencies import (
+    require_permission,
+    get_db,
+    get_kb,
+    get_providers,
+)
 from backend.app.models.api import SaveOnboardReq
 from backend.app.ratelimit import limiter
 import backend.app.controllers.onboard as ctrl
@@ -15,13 +20,13 @@ router = APIRouter()
 async def onboard_save(
     request: Request,
     req: SaveOnboardReq,
-    user_token=Depends(get_current_user),
+    workspace=Depends(require_permission("catalog.manage")),
     db=Depends(get_db),
     kb=Depends(get_kb),
 ):
     try:
-        user_id = user_token["user_id"]
-        return await ctrl.save(user_id, db, kb, req)
+        workspace_id = workspace["workspace_id"]
+        return await ctrl.save(workspace_id, db, kb, req)
     except HTTPException:
         raise
     except Exception:
@@ -33,14 +38,15 @@ async def onboard_save(
 @limiter.limit("5/minute")
 async def api_generate_starters(
     request: Request,
-    user_token=Depends(get_current_user),
+    workspace=Depends(require_permission("catalog.manage")),
+    _execute_permission=Depends(require_permission("queries.execute")),
     db=Depends(get_db),
     kb=Depends(get_kb),
     providers=Depends(get_providers),
 ):
     try:
-        user_id = user_token["user_id"]
-        return await ctrl.generate_starters_async(user_id, db, kb, providers)
+        workspace_id = workspace["workspace_id"]
+        return await ctrl.generate_starters_async(workspace_id, db, kb, providers)
     except HTTPException:
         raise
     except Exception:

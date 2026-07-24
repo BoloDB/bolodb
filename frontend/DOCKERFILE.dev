@@ -8,7 +8,7 @@ WORKDIR /app
 
 # Install dependencies (cached layer)
 COPY package.json package-lock.json* ./
-RUN npm ci
+RUN npm install
 
 # Copy source files
 COPY . .
@@ -22,4 +22,4 @@ EXPOSE 5173
 # dependencies missing whenever package.json gains a new one — surfacing as
 # ERR_MODULE_NOT_FOUND for a package that installs fine everywhere else.
 # Reconcile against the lockfile on every start so the volume can't go stale.
-CMD ["sh", "-c", "npm ci && npm run dev -- --host 0.0.0.0"]
+CMD ["sh", "-c", "npm install && npm run dev -- --host 0.0.0.0"]

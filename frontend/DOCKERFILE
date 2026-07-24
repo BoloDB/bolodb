@@ -10,7 +10,7 @@ WORKDIR /app
 
 # ── 1. Install dependencies (cached layer) ──
 COPY package.json package-lock.json* ./
-RUN npm ci
+RUN npm install
 
 # ── 2. Copy source & build ──
 COPY . .

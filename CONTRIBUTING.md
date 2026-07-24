@@ -12,7 +12,7 @@ BoloDB is built using a modern containerized stack designed for ease of local de
 - **Backend:** FastAPI (Python 3.10+) utilizing SQLAlchemy for database connectivity, and `sqlglot` for secure AST-based read-only validation.
 - **Frontend:** A SvelteKit application utilizing TypeScript and Tailwind CSS for a polished, responsive user interface.
 - **Database:** PostgreSQL container storing user accounts, query history, conversations, and recent connections.
-- **Knowledge Base:** Per-user SQLite database storing verified queries, glossary, and trust level.
+- **Knowledge Base:** PostgreSQL persistence storing verified queries, glossary, and trust level.
 - **Reverse Proxy:** Nginx configured to route traffic seamlessly between the frontend and backend services while handling proxy configurations.
 - **LLM Connectors:** Support for OpenRouter API.
 

@@ -81,6 +81,16 @@ async def me(user_token=Depends(get_current_user)):
     return JSONResponse({"message": "My details", "content": user})
 
 
+@router.patch("/me")
+async def update_me(
+    req: backend.app.models.user.UpdateProfile, user_token=Depends(get_current_user)
+):
+    user = await backend.app.controllers.auth.update_profile(user_token["user_id"], req)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    return JSONResponse({"message": "Profile updated", "content": user})
+
+
 @router.post("/login")
 @limiter.limit("10/minute")
 async def login(request: Request, login_data: UserLogin):

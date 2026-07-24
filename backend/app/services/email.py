@@ -96,3 +96,34 @@ async def send_password_reset_email(to: str, reset_link: str) -> bool:
     </html>
     """
     return await send_email(to, "Reset your BoloDB password", html)
+
+
+async def send_workspace_invite_email(
+    to: str, workspace_name: str, invite_code: str
+) -> bool:
+    """Send a workspace invite email."""
+    import html
+
+    safe_name = html.escape(workspace_name)
+    safe_code = html.escape(invite_code)
+    html_content = f"""
+    <!DOCTYPE html>
+    <html>
+    <head><meta charset="utf-8"></head>
+    <body style="font-family:system-ui,-apple-system,sans-serif;max-width:480px;margin:0 auto;padding:32px 24px;color:#1a1a2e">
+      <h2 style="margin:0 0 16px;font-size:22px;font-weight:700">You've been invited!</h2>
+      <p style="margin:0 0 20px;font-size:15px;line-height:1.5;color:#555">
+        You have been invited to join the <strong>{safe_name}</strong> workspace on BoloDB.
+      </p>
+      <div style="font-size:24px;font-weight:800;letter-spacing:0.1em;text-align:center;padding:20px;background:#f5f5f5;border-radius:12px;margin:0 0 20px;font-family:monospace">
+        {safe_code}
+      </div>
+      <p style="margin:20px 0 0;font-size:13px;color:#999">
+        Copy this code and paste it into the "Join Workspace" screen to accept the invitation.
+      </p>
+    </body>
+    </html>
+    """
+    return await send_email(
+        to, f"Invitation to join {workspace_name} on BoloDB", html_content
+    )

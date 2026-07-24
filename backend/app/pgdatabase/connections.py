@@ -1,4 +1,12 @@
-"""Recent connections CRUD with encryption."""
+"""Recent connections CRUD with encryption.
+
+Stored database URLs contain credentials, so they are encrypted at rest with a
+key derived from ``RECENT_CONNECTIONS_KEY`` in the environment. That is the only
+source — nothing is written to disk, so pointing a deploy at a fresh volume or
+rotating the app image can never orphan the key. The env var must stay stable:
+change it and previously saved connections can no longer be decrypted and have
+to be re-added.
+"""
 
 import base64
 import hashlib
@@ -10,69 +18,28 @@ from sqlalchemy import select, delete, func
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from backend.app.pgdatabase.engine import async_session
-from backend.app.pgdatabase.models import RecentConnection
+from backend.app.models.recent_connection import RecentConnection
+from backend.app.models.base import _uuid7
 from backend.app.pgdatabase.serialization import _to_uuid, serialize_doc
-from backend.app.pgdatabase.models import _uuid7
-from backend.app.config import CONFIG_DIR
 
 
-_CONNECTIONS_KEY_FILE = CONFIG_DIR / "connections.key"
+class ConnectionKeyError(RuntimeError):
+    """Raised when RECENT_CONNECTIONS_KEY is missing or unusable.
 
-
-def _recent_connections_master_cipher():
-    master = os.getenv("RECENT_CONNECTIONS_MASTER_KEY")
-    if not master:
-        return None
-    master_key = base64.urlsafe_b64encode(hashlib.sha256(master.encode()).digest())
-    return Fernet(master_key)
+    A dedicated type so callers can tell "the server is misconfigured" (every
+    save will fail until an operator fixes the environment) apart from a
+    transient database error (worth retrying).
+    """
 
 
 def _build_recent_connection_cipher():
     secret = os.getenv("RECENT_CONNECTIONS_KEY")
-    if secret:
-        key = base64.urlsafe_b64encode(hashlib.sha256(secret.encode()).digest())
-        return Fernet(key)
-    CONFIG_DIR.mkdir(parents=True, exist_ok=True)
-    master_cipher = _recent_connections_master_cipher()
-    if _CONNECTIONS_KEY_FILE.exists():
-        persisted = _CONNECTIONS_KEY_FILE.read_text().strip()
-        if master_cipher:
-            if persisted.startswith("v1:"):
-                try:
-                    loaded_secret = master_cipher.decrypt(
-                        persisted[3:].encode()
-                    ).decode()
-                except (InvalidToken, ValueError, TypeError):
-                    raise RuntimeError(
-                        "Failed to decrypt connections key file with RECENT_CONNECTIONS_MASTER_KEY. "
-                        "The master key may have changed or the key file is corrupted."
-                    )
-            else:
-                raise RuntimeError(
-                    "RECENT_CONNECTIONS_MASTER_KEY is set but connections key file "
-                    "is not encrypted. Re-run with RECENT_CONNECTIONS_MASTER_KEY unset "
-                    "to regenerate, or set RECENT_CONNECTIONS_KEY directly."
-                )
-        else:
-            loaded_secret = persisted
-        key = base64.urlsafe_b64encode(hashlib.sha256(loaded_secret.encode()).digest())
-        return Fernet(key)
-    if master_cipher:
-        new_secret = base64.urlsafe_b64encode(os.urandom(32)).decode()
-        _CONNECTIONS_KEY_FILE.write_text(
-            "v1:" + master_cipher.encrypt(new_secret.encode()).decode()
+    if not secret:
+        raise ConnectionKeyError(
+            "RECENT_CONNECTIONS_KEY is not set. It is required to encrypt saved "
+            "database connections — set a stable secret in the environment."
         )
-        try:
-            os.chmod(_CONNECTIONS_KEY_FILE, 0o600)
-        except OSError:
-            pass
-        key = base64.urlsafe_b64encode(hashlib.sha256(new_secret.encode()).digest())
-    else:
-        raise RuntimeError(
-            "No encryption key configured for recent connections. Set "
-            "RECENT_CONNECTIONS_KEY or RECENT_CONNECTIONS_MASTER_KEY (or "
-            "both) in the environment, or set JWT_SECRET for migration."
-        )
+    key = base64.urlsafe_b64encode(hashlib.sha256(secret.encode()).digest())
     return Fernet(key)
 
 
@@ -91,9 +58,13 @@ def _encrypt_connection_url(db_url):
 
 
 def _decrypt_connection_url(value):
+    # A missing or unusable key configuration must not short-circuit the legacy
+    # and plaintext paths below — rows written before the current key scheme are
+    # still readable through them, and that migration path is the whole point of
+    # the fallbacks. Hence RuntimeError is caught alongside the Fernet errors.
     try:
         return _recent_connection_cipher().decrypt(value.encode()).decode()
-    except (InvalidToken, ValueError, TypeError):
+    except (InvalidToken, ValueError, TypeError, RuntimeError):
         pass
     jwt_secret = os.getenv("JWT_SECRET")
     if jwt_secret:
@@ -113,9 +84,9 @@ def _decrypt_connection_url(value):
 
 
 async def save_recent_connection(
-    user_id, db_url, display_url, dialect, db_id, table_count
+    workspace_id, db_url, display_url, dialect, db_id, table_count, alias_name=None
 ):
-    uid = _to_uuid(user_id)
+    wid = _to_uuid(workspace_id)
     encrypted_url = _encrypt_connection_url(db_url)
     async with async_session() as session:
         try:
@@ -123,20 +94,26 @@ async def save_recent_connection(
                 pg_insert(RecentConnection)
                 .values(
                     id=_uuid7(),
-                    user_id=uid,
+                    workspace_id=wid,
                     db_url=encrypted_url,
                     display_url=display_url,
                     dialect=dialect,
                     db_id=db_id,
                     table_count=table_count,
+                    alias_name=alias_name,
                 )
                 .on_conflict_do_update(
-                    index_elements=["user_id", "db_id"],
+                    index_elements=["workspace_id", "db_id"],
                     set_=dict(
                         db_url=encrypted_url,
                         display_url=display_url,
                         dialect=dialect,
                         table_count=table_count,
+                        alias_name=(
+                            alias_name
+                            if alias_name is not None
+                            else RecentConnection.alias_name
+                        ),
                         connected_at=func.now(),
                     ),
                 )
@@ -148,34 +125,58 @@ async def save_recent_connection(
             raise
 
 
-async def get_recent_connections(user_id: str, limit: int = 5):
-    uid = _to_uuid(user_id)
+def _serialize_connection(row, include_url: bool = False) -> dict:
+    d = {
+        "id": row.id,
+        "workspace_id": row.workspace_id,
+        "display_url": row.display_url,
+        "alias_name": row.alias_name,
+        "dialect": row.dialect,
+        "db_id": row.db_id,
+        "table_count": row.table_count,
+        "connected_at": row.connected_at,
+    }
+    if include_url:
+        d["db_url"] = _decrypt_connection_url(row.db_url)
+    return serialize_doc(d)
+
+
+async def get_recent_connections(workspace_id: str, limit: int = 50):
+    wid = _to_uuid(workspace_id)
     async with async_session() as session:
         result = await session.execute(
             select(RecentConnection)
-            .where(RecentConnection.user_id == uid)
+            .where(RecentConnection.workspace_id == wid)
             .order_by(RecentConnection.connected_at.desc())
             .limit(limit)
         )
-        rows = result.scalars().all()
-        out = []
-        for row in rows:
-            d = {
-                "id": row.id,
-                "user_id": row.user_id,
-                "display_url": row.display_url,
-                "dialect": row.dialect,
-                "db_id": row.db_id,
-                "table_count": row.table_count,
-                "connected_at": row.connected_at,
-            }
-            out.append(serialize_doc(d))
-        return out
+        return [_serialize_connection(row) for row in result.scalars().all()]
 
 
-async def delete_recent_connection(user_id: str, connection_id: str) -> bool:
+async def get_latest_recent_connection(workspace_id: str) -> Optional[dict]:
+    """The workspace's most recently used connection, with its URL decrypted.
+
+    Used to restore a workspace's database after a server restart, when nothing
+    tells us *which* database to reconnect to.
+    """
     try:
-        uid = _to_uuid(user_id)
+        wid = _to_uuid(workspace_id)
+    except (ValueError, TypeError):
+        return None
+    async with async_session() as session:
+        result = await session.execute(
+            select(RecentConnection)
+            .where(RecentConnection.workspace_id == wid)
+            .order_by(RecentConnection.connected_at.desc())
+            .limit(1)
+        )
+        row = result.scalar_one_or_none()
+        return _serialize_connection(row, include_url=True) if row else None
+
+
+async def delete_recent_connection(workspace_id: str, connection_id: str) -> bool:
+    try:
+        wid = _to_uuid(workspace_id)
         cid = _to_uuid(connection_id)
     except (ValueError, TypeError):
         return False
@@ -183,7 +184,7 @@ async def delete_recent_connection(user_id: str, connection_id: str) -> bool:
         try:
             result = await session.execute(
                 delete(RecentConnection).where(
-                    RecentConnection.id == cid, RecentConnection.user_id == uid
+                    RecentConnection.id == cid, RecentConnection.workspace_id == wid
                 )
             )
             await session.commit()
@@ -193,27 +194,42 @@ async def delete_recent_connection(user_id: str, connection_id: str) -> bool:
             raise
 
 
-async def get_recent_connection_by_db_id(user_id: str, db_id: str) -> Optional[dict]:
-    uid = _to_uuid(user_id)
+async def get_recent_connection_by_db_id(
+    workspace_id: str, db_id: str
+) -> Optional[dict]:
+    try:
+        wid = _to_uuid(workspace_id)
+    except (ValueError, TypeError):
+        return None
     async with async_session() as session:
         result = await session.execute(
             select(RecentConnection).where(
-                RecentConnection.user_id == uid, RecentConnection.db_id == db_id
+                RecentConnection.workspace_id == wid, RecentConnection.db_id == db_id
             )
         )
         conn = result.scalar_one_or_none()
-        if conn is None:
-            return None
-        d = {
-            "id": conn.id,
-            "user_id": conn.user_id,
-            "db_url": conn.db_url,
-            "display_url": conn.display_url,
-            "dialect": conn.dialect,
-            "db_id": conn.db_id,
-            "table_count": conn.table_count,
-            "connected_at": conn.connected_at,
-        }
-        if "db_url" in d:
-            d["db_url"] = _decrypt_connection_url(d["db_url"])
-        return serialize_doc(d)
+        return _serialize_connection(conn, include_url=True) if conn else None
+
+
+async def update_recent_connection_alias(
+    workspace_id: str, connection_id: str, alias_name: str | None
+) -> bool:
+    try:
+        wid = _to_uuid(workspace_id)
+        cid = _to_uuid(connection_id)
+    except (ValueError, TypeError):
+        return False
+    from sqlalchemy import update
+
+    async with async_session() as session:
+        try:
+            result = await session.execute(
+                update(RecentConnection)
+                .where(RecentConnection.id == cid, RecentConnection.workspace_id == wid)
+                .values(alias_name=alias_name)
+            )
+            await session.commit()
+            return result.rowcount > 0
+        except Exception:
+            await session.rollback()
+            raise

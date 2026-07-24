@@ -1,10 +1,11 @@
 """FastAPI application."""
 
+import asyncio
 import logging
 import os
 import sys
 from pathlib import Path
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, suppress
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.concurrency import run_in_threadpool
@@ -21,15 +22,20 @@ from backend.app.ratelimit import limiter
 from backend.app.pgdatabase import KnowledgeService
 from backend.app.pgdatabase.engine import async_session
 
-from backend.app.routes.auth import router as auth_router
-from backend.app.routes.system import router as system_router
-from backend.app.routes.database import router as database_router
-from backend.app.routes.onboard import router as onboard_router
-from backend.app.routes.query import router as query_router
-from backend.app.routes.history import router as history_router
-from backend.app.routes.connections import router as connections_router
-from backend.app.routes.catalog import router as catalog_router
-from backend.app.routes.conversations import router as conversations_router
+from backend.app.routes import (
+    auth,
+    catalog,
+    connections,
+    conversations,
+    database,
+    history,
+    onboard,
+    query,
+    system,
+    workspaces,
+    dashboards,
+    saved_queries,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -80,9 +86,23 @@ async def lifespan(app):
     else:
         from backend.app.pgdatabase import dispose_db
 
-    yield
+    # In-process periodic pruning of the activity log. Safe here because the
+    # deployment is single-process; a second worker would double up the work
+    # (harmless, but wasteful), so the flag exists to turn it off.
+    cleanup_task = None
+    if cfgmod.ACTIVITY_CLEANUP_ENABLED:
+        from backend.app.controllers.activity import activity_cleanup_loop
 
-    await dispose_db()
+        cleanup_task = asyncio.create_task(activity_cleanup_loop())
+
+    try:
+        yield
+    finally:
+        if cleanup_task:
+            cleanup_task.cancel()
+            with suppress(asyncio.CancelledError):
+                await cleanup_task
+        await dispose_db()
 
 
 def create_app(initial_db_url="", readonly=True):
@@ -114,7 +134,7 @@ def create_app(initial_db_url="", readonly=True):
     providers = ProviderManager(cfg)
     db = DatabaseManager(readonly=readonly)
     kbs = KnowledgeService(async_session)
-    session_log = SessionLog(cfgmod.CONFIG_DIR)
+    session_log = SessionLog()
 
     app = FastAPI(title="BoloDB", version="2.0.0", lifespan=lifespan)
     app.state.limiter = limiter
@@ -148,14 +168,19 @@ def create_app(initial_db_url="", readonly=True):
             "in the server. Connect from the UI after signing in."
         )
 
-    app.include_router(auth_router)
-    app.include_router(system_router)
-    app.include_router(database_router)
-    app.include_router(onboard_router)
-    app.include_router(query_router)
-    app.include_router(history_router)
-    app.include_router(connections_router)
-    app.include_router(catalog_router)
-    app.include_router(conversations_router)
+    app.include_router(auth.router)
+    app.include_router(system.router)
+    app.include_router(database.router)
+    app.include_router(onboard.router)
+    app.include_router(query.router)
+    app.include_router(history.router)
+    app.include_router(connections.router)
+    app.include_router(catalog.router)
+    app.include_router(conversations.router)
+    app.include_router(workspaces.router)
+    app.include_router(dashboards.router)
+    app.include_router(saved_queries.router)
+
+    # Catch-all for API 404app
 
     return app

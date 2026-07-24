@@ -18,7 +18,7 @@
   $effect(() => {
     if (!browser) return;
     fetch("/api/auth/me", { credentials: "include" }).then((res) => {
-      if (res.ok) goto("/dashboard");
+      if (res.ok) goto("/chat");
       else goto("/signup");
     });
   });

@@ -9,9 +9,10 @@
   import ResultChart from '$lib/components/charts/ResultChart.svelte';
   import Thinking from '$lib/components/Thinking.svelte';
   import Flywheel from '$lib/components/Flywheel.svelte';
-  import { detectChartData } from '$lib/components/charts/chartUtils';
+  import SaveQueryDialog from '$lib/components/SaveQueryDialog.svelte';
+  import { detectChartData, planChart } from '$lib/components/charts/chartUtils';
 
-  let { turn, onVerify, isLatest, liveArtifacts, onRegenerate, onEditPrompt }:
+  let { turn, onVerify, isLatest, liveArtifacts, onRegenerate, onEditPrompt, onRerun, rerunning = false }:
     {
       turn: Turn;
       onVerify: (id: string, verdict: string, reason: string | null) => void;
@@ -19,6 +20,9 @@
       liveArtifacts?: ThinkingArtifact[];
       onRegenerate?: (id: string) => void;
       onEditPrompt?: (id: string, newQuestion: string) => void;
+      /** Re-execute this turn's SQL — no model call, so no tokens spent. */
+      onRerun?: (id: string) => void;
+      rerunning?: boolean;
     } = $props();
 
   let showReasons = $state(false);
@@ -27,10 +31,34 @@
   let editing = $state(false);
   let editValue = $state('');
   let copyFeedback = $state<'response' | 'prompt' | null>(null);
+  let showSaveDialog = $state(false);
 
+  const stringRows = $derived((turn.rows || []).map(r => r.map(String)));
+
+  // The model picks the chart from the SQL it wrote, so trust it when it made a
+  // call; the local heuristic only covers turns that have no chart spec.
+  const modelPlan = $derived(planChart(turn.chart, turn.columns || [], stringRows));
   const hasChartData = $derived(
-    detectChartData(turn.columns || [], (turn.rows || []).map(r => r.map(String))) !== null
+    modelPlan !== null ||
+      detectChartData(turn.columns || [], stringRows) !== null
   );
+  // "table" is a deliberate choice by the model, not an absent one — respect it.
+  const modelWantsChart = $derived(!!turn.chart && turn.chart.type !== 'table' && modelPlan !== null);
+
+  // Open on the chart when the model asked for one, without pinning the toggle.
+  let userPickedView = $state(false);
+  const effectiveView = $derived(
+    userPickedView ? viewMode : (modelWantsChart ? 'chart' : 'table')
+  );
+
+  function toggleView() {
+    // Capture the view actually on screen *before* flipping the flag — once
+    // userPickedView is true, effectiveView resolves to viewMode, so reading it
+    // afterwards would ignore the model's chart default and no-op the first click.
+    const current = effectiveView;
+    userPickedView = true;
+    viewMode = current === 'table' ? 'chart' : 'table';
+  }
 
   function yes() { justVerified = true; onVerify(turn.id, 'correct', null); setTimeout(() => justVerified = false, 1600); }
   function no(reason: string) { showReasons = false; onVerify(turn.id, 'wrong', reason); }
@@ -103,6 +131,26 @@
   }
 </script>
 
+{#snippet rerunButton()}
+  {#if onRerun && turn.sql}
+    {#if turn.lastRunAt}
+      <span style="font-size:11px;color:var(--faint);font-weight:550">Updated {formatTime(turn.lastRunAt)}</span>
+    {/if}
+    <button
+      class="rerun-btn"
+      onclick={() => onRerun?.(turn.id)}
+      disabled={rerunning}
+      title="Re-run this SQL against your database — no AI credits used"
+    >
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" class={rerunning ? 'spin' : ''}>
+        <path d="M1 4v6h6M23 20v-6h-6" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M20.5 6.5A9 9 0 004.9 9M3.5 17.5A9 9 0 0019.1 15" stroke="currentColor" stroke-width="2.1" stroke-linecap="round"/>
+      </svg>
+      {rerunning ? 'Running…' : 'Re-run SQL'}
+    </button>
+  {/if}
+{/snippet}
+
 <div class="rise group" style="margin-bottom:26px">
   <!-- question bubble -->
   <div style="display:flex;justify-content:flex-end;margin-bottom:12px">
@@ -169,6 +217,9 @@
           <div style="font-weight:500;font-family:var(--font-mono);font-size:12.5px;opacity:.85">{turn.executionError}</div>
         </div>
       {:else}
+        <div style="display:flex;align-items:center;justify-content:flex-end;margin-bottom:8px;gap:8px;">
+          {@render rerunButton()}
+        </div>
         <ResultTable columns={turn.columns || []} rows={turn.rows || []} />
       {/if}
       {#if turn.resultTruncated}
@@ -219,13 +270,14 @@
       {/if}
 
       {#if !turn.executionError && turn.sql}
-        <div style="display:flex;align-items:center;justify-content:flex-end;margin-bottom:8px;gap:6px;">
+        <div style="display:flex;align-items:center;justify-content:flex-end;margin-bottom:8px;gap:8px;">
+          {@render rerunButton()}
           {#if hasChartData}
-            <ChartToggle mode={viewMode} onToggle={() => viewMode = viewMode === 'table' ? 'chart' : 'table'} />
+            <ChartToggle mode={effectiveView} onToggle={toggleView} />
           {/if}
         </div>
-        {#if viewMode === 'chart' && hasChartData}
-          <ResultChart columns={turn.columns || []} rows={(turn.rows || []).map(r => r.map(String))} />
+        {#if effectiveView === 'chart' && hasChartData}
+          <ResultChart columns={turn.columns || []} rows={stringRows} spec={turn.chart} />
         {:else}
           <ResultTable columns={turn.columns || []} rows={turn.rows || []} />
         {/if}
@@ -295,6 +347,11 @@
       <button class="tb-btn" onclick={() => onRegenerate?.(turn.id)} title="Regenerate">
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none"><path d="M1 4v6h6M23 20v-6h-6" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"/><path d="M20.5 6.5A9 9 0 004.9 9M3.5 17.5A9 9 0 0019.1 15" stroke="currentColor" stroke-width="2.1" stroke-linecap="round"/></svg>
       </button>
+      {#if turn.sql}
+      <button class="tb-btn" onclick={() => showSaveDialog = true} title="Save to Dashboard">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none"><path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M17 21v-8H7v8M7 3v5h8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
+      {/if}
       <button class="tb-btn" onclick={copyResponse} title="Copy response" style="position:relative">
         {#if copyFeedback === 'response'}
           <span class="tb-copied" aria-live="polite">Copied!</span>
@@ -314,7 +371,39 @@
   {/if}
 </div>
 
+{#if showSaveDialog}
+  <SaveQueryDialog {turn} onClose={() => showSaveDialog = false} />
+{/if}
+
 <style>
+  .rerun-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 4px 10px;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--muted);
+    border-radius: 99px;
+    font-size: 12px;
+    font-weight: 650;
+    cursor: pointer;
+    transition: color .12s, border-color .12s;
+  }
+  .rerun-btn:hover:not(:disabled) {
+    color: var(--brand-ink);
+    border-color: var(--brand-tint-2);
+  }
+  .rerun-btn:disabled {
+    opacity: .65;
+    cursor: default;
+  }
+  .rerun-btn .spin {
+    animation: rerun-spin .8s linear infinite;
+  }
+  @keyframes rerun-spin {
+    to { transform: rotate(360deg); }
+  }
   .tb-btn {
     width: 24px;
     height: 24px;

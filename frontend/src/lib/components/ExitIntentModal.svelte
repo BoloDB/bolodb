@@ -142,7 +142,7 @@
       </h2>
       <p class="exit-desc">
         No credit card, no database of your own needed. We spin up a realistic
-        TechStore e-commerce dataset so you can see BoloDB answer real questions
+        webshop dataset so you can see BoloDB answer real questions
         in under 30 seconds.
       </p>
 

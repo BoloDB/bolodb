@@ -1,0 +1,51 @@
+# ──────────────────────────────────────────────
+#  BoloDB  ·  Local development overrides
+# ──────────────────────────────────────────────
+#  Usage:
+#    docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build
+#
+#  NOT auto-loaded (unlike docker-compose.override.yml), so Coolify /
+#  production deploys that use only docker-compose.yml get the static
+#  nginx image without a Vite bind-mount that empties /app.
+# ──────────────────────────────────────────────
+
+services:
+  backend:
+    ports:
+      - "127.0.0.1:4322:4321"
+
+  # Vite HMR for local UI work — overrides the production static nginx build
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: DOCKERFILE.dev
+    container_name: bolodb-frontend
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    ports:
+      - "127.0.0.1:5174:5173"
+    environment:
+      - BACKEND_URL=http://backend:4321
+      - PUBLIC_POSTHOG_PROJECT_TOKEN=${PUBLIC_POSTHOG_PROJECT_TOKEN}
+      - PUBLIC_POSTHOG_HOST=${PUBLIC_POSTHOG_HOST:-https://us.i.posthog.com}
+      - VITE_SUPABASE_URL=${SUPABASE_URL:?SUPABASE_URL must be set}
+      - VITE_SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY:?SUPABASE_ANON_KEY must be set}
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks:
+      - bolodb-net
+
+  nginx:
+    build:
+      context: ./nginx
+      dockerfile: DOCKERFILE.dev
+    container_name: bolodb-nginx
+    ports:
+      - "127.0.0.1:8080:80"
+    depends_on:
+      frontend:
+        condition: service_started
+      backend:
+        condition: service_healthy

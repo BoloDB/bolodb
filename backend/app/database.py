@@ -120,11 +120,22 @@ def db_id_for(url):
     return hashlib.sha256(sanitize_url(url).encode()).hexdigest()[:16]
 
 
+class _ConnectionsDict(dict):
+    def __getitem__(self, key):
+        if key in self:
+            return super().__getitem__(key)
+        if isinstance(key, str):
+            for k, v in self.items():
+                if k == key or (isinstance(k, tuple) and k[0] == key):
+                    return v
+        raise KeyError(key)
+
+
 class DatabaseManager:
     def __init__(
         self, readonly=True, sample_rows=3, max_rows=500, statement_timeout=30
     ):
-        self._connections = {}
+        self._connections = _ConnectionsDict()
         self.readonly = readonly
         self.sample_rows = sample_rows
         self.max_rows = max_rows
@@ -132,26 +143,39 @@ class DatabaseManager:
         # it. Enforced server-side per connection (see _apply_statement_timeout).
         self.statement_timeout = statement_timeout
 
-    def connected(self, user_id):
-        return user_id in self._connections
+    def connected(self, workspace_id, db_id=None):
+        if db_id:
+            return (workspace_id, db_id) in self._connections
+        return any(k[0] == workspace_id for k in self._connections.keys())
 
-    def _get(self, user_id):
-        try:
-            return self._connections[user_id]
-        except KeyError:
-            raise HTTPException(409, "No Database Connected")
+    def _get(self, workspace_id, db_id=None):
+        if db_id:
+            try:
+                return self._connections[(workspace_id, db_id)]
+            except KeyError:
+                raise HTTPException(409, "No Database Connected")
 
-    def disconnect(self, user_id):
+        # Fallback to the first connected database for this workspace
+        for k, v in self._connections.items():
+            if k[0] == workspace_id:
+                return v
+        raise HTTPException(409, "No Database Connected")
+
+    def disconnect(self, workspace_id, db_id=None):
         """Reset all connection state so the server accepts a new connect call."""
-        if user_id not in self._connections:
-            return
-        try:
-            self._connections[user_id]["engine"].dispose()  # release pooled connections
-        except Exception as e:
-            logger.warning("Error disposing engine on disconnect: %s", e)
-        del self._connections[user_id]
+        keys_to_delete = []
+        for k in self._connections.keys():
+            if k[0] == workspace_id and (db_id is None or k[1] == db_id):
+                keys_to_delete.append(k)
 
-    def connect(self, user_id, url):
+        for k in keys_to_delete:
+            try:
+                self._connections[k]["engine"].dispose()
+            except Exception as e:
+                logger.warning("Error disposing engine on disconnect: %s", e)
+            del self._connections[k]
+
+    def connect(self, workspace_id, url):
         import os
 
         if os.environ.get("RUNNING_IN_DOCKER") == "true":
@@ -170,11 +194,12 @@ class DatabaseManager:
             with engine.connect() as c:
                 c.execute(text("SELECT 1"))
             tables = len(inspect(engine).get_table_names())
-            old_connection = self._connections.get(user_id)
-            self._connections[user_id] = {
+            db_id = db_id_for(url)
+            old_connection = self._connections.get((workspace_id, db_id))
+            self._connections[(workspace_id, db_id)] = {
                 "engine": engine,
                 "url": url,
-                "db_id": db_id_for(url),
+                "db_id": db_id,
                 "dialect": url.split(":")[0].split("+")[0],
                 "_schema_cache": None,
                 "_table_count": tables,
@@ -183,22 +208,22 @@ class DatabaseManager:
                 old_connection["engine"].dispose()
             return {
                 "ok": True,
-                "dialect": self._connections[user_id]["dialect"],
+                "dialect": self._connections[(workspace_id, db_id)]["dialect"],
                 "tables": tables,
-                "db_id": self._connections[user_id]["db_id"],
+                "db_id": self._connections[(workspace_id, db_id)]["db_id"],
                 "url": sanitize_url(url),
             }
         except Exception as e:
             return {"ok": False, "error": _sanitize_db_error(e)}
 
-    def _q(self, user_id, n):
-        c = self._get(user_id)
+    def _q(self, workspace_id, n):
+        c = self._get(workspace_id)
         n = str(n)
         if c["dialect"] == "mysql":
             return f"`{n.replace('`', '``')}`"
         return f'"{n.replace(chr(34), chr(34) * 2)}"'
 
-    def get_schema(self, user_id, refresh=False):
+    def get_schema(self, workspace_id, db_id=None, refresh=False):
         """Introspect the connected database into the schema dict.
 
         STRUCTURE (columns, primary/foreign keys) is collected for EVERY table
@@ -207,7 +232,7 @@ class DatabaseManager:
         distinct values) is capped, at ENRICH_MAX tables, preferring the
         largest tables when row counts are known.
         """
-        c = self._get(user_id)
+        c = self._get(workspace_id, db_id=db_id)
         if c["_schema_cache"] and not refresh:
             return c["_schema_cache"]
         inspector = inspect(c["engine"])
@@ -355,7 +380,7 @@ class DatabaseManager:
                 try:
                     res = conn.execute(
                         text(
-                            f"SELECT * FROM {self._q(user_id, tbl)} LIMIT {self.sample_rows}"
+                            f"SELECT * FROM {self._q(workspace_id, tbl)} LIMIT {self.sample_rows}"
                         )
                     )
                     names = list(res.keys())
@@ -372,7 +397,7 @@ class DatabaseManager:
                 if rc is None:
                     try:
                         rc = conn.execute(
-                            text(f"SELECT COUNT(*) FROM {self._q(user_id, tbl)}")
+                            text(f"SELECT COUNT(*) FROM {self._q(workspace_id, tbl)}")
                         ).scalar()
                     except Exception as e:
                         logger.warning("Error fetching row count for %s: %s", tbl, e)
@@ -390,7 +415,7 @@ class DatabaseManager:
                             try:
                                 dv = conn.execute(
                                     text(
-                                        f"SELECT DISTINCT {self._q(user_id, col['name'])} FROM {self._q(user_id, tbl)} LIMIT 12"
+                                        f"SELECT DISTINCT {self._q(workspace_id, col['name'])} FROM {self._q(workspace_id, tbl)} LIMIT 12"
                                     )
                                 ).fetchall()
                                 vals = [row[0] for row in dv if row[0] is not None]
@@ -414,9 +439,9 @@ class DatabaseManager:
         c["_schema_cache"] = schema
         return schema
 
-    def schema_as_text(self, user_id):
-        c = self._get(user_id)
-        schema = self.get_schema(user_id)
+    def schema_as_text(self, workspace_id, db_id=None):
+        c = self._get(workspace_id, db_id)
+        schema = self.get_schema(workspace_id, db_id=db_id)
         lines = [f"Database dialect: {c['dialect']}"]
         for tbl, info in schema.items():
             rc = (
@@ -441,7 +466,7 @@ class DatabaseManager:
                 lines.append(f"  sample: {info['sample_rows'][:1]}")
         return "\n".join(lines)
 
-    def _readonly_violation(self, user_id, cleaned):
+    def _readonly_violation(self, workspace_id, cleaned, db_id=None):
         """Return an error string if `cleaned` is not a safe read-only query, else None.
 
         Primary check parses the SQL into an AST (sqlglot) and rejects anything
@@ -453,7 +478,7 @@ class DatabaseManager:
         """
         if not cleaned:
             return "Empty statement."
-        c = self._get(user_id)
+        c = self._get(workspace_id, db_id)
         glot_dialect = _GLOT_DIALECT.get(c["dialect"], c["dialect"])
         try:
             stmts = sqlglot.parse(cleaned, dialect=glot_dialect)
@@ -512,11 +537,11 @@ class DatabaseManager:
         except SQLAlchemyError as e:
             logger.warning("Could not set statement timeout for %s: %s", dialect, e)
 
-    def execute(self, user_id, sql):
-        c = self._get(user_id)
+    def execute(self, workspace_id, sql, db_id=None):
+        c = self._get(workspace_id, db_id)
         cleaned = sql.strip().rstrip(";").strip()
         if self.readonly:
-            violation = self._readonly_violation(user_id, cleaned)
+            violation = self._readonly_violation(workspace_id, cleaned, db_id)
             if violation:
                 return {"error": violation, "sql": cleaned}
         try:
@@ -551,14 +576,14 @@ class DatabaseManager:
                 }
             return {"error": _sanitize_db_error(e), "sql": cleaned}
 
-    def get_db_id(self, user_id):
-        return self._get(user_id)["db_id"]
+    def get_db_id(self, workspace_id, db_id=None):
+        return self._get(workspace_id, db_id)["db_id"]
 
-    def get_dialect(self, user_id):
-        return self._get(user_id)["dialect"]
+    def get_dialect(self, workspace_id, db_id=None):
+        return self._get(workspace_id, db_id)["dialect"]
 
-    def get_info(self, user_id):
-        c = self._get(user_id)
+    def get_info(self, workspace_id, db_id=None):
+        c = self._get(workspace_id, db_id)
         return {
             "url": sanitize_url(c["url"]),
             "dialect": c["dialect"],

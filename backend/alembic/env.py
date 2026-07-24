@@ -39,9 +39,23 @@ def run_migrations_offline() -> None:
         context.run_migrations()
 
 
+# Any 64-bit constant works; it only has to be the same in every process that
+# migrates this database. Derived from the project name so it cannot collide
+# with an advisory lock another application takes on a shared cluster.
+_MIGRATION_LOCK_ID = 8410231166942030001
+
+
 def do_run_migrations(connection):
     context.configure(connection=connection, target_metadata=target_metadata)
     with context.begin_transaction():
+        # Containers start migrations concurrently on a scaled deployment, and
+        # two Alembic runs against one database race on alembic_version. The
+        # transaction-scoped advisory lock makes the second wait for the first
+        # and then find nothing left to apply; it is released on commit or
+        # rollback, so a crashed migration cannot wedge later deploys.
+        connection.exec_driver_sql(
+            f"SELECT pg_advisory_xact_lock({_MIGRATION_LOCK_ID})"
+        )
         context.run_migrations()
 
 

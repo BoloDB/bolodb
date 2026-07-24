@@ -38,6 +38,7 @@ export interface DbInfo {
   url?: string;
   dialect?: string;
   db_id?: string;
+  alias_name?: string;
   tables?: number;
   ok?: boolean;
   has_knowledge?: boolean;
@@ -45,6 +46,8 @@ export interface DbInfo {
   starters?: string[];
   glossary?: GlossaryItem[];
   is_sample?: boolean;
+  /** Set when the connection succeeded but couldn't be saved to the workspace. */
+  save_error?: string;
 }
 
 export interface ThinkingArtifact {
@@ -57,6 +60,19 @@ export interface ThinkingArtifact {
     | "execution"
     | "confidence";
   data: Record<string, unknown>;
+}
+
+/** How the model chose to visualise a result. */
+export type ChartType = "table" | "bar" | "line" | "area" | "pie" | "number";
+
+export interface ChartSpec {
+  type: ChartType;
+  /** Column alias for the category/time axis. Empty for table and number. */
+  x_axis: string;
+  /** Column alias for the numeric value. Empty for table. */
+  y_axis: string;
+  title: string;
+  reason: string;
 }
 
 export interface Turn {
@@ -79,6 +95,10 @@ export interface Turn {
   /** Restored from history with the stored result capped server-side. */
   resultTruncated?: boolean;
   thinkingArtifacts?: ThinkingArtifact[];
+  /** The model's chart choice. Absent on turns from before charts existed. */
+  chart?: ChartSpec | null;
+  /** Set when the turn's SQL was re-executed without regenerating it. */
+  lastRunAt?: string;
 }
 
 export type StreamEvent =
@@ -91,6 +111,7 @@ export type StreamEvent =
     }
   | { kind: "hint"; message: string; elapsed: number }
   | { kind: "sql"; attempt: number; sql: string }
+  | { kind: "chart"; attempt: number; chart: ChartSpec }
   | {
       kind: "validation";
       attempt: number;
@@ -176,6 +197,8 @@ export interface ConversationTurn {
   result_truncated?: boolean;
   confidence: "High" | "Medium" | "Low";
   restatement: string;
+  /** Null for turns recorded before the model started choosing a chart. */
+  chart?: ChartSpec | null;
   timestamp: string;
 }
 

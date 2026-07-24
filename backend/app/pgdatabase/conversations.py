@@ -6,7 +6,8 @@ from datetime import datetime
 from sqlalchemy import select, delete, update, text
 
 from backend.app.pgdatabase.engine import async_session
-from backend.app.pgdatabase.models import Conversation, QueryHistory, _utcnow
+from backend.app.models.conversation import Conversation, QueryHistory
+from backend.app.models.base import _utcnow
 from backend.app.pgdatabase.serialization import _to_uuid, serialize_doc
 
 # Max result rows returned per turn when restoring a conversation.
@@ -15,12 +16,14 @@ MAX_RESTORED_ROWS = 100
 MAX_SAVED_ROWS = 500
 
 
-async def create_conversation(user_id, title="", database_id=None):
-    uid = _to_uuid(user_id)
+async def create_conversation(workspace_id, user_id, title="", database_id=None):
+    uid = _to_uuid(workspace_id)
+    usr = _to_uuid(user_id)
     async with async_session() as session:
         try:
             conv = Conversation(
-                user_id=uid,
+                workspace_id=uid,
+                user_id=usr,
                 title=title,
                 database_id=database_id,
             )
@@ -32,7 +35,8 @@ async def create_conversation(user_id, title="", database_id=None):
             raise
         d = {
             "id": conv.id,
-            "user_id": conv.user_id,
+            "_id": conv.id,
+            "workspace_id": conv.workspace_id,
             "title": conv.title,
             "database_id": conv.database_id,
             "created_at": conv.created_at,
@@ -41,27 +45,33 @@ async def create_conversation(user_id, title="", database_id=None):
         return serialize_doc(d)
 
 
-async def conversation_owned_by(user_id: str, conversation_id: str) -> bool:
+async def conversation_owned_by(
+    workspace_id: str, user_id: str, conversation_id: str
+) -> bool:
     try:
-        uid = _to_uuid(user_id)
+        uid = _to_uuid(workspace_id)
+        usr = _to_uuid(user_id)
         cid = _to_uuid(conversation_id)
     except (ValueError, TypeError):
         return False
     async with async_session() as session:
         result = await session.execute(
             select(Conversation.id).where(
-                Conversation.id == cid, Conversation.user_id == uid
+                Conversation.id == cid,
+                Conversation.workspace_id == uid,
+                Conversation.user_id == usr,
             )
         )
         return result.scalar_one_or_none() is not None
 
 
-async def get_conversations(user_id: str):
-    uid = _to_uuid(user_id)
+async def get_conversations(workspace_id: str, user_id: str):
+    uid = _to_uuid(workspace_id)
+    usr = _to_uuid(user_id)
     async with async_session() as session:
         conv_result = await session.execute(
             select(Conversation)
-            .where(Conversation.user_id == uid)
+            .where(Conversation.workspace_id == uid, Conversation.user_id == usr)
             .order_by(Conversation.updated_at.desc())
         )
         convs = conv_result.scalars().all()
@@ -76,7 +86,7 @@ async def get_conversations(user_id: str):
                 "SELECT qh.conversation_id, COUNT(*) AS turn_count, "
                 "MAX(qh.timestamp) AS last_ts "
                 "FROM query_history qh "
-                "WHERE qh.user_id = :uid AND qh.conversation_id = ANY(CAST(:cids AS uuid[])) "
+                "WHERE qh.workspace_id = :uid AND qh.conversation_id = ANY(CAST(:cids AS uuid[])) "
                 "GROUP BY qh.conversation_id"
             ),
             {"uid": uid, "cids": cid_params},
@@ -91,7 +101,7 @@ async def get_conversations(user_id: str):
             text(
                 "SELECT DISTINCT ON (qh.conversation_id) qh.conversation_id, qh.question "
                 "FROM query_history qh "
-                "WHERE qh.user_id = :uid AND qh.conversation_id = ANY(CAST(:cids AS uuid[])) "
+                "WHERE qh.workspace_id = :uid AND qh.conversation_id = ANY(CAST(:cids AS uuid[])) "
                 "ORDER BY qh.conversation_id, qh.timestamp DESC"
             ),
             {"uid": uid, "cids": cid_params},
@@ -102,7 +112,8 @@ async def get_conversations(user_id: str):
         for conv in convs:
             d = {
                 "id": conv.id,
-                "user_id": conv.user_id,
+                "_id": conv.id,
+                "workspace_id": conv.workspace_id,
                 "title": conv.title,
                 "database_id": conv.database_id,
                 "created_at": conv.created_at,
@@ -115,16 +126,19 @@ async def get_conversations(user_id: str):
         return out
 
 
-async def get_conversation(user_id: str, conversation_id: str):
+async def get_conversation(workspace_id: str, user_id: str, conversation_id: str):
     try:
-        uid = _to_uuid(user_id)
+        uid = _to_uuid(workspace_id)
+        usr = _to_uuid(user_id)
         cid = _to_uuid(conversation_id)
     except (ValueError, TypeError):
         return None
     async with async_session() as session:
         result = await session.execute(
             select(Conversation).where(
-                Conversation.id == cid, Conversation.user_id == uid
+                Conversation.id == cid,
+                Conversation.workspace_id == uid,
+                Conversation.user_id == usr,
             )
         )
         conv = result.scalar_one_or_none()
@@ -132,7 +146,8 @@ async def get_conversation(user_id: str, conversation_id: str):
             return None
         d = {
             "id": conv.id,
-            "user_id": conv.user_id,
+            "_id": conv.id,
+            "workspace_id": conv.workspace_id,
             "title": conv.title,
             "database_id": conv.database_id,
             "created_at": conv.created_at,
@@ -144,7 +159,7 @@ async def get_conversation(user_id: str, conversation_id: str):
             select(QueryHistory)
             .where(
                 QueryHistory.conversation_id == cid,
-                QueryHistory.user_id == uid,
+                QueryHistory.workspace_id == uid,
             )
             .order_by(QueryHistory.timestamp.asc())
         )
@@ -157,13 +172,15 @@ async def get_conversation(user_id: str, conversation_id: str):
             truncated = len(result) > MAX_RESTORED_ROWS
             td = {
                 "id": turn.id,
-                "user_id": turn.user_id,
+                "_id": turn.id,
+                "workspace_id": turn.workspace_id,
                 "question": turn.question,
                 "sql": turn.sql,
                 "result": result[:MAX_RESTORED_ROWS],
                 "result_truncated": truncated,
                 "confidence": turn.confidence,
                 "restatement": turn.restatement,
+                "chart": turn.chart,
                 "conversation_id": turn.conversation_id,
                 "timestamp": turn.timestamp,
             }
@@ -172,9 +189,12 @@ async def get_conversation(user_id: str, conversation_id: str):
         return d
 
 
-async def rename_conversation(user_id: str, conversation_id: str, title: str) -> bool:
+async def rename_conversation(
+    workspace_id: str, user_id: str, conversation_id: str, title: str
+) -> bool:
     try:
-        uid = _to_uuid(user_id)
+        uid = _to_uuid(workspace_id)
+        usr = _to_uuid(user_id)
         cid = _to_uuid(conversation_id)
     except (ValueError, TypeError):
         return False
@@ -182,7 +202,11 @@ async def rename_conversation(user_id: str, conversation_id: str, title: str) ->
         try:
             result = await session.execute(
                 update(Conversation)
-                .where(Conversation.id == cid, Conversation.user_id == uid)
+                .where(
+                    Conversation.id == cid,
+                    Conversation.workspace_id == uid,
+                    Conversation.user_id == usr,
+                )
                 .values(title=title, updated_at=_utcnow())
             )
             await session.commit()
@@ -192,27 +216,30 @@ async def rename_conversation(user_id: str, conversation_id: str, title: str) ->
             raise
 
 
-async def touch_conversation(conversation_id: str):
+async def touch_conversation(conversation_id: str, user_id: str = None):
     try:
         cid = _to_uuid(conversation_id)
+        usr = _to_uuid(user_id) if user_id else None
     except (ValueError, TypeError):
         return
     async with async_session() as session:
         try:
-            await session.execute(
-                update(Conversation)
-                .where(Conversation.id == cid)
-                .values(updated_at=_utcnow())
-            )
+            stmt = update(Conversation).where(Conversation.id == cid)
+            if usr is not None:
+                stmt = stmt.where(Conversation.user_id == usr)
+            await session.execute(stmt.values(updated_at=_utcnow()))
             await session.commit()
         except Exception:
             await session.rollback()
             raise
 
 
-async def delete_conversation(user_id: str, conversation_id: str) -> bool:
+async def delete_conversation(
+    workspace_id: str, user_id: str, conversation_id: str
+) -> bool:
     try:
-        uid = _to_uuid(user_id)
+        uid = _to_uuid(workspace_id)
+        usr = _to_uuid(user_id)
         cid = _to_uuid(conversation_id)
     except (ValueError, TypeError):
         return False
@@ -220,7 +247,9 @@ async def delete_conversation(user_id: str, conversation_id: str) -> bool:
         async with session.begin():
             owner = await session.execute(
                 select(Conversation.id).where(
-                    Conversation.id == cid, Conversation.user_id == uid
+                    Conversation.id == cid,
+                    Conversation.workspace_id == uid,
+                    Conversation.user_id == usr,
                 )
             )
             if owner.scalar_one_or_none() is None:
@@ -228,32 +257,39 @@ async def delete_conversation(user_id: str, conversation_id: str) -> bool:
             await session.execute(
                 delete(QueryHistory).where(
                     QueryHistory.conversation_id == cid,
-                    QueryHistory.user_id == uid,
+                    QueryHistory.workspace_id == uid,
                 )
             )
             await session.execute(
                 delete(Conversation).where(
-                    Conversation.id == cid, Conversation.user_id == uid
+                    Conversation.id == cid,
+                    Conversation.workspace_id == uid,
+                    Conversation.user_id == usr,
                 )
             )
         return True
 
 
-async def clear_conversations(user_id: str):
-    uid = _to_uuid(user_id)
+async def clear_conversations(workspace_id: str, user_id: str):
+    uid = _to_uuid(workspace_id)
+    usr = _to_uuid(user_id)
     async with async_session() as session:
         async with session.begin():
             conv_ids_result = await session.execute(
-                select(Conversation.id).where(Conversation.user_id == uid)
+                select(Conversation.id).where(
+                    Conversation.workspace_id == uid, Conversation.user_id == usr
+                )
             )
             conv_ids = [row[0] for row in conv_ids_result]
             if conv_ids:
                 await session.execute(
                     delete(QueryHistory).where(
                         QueryHistory.conversation_id.in_(conv_ids),
-                        QueryHistory.user_id == uid,
+                        QueryHistory.workspace_id == uid,
                     )
                 )
             await session.execute(
-                delete(Conversation).where(Conversation.user_id == uid)
+                delete(Conversation).where(
+                    Conversation.workspace_id == uid, Conversation.user_id == usr
+                )
             )

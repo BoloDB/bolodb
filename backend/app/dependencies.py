@@ -1,7 +1,13 @@
-from fastapi import HTTPException, Cookie, Request
+from fastapi import HTTPException, Cookie, Request, Depends, Header
 import jwt
+from sqlalchemy import select
 
 from backend.app.secrets import get_jwt_secret
+from backend.app.pgdatabase.engine import async_session
+from backend.app.models.workspace import WorkspaceMember
+from backend.app.models.workspace_settings import WorkspaceSettings
+from backend.app.permissions import has_permission
+from backend.app.pgdatabase.serialization import _to_uuid
 
 
 async def get_current_user(access_token: str = Cookie(None)):
@@ -16,6 +22,79 @@ async def get_current_user(access_token: str = Cookie(None)):
         )
     except jwt.InvalidTokenError:
         raise HTTPException(status_code=401, detail="Invalid Token")
+
+
+async def get_current_workspace(
+    x_workspace_id: str = Header(None), user=Depends(get_current_user)
+):
+    if not x_workspace_id:
+        raise HTTPException(status_code=400, detail="X-Workspace-Id header missing")
+    try:
+        wid = _to_uuid(x_workspace_id)
+        uid = _to_uuid(user.get("user_id", user.get("sub")))
+    except (ValueError, TypeError):
+        raise HTTPException(status_code=400, detail="Invalid workspace_id or user_id")
+
+    async with async_session() as session:
+        result = await session.execute(
+            select(WorkspaceMember).where(
+                WorkspaceMember.workspace_id == wid, WorkspaceMember.user_id == uid
+            )
+        )
+        member = result.scalar_one_or_none()
+        if not member:
+            raise HTTPException(
+                status_code=403, detail="Not a member of this workspace"
+            )
+
+        return {
+            "workspace_id": str(member.workspace_id),
+            "role": member.role,
+            "user_id": str(member.user_id),
+        }
+
+
+def require_role(minimum_role: str):
+    def role_dependency(workspace=Depends(get_current_workspace)):
+        roles = {"member": 1, "admin": 2, "owner": 3}
+        user_role = workspace["role"]
+        if roles.get(user_role, 0) < roles.get(minimum_role, 1):
+            raise HTTPException(status_code=403, detail="Insufficient permissions")
+        return workspace
+
+    return role_dependency
+
+
+async def workspace_has_permission(workspace, permission_key: str) -> bool:
+    """Resolve whether the current workspace member holds a fine-grained permission."""
+    if workspace["role"] == "owner":
+        return True
+
+    wid = _to_uuid(workspace["workspace_id"])
+    async with async_session() as session:
+        result = await session.execute(
+            select(WorkspaceSettings).where(WorkspaceSettings.workspace_id == wid)
+        )
+        settings = result.scalar_one_or_none()
+
+    role_permissions = getattr(settings, "role_permissions", None)
+    return has_permission(workspace["role"], role_permissions, permission_key)
+
+
+def require_permission(permission_key: str):
+    async def permission_dependency(workspace=Depends(get_current_workspace)):
+        if not await workspace_has_permission(workspace, permission_key):
+            raise HTTPException(
+                status_code=403, detail=f"Permission '{permission_key}' required"
+            )
+
+        return workspace
+
+    return permission_dependency
+
+
+def get_current_db_id(x_db_id: str = Header(None)):
+    return x_db_id
 
 
 def get_db(request: Request):

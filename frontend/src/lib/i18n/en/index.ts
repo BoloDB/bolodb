@@ -124,7 +124,7 @@ const en = {
     trySampleData: "Try with sample data",
     buildingSample: "Building sample data\u2026",
     sampleDataDesc:
-      "A realistic TechStore e-commerce database, built locally for you. No setup, no credentials, ready in seconds.",
+      "A realistic webshop database \u2014 1,000 customers, 2,000 orders \u2014 built locally for you. No setup, no credentials, ready in seconds.",
     startInSeconds: "Start in seconds",
     couldNotConnect: "Couldn\u2019t connect \u2014",
     fillRequired: "Please fill in all required fields.",

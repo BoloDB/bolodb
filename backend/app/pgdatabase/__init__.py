@@ -1,7 +1,7 @@
 """PostgreSQL application state: users, conversations, history, connections."""
 
 from backend.app.pgdatabase.engine import get_engine, dispose_db, async_session
-from backend.app.pgdatabase.models import (
+from backend.app.models import (
     Base,
     User,
     Conversation,
@@ -16,6 +16,9 @@ from backend.app.pgdatabase.models import (
     CatalogJoin,
     CatalogSynonym,
     CatalogValueMapping,
+    Workspace,
+    WorkspaceMember,
+    WorkspaceInvite,
 )
 from backend.app.pgdatabase.users import (
     get_user_by_email,
@@ -38,6 +41,8 @@ from backend.app.pgdatabase.connections import (
     get_recent_connections,
     delete_recent_connection,
     get_recent_connection_by_db_id,
+    get_latest_recent_connection,
+    update_recent_connection_alias,
 )
 from backend.app.pgdatabase.conversations import (
     create_conversation,
@@ -70,6 +75,9 @@ __all__ = [
     "CatalogJoin",
     "CatalogSynonym",
     "CatalogValueMapping",
+    "Workspace",
+    "WorkspaceMember",
+    "WorkspaceInvite",
     "get_user_by_email",
     "get_user_by_google_id",
     "get_user_by_supabase_id",
@@ -86,6 +94,8 @@ __all__ = [
     "get_recent_connections",
     "delete_recent_connection",
     "get_recent_connection_by_db_id",
+    "get_latest_recent_connection",
+    "update_recent_connection_alias",
     "create_conversation",
     "conversation_owned_by",
     "get_conversations",

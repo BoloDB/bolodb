@@ -1,5 +1,6 @@
 <script lang="ts">
   import { apiCall } from "$lib/api";
+  import { appState } from "$lib/appState.svelte";
   import { goto } from "$app/navigation";
   import { page } from "$app/stores";
   import Logo from "$lib/components/ui/Logo.svelte";
@@ -36,9 +37,19 @@
     try {
       await apiCall("/api/auth/verify-email", { email, code: code.trim() });
       posthog.capture("email_verified", { method: "otp" });
-      goto("/onboard");
     } catch (err: any) {
       error = err.message || "Verification failed";
+      posthog.captureException(err);
+      loading = false;
+      return;
+    }
+
+    // Verification already succeeded — a failure past this point is an app-state
+    // refresh problem, not a verification failure, so don't mislabel it.
+    try {
+      appState.isLoaded = false;
+      await appState.init(true);
+    } catch (err: any) {
       posthog.captureException(err);
     } finally {
       loading = false;

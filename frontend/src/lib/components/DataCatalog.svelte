@@ -3,8 +3,14 @@
   import { getCatalog, saveCatalog, suggestCatalog } from "$lib/api";
   import Button from "$lib/components/ui/Button.svelte";
   import Spinner from "$lib/components/ui/Spinner.svelte";
+  import { appState } from "$lib/appState.svelte";
 
   let { onClose }: { onClose: () => void } = $props();
+
+  const isAdmin = $derived(
+    appState.activeWorkspace?.role === "admin" ||
+    appState.activeWorkspace?.role === "owner"
+  );
 
   type Field = {
     k: string;
@@ -227,6 +233,7 @@
         Teach BoloDB your business language. It's sent with every question to
         answer more accurately.
       </div>
+      {#if isAdmin}
       <Button kind="ghost" disabled={suggesting || loading} onclick={suggest}>
         {#snippet icon()}{#if suggesting}<Spinner />{:else}<svg
               width="15"
@@ -240,6 +247,7 @@
             >{/if}{/snippet}
         {suggesting ? "Thinking…" : "Suggest with AI"}
       </Button>
+      {/if}
     </div>
 
     <div style="padding:8px 24px 20px;overflow-y:auto;flex:1">
@@ -269,6 +277,7 @@
                     <select
                       class="field"
                       bind:value={row[f.k]}
+                      disabled={!isAdmin}
                       aria-label={f.label}
                       style="flex:1;font-size:13px;padding:7px 9px"
                     >
@@ -280,12 +289,14 @@
                     <input
                       class="field"
                       bind:value={row[f.k]}
+                      disabled={!isAdmin}
                       placeholder={f.ph ?? f.label}
                       aria-label={f.label}
                       style="flex:1;font-size:13px;padding:7px 9px"
                     />
                   {/if}
                 {/each}
+                {#if isAdmin}
                 <button
                   onclick={() => removeRow(section.key, i)}
                   aria-label="Remove row"
@@ -301,14 +312,17 @@
                     /></svg
                   >
                 </button>
+                {/if}
               </div>
             {/each}
+            {#if isAdmin}
             <button
               onclick={() => addRow(section)}
               style="font-size:12.5px;font-weight:700;color:var(--brand-ink);background:none;border:none;cursor:pointer;padding:4px 0"
             >
               + Add {section.title.toLowerCase().replace(/s$/, "")}
             </button>
+            {/if}
           </div>
         {/each}
       {/if}
@@ -335,6 +349,7 @@
         >{totalEntries} {totalEntries === 1 ? "entry" : "entries"}</span
       >
       <div style="display:flex;gap:10px">
+        {#if isAdmin}
         <Button kind="ghost" onclick={onClose}>Cancel</Button>
         <Button kind="primary" disabled={saving || loading} onclick={save}>
           {#snippet icon()}{#if saving}<Spinner />{:else}<svg
@@ -352,6 +367,9 @@
               >{/if}{/snippet}
           {saving ? "Saving…" : "Save catalog"}
         </Button>
+        {:else}
+        <Button kind="ghost" onclick={onClose}>Close</Button>
+        {/if}
       </div>
     </div>
   </div>

@@ -20,9 +20,12 @@ RUN pip install --no-cache-dir -r /app/backend/requirements.txt
 COPY backend/        /app/backend/
 
 # ── 3. Create non-root user ──
+# /app/data holds the regenerable sample database; create it owned by the
+# runtime user so it is writable whether or not a volume is mounted over it.
 RUN addgroup --system bolodb && adduser --system --home /home/bolodb --ingroup bolodb bolodb \
-    && mkdir -p /home/bolodb/.bolodb \
-    && chown -R bolodb:bolodb /home/bolodb/.bolodb /app
+    && mkdir -p /app/data \
+    && chmod +x /app/backend/docker-entrypoint.sh \
+    && chown -R bolodb:bolodb /app
 
 USER bolodb
 
@@ -30,6 +33,10 @@ EXPOSE 4321
 
 HEALTHCHECK --interval=30s --timeout=5s --retries=3 \
     CMD python -c "import httpx; httpx.get('http://localhost:4321/api/health', timeout=3).raise_for_status()" || exit 1
+
+# Migrations run first, so a deploy pointed at a new or stale database brings
+# the schema to head before the app serves its first request.
+ENTRYPOINT ["/app/backend/docker-entrypoint.sh"]
 
 CMD ["python", "-m", "uvicorn", "backend.app.server:create_app", \
      "--factory", "--host", "0.0.0.0", "--port", "4321", "--log-level", "warning"]

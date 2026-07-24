@@ -1,8 +1,10 @@
 <script lang="ts">
   import { schema as defaultSchema, trustFor, formatTime } from '$lib/data';
   import type { SchemaTable, DbInfo, Conversation } from '$lib/types';
-  import { getConversations, deleteConversation, clearConversations, renameConversation } from '$lib/api';
+  import { deleteConversation, clearConversations, renameConversation, createWorkspace } from '$lib/api';
   import { appState } from '$lib/appState.svelte';
+  import { goto } from '$app/navigation';
+  import { workspaceNameError, WORKSPACE_NAME_MAX } from '$lib/validation';
 
   type Tab = 'ask' | 'dash' | 'settings';
 
@@ -16,15 +18,15 @@
     onNewChat,
     activeConversationId,
     conversationTrigger = 0,
-    userEmail = '',
-    theme = 'dark',
+    userEmail,
+    theme,
     onToggleTheme,
     onLogout,
-    mobileOpen = false,
+    mobileOpen,
     onClose,
   }: {
-    activeTab: Tab;
-    onTab: (t: Tab) => void;
+    activeTab: 'ask' | 'dash' | 'settings';
+    onTab: (t: 'ask' | 'dash' | 'settings') => void;
     verifiedCount: number;
     schema: SchemaTable[] | null;
     dbInfo: DbInfo | null;
@@ -33,9 +35,9 @@
     activeConversationId?: string | null;
     conversationTrigger?: number;
     userEmail?: string;
-    theme?: string;
-    onToggleTheme?: () => void;
-    onLogout?: () => void;
+    theme: 'light' | 'dark';
+    onToggleTheme: () => void;
+    onLogout: () => void;
     mobileOpen?: boolean;
     onClose?: () => void;
   } = $props();
@@ -43,7 +45,15 @@
   let sidePanel: 'chats' | 'schema' = $state('chats');
   let openTable: string | null = $state(null);
   let profileOpen = $state(false);
-  let conversations: Conversation[] = $state([]);
+  let wsMenuOpen = $state(false);
+  let wsAddMenuOpen = $state(false);
+  let showCreateWsModal = $state(false);
+  let newWorkspaceName = $state('');
+  let creatingWorkspace = $state(false);
+  // Held in appState so the list survives the sidebar being torn down and
+  // rebuilt on every route change.
+  const conversations = $derived(appState.conversations);
+  let loadingConvs = $state(!appState.conversationsLoaded);
 
   const schemaData = $derived(schema && schema.length ? schema : defaultSchema);
   const trust = $derived(trustFor(verifiedCount));
@@ -65,19 +75,27 @@
     { label: 'Settings', icon: '⚙', key: 'settings' },
   ];
 
+  // `conversationTrigger` bumps when a turn is saved; the first run just fills
+  // the cache if some other screen hasn't already.
+  let lastTrigger = -1;
   $effect(() => {
-    conversationTrigger;
-    getConversations()
-      .then((res) => {
-        if (res && res.conversations) conversations = res.conversations;
-      })
-      .catch((e) => console.error(e));
+    const trigger = conversationTrigger;
+    const force = lastTrigger !== -1 && trigger !== lastTrigger;
+    lastTrigger = trigger;
+    if (!force && appState.conversationsLoaded) {
+      loadingConvs = false;
+      return;
+    }
+    loadingConvs = !appState.conversationsLoaded;
+    appState.loadConversations(force).finally(() => {
+      loadingConvs = false;
+    });
   });
 
   async function handleClearConvs() {
     try {
       await clearConversations();
-      conversations = [];
+      appState.conversations = [];
     } catch (e) {
       console.error(e);
       appState.showError("Couldn't clear conversations — please try again.");
@@ -88,7 +106,7 @@
     e.stopPropagation();
     try {
       await deleteConversation(id);
-      conversations = conversations.filter((c) => c._id !== id);
+      appState.conversations = conversations.filter((c) => c._id !== id);
       if (id === activeConversationId) {
         onNewChat?.();
       }
@@ -112,7 +130,9 @@
     if (title && title !== (conversations.find((c) => c._id === id)?.title || '')) {
       try {
         await renameConversation(id, title);
-        conversations = conversations.map((c) => (c._id === id ? { ...c, title } : c));
+        appState.conversations = conversations.map((c) =>
+          c._id === id ? { ...c, title } : c,
+        );
       } catch (e) {
         console.error(e);
         appState.showError("Couldn't rename that conversation — please try again.");
@@ -137,27 +157,241 @@
     }
   }
 
+  const newWorkspaceNameError = $derived(
+    newWorkspaceName.trim() ? workspaceNameError(newWorkspaceName) : null,
+  );
+
+  async function handleCreateWorkspace() {
+    if (!newWorkspaceName.trim() || newWorkspaceNameError) return;
+    creatingWorkspace = true;
+    try {
+      await createWorkspace(newWorkspaceName);
+      await appState.loadWorkspaces();
+      showCreateWsModal = false;
+      newWorkspaceName = '';
+    } catch (e: any) {
+      console.error(e);
+      appState.showError(e.message || "Couldn't create workspace.");
+    } finally {
+      creatingWorkspace = false;
+    }
+  }
+
   // Selecting a destination on mobile should dismiss the drawer.
   function selectTab(t: Tab) {
-    onTab(t);
     onClose?.();
+    if (t === 'dash') {
+      goto('/dashboards');
+      return;
+    }
+    // Ask and Settings live on /chat. When the dashboards route is showing,
+    // switching to them means navigating back — the shell stays mounted, so
+    // this reads as a tab change rather than a page load.
+    if (activeTab === 'dash') {
+      goto(t === 'settings' ? '/chat?tab=settings' : '/chat');
+      return;
+    }
+    onTab(t);
   }
+  /**
+   * Routes that aren't /chat (dashboards, for one) mount this sidebar without a
+   * conversation handler, so a click there used to hit a no-op default and look
+   * like a dead button. Hand off through the URL instead — /chat reads
+   * `?conversation=` on the way in and opens it.
+   */
   function selectConversation(id: string) {
+    onClose?.();
+    if (activeTab === 'dash') {
+      appState.activeConversationId = id;
+      goto(`/chat?conversation=${id}`);
+      return;
+    }
     onConversationSelect?.(id);
     onTab('ask');
-    onClose?.();
   }
   function newChat() {
+    onClose?.();
+    sidePanel = 'chats';
+    if (activeTab === 'dash') {
+      appState.activeConversationId = null;
+      goto('/chat');
+      return;
+    }
     onNewChat?.();
     onTab('ask');
-    sidePanel = 'chats';
-    onClose?.();
+  }
+
+  /**
+   * The database a conversation was asked against. The list is keyed by db_id;
+   * a conversation whose database has since been removed from the workspace
+   * still gets a label, so the badge never silently disappears.
+   */
+  function conversationDb(databaseId: string) {
+    return (appState.databases || []).find((d: any) => d.db_id === databaseId);
+  }
+
+  function conversationDbLabel(databaseId: string): string {
+    const db = conversationDb(databaseId);
+    if (!db) return 'removed';
+    return db.alias_name || db.display_url?.split('@').pop()?.split('/')[0] || db.dialect;
+  }
+
+  function conversationDbTitle(databaseId: string): string {
+    const db = conversationDb(databaseId);
+    if (!db) return 'This database is no longer connected to the workspace';
+    return [db.alias_name, db.display_url].filter(Boolean).join(' · ');
+  }
+
+  function getAvatar(name: string) {
+    if (!name) return 'W';
+    return name.substring(0, 2).toUpperCase();
+  }
+
+  function memberLabel(ws: any): string {
+    const n = ws?.member_count;
+    if (typeof n !== 'number') return 'Members unknown';
+    return `${n} member${n === 1 ? '' : 's'}`;
+  }
+
+  /** Hover text for a workspace pill: name, size, and connection state. */
+  function wsTitle(ws: any): string {
+    const parts = [ws.name, memberLabel(ws)];
+    if (appState.activeWorkspace?.id === ws.id) {
+      parts.push(appState.dbInfo ? 'Database connected' : 'No database connected');
+    }
+    return parts.join(' · ');
+  }
+
+  async function selectWorkspace(ws: any) {
+    if (appState.activeWorkspace?.id === ws.id) return;
+    localStorage.setItem("bolodb_active_workspace_id", ws.id);
+    appState.activeWorkspace = ws;
+    // We should reload to fetch new dbInfo for the new workspace
+    // The easiest way is to let the user pick a DB from /connect if this ws doesn't have an active one,
+    // or we can just call appState.init().
+    appState.dbInfo = null;
+    appState.isLoaded = false;
+    appState.activeConversationId = null;
+    await appState.init(true);
+  }
+  function closeMenus(e: MouseEvent) {
+    wsMenuOpen = false;
+    wsAddMenuOpen = false;
+    profileOpen = false;
   }
 </script>
 
-<aside class="sidebar" class:mobile-open={mobileOpen}>
-  <!-- brand -->
-  <div class="brand">
+{#if showCreateWsModal}
+  <div class="modal-backdrop" onclick={() => showCreateWsModal = false}>
+    <div class="modal-content" onclick={(e) => e.stopPropagation()} style="max-width:400px;">
+      <div class="modal-header">
+        <h3>Create Workspace</h3>
+        <button class="close-btn" onclick={() => showCreateWsModal = false}>✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="input-group">
+          <label>Workspace Name</label>
+          <input
+            type="text"
+            placeholder="e.g. Acme Corp"
+            bind:value={newWorkspaceName}
+            maxlength={WORKSPACE_NAME_MAX}
+            aria-invalid={!!newWorkspaceNameError}
+            onkeydown={(e) => {
+              if (e.key === 'Enter' && newWorkspaceName.trim()) {
+                handleCreateWorkspace();
+              }
+            }}
+          />
+          {#if newWorkspaceNameError}
+            <span class="ws-name-error">{newWorkspaceNameError}</span>
+          {/if}
+        </div>
+      </div>
+      <div class="modal-footer" style="justify-content: flex-end;">
+        <button class="btn btn-ghost" onclick={() => showCreateWsModal = false}>Cancel</button>
+        <button
+          class="btn btn-primary"
+          onclick={handleCreateWorkspace}
+          disabled={!newWorkspaceName.trim() || !!newWorkspaceNameError || creatingWorkspace}
+        >
+          {creatingWorkspace ? 'Creating...' : 'Create'}
+        </button>
+      </div>
+    </div>
+  </div>
+{/if}
+
+<svelte:window onclick={closeMenus} />
+
+<div class="sidebar-wrapper" class:mobile-open={mobileOpen}>
+  <!-- workspace rail -->
+  <div class="ws-rail">
+    {#each appState.workspaces || [] as ws}
+      <div style="position:relative">
+        <button
+          class="ws-avatar"
+          class:ws-active={appState.activeWorkspace?.id === ws.id}
+          onclick={(e) => {
+            e.stopPropagation();
+            if (appState.activeWorkspace?.id === ws.id) {
+              wsMenuOpen = !wsMenuOpen;
+            } else {
+              selectWorkspace(ws);
+            }
+          }}
+          title={wsTitle(ws)}
+        >
+          {getAvatar(ws.name)}
+          {#if appState.activeWorkspace?.id === ws.id}
+            <!-- Connection state is only known for the workspace currently
+                 loaded, so the dot is scoped to the active pill. -->
+            <span
+              class="ws-conn-dot"
+              class:connected={!!appState.dbInfo}
+              aria-hidden="true"
+            ></span>
+          {/if}
+        </button>
+        {#if wsMenuOpen && appState.activeWorkspace?.id === ws.id}
+          <div class="ws-popover" onclick={(e) => e.stopPropagation()}>
+            <div class="ws-popover-header">
+              <span class="ws-p-name">{ws.name}</span>
+              <span class="ws-p-role">{ws.role}</span>
+              <span class="ws-p-stats">
+                <span>{memberLabel(ws)}</span>
+                <span class="ws-p-sep">·</span>
+                <span class:ws-p-on={!!appState.dbInfo}>
+                  {appState.dbInfo
+                    ? appState.dbInfo.alias_name || 'Database connected'
+                    : 'No database connected'}
+                </span>
+              </span>
+            </div>
+            <button class="ws-p-item" onclick={() => { wsMenuOpen = false; goto('/workspaces'); }}>⚙ Workspace Settings</button>
+            <button class="ws-p-item" onclick={() => { wsMenuOpen = false; goto('/connect'); }}>🗄 Manage Databases</button>
+            {#if ws.role === 'admin' || ws.role === 'owner'}
+              <button class="ws-p-item" onclick={() => { wsMenuOpen = false; goto('/workspaces'); }}>👥 Invite People</button>
+            {/if}
+          </div>
+        {/if}
+      </div>
+    {/each}
+    <div class="ws-divider"></div>
+    <div style="position:relative">
+      <button class="ws-avatar ws-add" onclick={(e) => { e.stopPropagation(); wsAddMenuOpen = !wsAddMenuOpen; wsMenuOpen = false; }} title="Add Workspace">+</button>
+      {#if wsAddMenuOpen}
+        <div class="ws-popover" onclick={(e) => e.stopPropagation()} style="bottom: 0; top: auto; left: 52px; transform: none;">
+          <button class="ws-p-item" onclick={() => { wsAddMenuOpen = false; showCreateWsModal = true; }}>✨ Create a Workspace</button>
+          <button class="ws-p-item" onclick={() => { wsAddMenuOpen = false; goto('/workspaces'); }}>🤝 Join a Workspace</button>
+        </div>
+      {/if}
+    </div>
+  </div>
+
+  <aside class="sidebar">
+    <!-- brand -->
+    <div class="brand">
     <svg width="22" height="22" viewBox="0 0 256 256" fill="none">
       <path d="M 52 44 Q 52 30 66 30 L 190 30 Q 204 30 204 44 L 204 138 Q 204 152 190 152 L 116 152 L 88 176 L 92 152 L 66 152 Q 52 152 52 138 Z" stroke="var(--brand)" stroke-width="6" fill="none" />
       <g stroke="var(--brand)" stroke-width="6" stroke-linecap="round" fill="none">
@@ -191,6 +425,7 @@
     <button class="new-chat" aria-label="New chat" title="New chat" onclick={newChat}>+</button>
   </div>
 
+
   <!-- panel body -->
   <div class="panel-body">
     {#if sidePanel === 'chats'}
@@ -209,7 +444,14 @@
                 />
               {:else}
                 <button class="convo" class:active={activeConversationId === cv._id} onclick={() => selectConversation(cv._id)}>
-                  <span class="convo-title">{cv.title || cv.last_question || 'New conversation'}</span>
+                  <div style="display:flex;justify-content:space-between;align-items:center;">
+                    <span class="convo-title">{cv.title || cv.last_question || 'New conversation'}</span>
+                    {#if cv.database_id}
+                      <span class="convo-db" title={conversationDbTitle(cv.database_id)}>
+                        {conversationDbLabel(cv.database_id)}
+                      </span>
+                    {/if}
+                  </div>
                   <span class="convo-meta">{cv.turn_count} turn{cv.turn_count === 1 ? '' : 's'} · {formatTime(cv.updated_at)}</span>
                 </button>
                 <button class="convo-ren opacity-0 group-hover:opacity-100 focus-visible:opacity-100" aria-label="Rename conversation" title="Rename" onclick={(e) => startRename(cv, e)}>
@@ -220,6 +462,13 @@
             </div>
           {/each}
           <button class="clear-all" onclick={handleClearConvs}>Clear all</button>
+        </div>
+      {:else if loadingConvs}
+        <div style="display:flex;align-items:center;justify-content:center;padding:24px 0;color:var(--text-light);font-size:12px;gap:6px">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="spin">
+            <path d="M21 12a9 9 0 11-6.219-8.56"/>
+          </svg>
+          Loading chats...
         </div>
       {:else}
         <span class="empty-hint">No chats yet.<br />Press + to start one.</span>
@@ -258,18 +507,19 @@
     <!-- profile -->
     <div style="position:relative">
       {#if profileOpen}
-        <div class="pmenu">
+        <div class="pmenu" onclick={(e) => e.stopPropagation()}>
           <div class="pmenu-head">
             <span class="pmenu-name">{name}</span>
             <span class="pmenu-email">{userEmail || '—'}</span>
             <span class="pmenu-plan">FREE PLAN</span>
           </div>
-          <button class="pmenu-item" onclick={() => { profileOpen = false; selectTab('settings'); }}>⚙ Settings</button>
+          <button class="pmenu-item" onclick={() => { profileOpen = false; goto('/profile'); }}>👤 Profile & Account</button>
+          <button class="pmenu-item" onclick={() => { profileOpen = false; selectTab('settings'); }}>⚙ App Settings</button>
           <button class="pmenu-item" onclick={() => { profileOpen = false; onToggleTheme?.(); }}>{theme === 'dark' ? '☀' : '☾'} {theme === 'dark' ? 'Light mode' : 'Dark mode'}</button>
           <button class="pmenu-item danger" onclick={() => { profileOpen = false; onLogout?.(); }}>↪ Log out</button>
         </div>
       {/if}
-      <button class="profile-btn" data-testid="profile-menu-button" onclick={() => (profileOpen = !profileOpen)}>
+      <button class="profile-btn" data-testid="profile-menu-button" onclick={(e) => { e.stopPropagation(); profileOpen = !profileOpen; }}>
         <span class="pleft">
           <span class="avatar">{initials}</span>
           <span class="pinfo">
@@ -280,10 +530,138 @@
         <span class="pchev" style="transform:{profileOpen ? 'rotate(180deg)' : 'rotate(0deg)'}">▲</span>
       </button>
     </div>
-  </div>
-</aside>
+  </aside>
+</div>
 
 <style>
+  .sidebar-wrapper {
+    display: flex;
+    height: 100%;
+    flex-shrink: 0;
+    box-sizing: border-box;
+  }
+  .ws-rail {
+    width: 60px;
+    background: var(--surface-1);
+    border-right: 1px solid var(--border-2);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 16px 0;
+    gap: 12px;
+    z-index: 10;
+  }
+  .ws-avatar {
+    position: relative;
+    width: 40px;
+    height: 40px;
+    border-radius: 12px;
+    background: var(--surface-3);
+    color: var(--muted);
+    font-size: 14px;
+    font-weight: 700;
+    display: grid;
+    place-items: center;
+    border: 2px solid transparent;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .ws-avatar:hover {
+    border-radius: 8px;
+    color: var(--ink);
+    background: var(--card-hover);
+  }
+  .ws-avatar.ws-active {
+    border-radius: 8px;
+    background: var(--brand);
+    color: var(--on-brand);
+  }
+  .ws-add {
+    background: transparent;
+    border: 2px dashed var(--border);
+    color: var(--faint);
+    font-size: 20px;
+    font-weight: 400;
+  }
+  .ws-add:hover {
+    border-color: var(--brand);
+    color: var(--brand);
+  }
+  .ws-divider {
+    width: 32px;
+    height: 2px;
+    background: var(--border-2);
+    border-radius: 1px;
+    margin: 4px 0;
+  }
+  .ws-popover {
+    position: absolute;
+    left: 56px;
+    top: 0;
+    width: 220px;
+    background: var(--card);
+    border: 1px solid var(--border-2);
+    border-radius: 12px;
+    padding: 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    box-shadow: 0 16px 40px -12px rgba(0, 0, 0, 0.4);
+    animation: rise 0.2s var(--ease) both;
+    z-index: 100;
+  }
+  .ws-popover-header {
+    display: flex;
+    flex-direction: column;
+    padding: 6px 8px 10px;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 4px;
+  }
+  .ws-p-name { font-size: 14px; font-weight: 700; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .ws-p-role { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; font-weight: 600; margin-top: 2px; }
+  .ws-p-stats {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-top: 6px;
+    font-size: 11.5px;
+    color: var(--muted);
+  }
+  .ws-p-sep { opacity: 0.5; }
+  .ws-p-on { color: var(--brand); }
+  .ws-conn-dot {
+    position: absolute;
+    right: -2px;
+    bottom: -2px;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: var(--faint);
+    border: 2px solid var(--bg);
+  }
+  .ws-conn-dot.connected { background: var(--brand); }
+  .ws-name-error {
+    display: block;
+    margin-top: 6px;
+    font-size: 12px;
+    color: var(--c-low-ink);
+  }
+  .ws-p-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: transparent;
+    border: none;
+    color: var(--ink-2);
+    font-size: 13px;
+    font-weight: 500;
+    padding: 8px 10px;
+    border-radius: 8px;
+    cursor: pointer;
+    text-align: left;
+    transition: all 0.15s;
+  }
+  .ws-p-item:hover { background: var(--surface-2); color: var(--ink); }
   .sidebar {
     width: 232px;
     flex-shrink: 0;
@@ -424,8 +802,25 @@
   }
   .convo:hover { background: var(--surface-2); color: var(--ink); }
   .convo.active { background: var(--surface-2); color: var(--ink); }
-  .convo-title { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+  .convo-title { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; flex: 1; }
   .convo-meta { font-size: 10.5px; color: var(--faint); font-weight: 400; }
+  /* Which database a conversation was asked against. Sits right of the title,
+     and never grows enough to squeeze it out. */
+  .convo-db {
+    flex-shrink: 0;
+    max-width: 84px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 9.5px;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    padding: 2px 5px;
+    margin-left: 6px;
+    border-radius: 4px;
+    background: var(--surface-3);
+    color: var(--muted);
+  }
   .convo-del {
     position: absolute;
     right: 6px;
@@ -625,25 +1020,32 @@
 
   /* ── Mobile: sidebar becomes an off-canvas drawer ── */
   @media (max-width: 768px) {
-    .sidebar {
+    .sidebar-wrapper {
       position: fixed;
       top: 0;
       left: 0;
       bottom: 0;
       z-index: 60;
-      width: min(84vw, 300px);
+      width: min(84vw, 360px);
       transform: translateX(-100%);
       transition: transform 0.25s var(--ease, ease);
       box-shadow: none;
       visibility: hidden;
       pointer-events: none;
     }
-    .sidebar.mobile-open {
+    .sidebar-wrapper.mobile-open {
       transform: translateX(0);
       box-shadow: 0 0 40px rgba(0, 0, 0, 0.4);
       visibility: visible;
       pointer-events: auto;
     }
     .mobile-close { display: inline-flex; align-items: center; justify-content: center; }
+  }
+  @keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+  }
+  .spin {
+    animation: spin 1s linear infinite;
   }
 </style>

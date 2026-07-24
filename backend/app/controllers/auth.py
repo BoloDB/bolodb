@@ -6,6 +6,7 @@ import bcrypt
 from pydantic import EmailStr
 from fastapi import HTTPException
 from backend.app.models.user import (
+    UpdateProfile,
     UserSignup,
     UserInDB,
     Role,
@@ -19,7 +20,7 @@ from backend.app.pgdatabase import (
     update_user,
     UserAlreadyExistsError,
 )
-from backend.app.pgdatabase.models import PasswordResetToken
+from backend.app.models.auth_token import PasswordResetToken
 from backend.app.pgdatabase.engine import get_engine
 import jwt
 from jwt import PyJWKClient
@@ -54,6 +55,41 @@ async def get_me(user_id):
         return None
     data.pop("hashed_pass", None)
     return data
+
+
+async def update_profile(user_id: str, req: UpdateProfile):
+    fields = req.model_dump(mode="json", exclude_unset=True)
+    new_email = fields.get("email")
+
+    if new_email:
+        existing = await get_user_by_email(new_email)
+        if existing and str(existing["_id"]) != str(user_id):
+            raise HTTPException(
+                status_code=409, detail="An account with this email already exists"
+            )
+
+        current = await get_me(user_id)
+        if current and current.get("email") != new_email:
+            fields["email_verified"] = False
+
+    if fields:
+        from sqlalchemy.exc import IntegrityError
+
+        try:
+            await update_user(user_id, **fields)
+        except (IntegrityError, UserAlreadyExistsError):
+            raise HTTPException(
+                status_code=409, detail="An account with this email already exists"
+            )
+
+    if new_email and fields.get("email_verified") is False:
+        from backend.app.pgdatabase.otp import create_otp
+        from backend.app.services.email import send_verification_email
+
+        otp_code = await create_otp(user_id, purpose="signup")
+        await send_verification_email(new_email, otp_code)
+
+    return await get_me(user_id)
 
 
 async def login(email: EmailStr, password: str):

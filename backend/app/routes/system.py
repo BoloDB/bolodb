@@ -1,12 +1,14 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Header
 from fastapi.responses import JSONResponse
 from sqlalchemy import text
 from backend.app.dependencies import (
     get_current_user,
+    get_current_workspace,
     get_db,
     get_cfg,
     get_kb,
     get_providers,
+    get_current_db_id,
 )
 from backend.app.models.api import ConfigUpdate
 from backend.app.secrets import get_supabase_url, get_supabase_anon_key
@@ -18,6 +20,8 @@ router = APIRouter()
 @router.get("/api/state")
 async def state(
     user_token=Depends(get_current_user),
+    x_workspace_id: str = Header(None),
+    x_db_id: str = Depends(get_current_db_id),
     db=Depends(get_db),
     cfg=Depends(get_cfg),
     kb=Depends(get_kb),
@@ -29,7 +33,11 @@ async def state(
         The current application state.
     """
     user_id = user_token["user_id"]
-    return await ctrl.get_state(user_id, db, cfg, kb)
+    verified_workspace_id = None
+    if x_workspace_id:
+        workspace = await get_current_workspace(x_workspace_id, user_token)
+        verified_workspace_id = workspace["workspace_id"]
+    return await ctrl.get_state(user_id, verified_workspace_id, x_db_id, db, cfg, kb)
 
 
 @router.post("/api/tour-complete")

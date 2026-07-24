@@ -1,6 +1,6 @@
 import { trustFor, schemaObjToDisplay } from "$lib/data";
-import { apiCall } from "$lib/api";
-import type { DbInfo, SchemaTable, Toast } from "$lib/types";
+import { apiCall, getConversations, listDatabases } from "$lib/api";
+import type { Conversation, DbInfo, SchemaTable, Toast } from "$lib/types";
 import { goto } from "$app/navigation";
 import { browser } from "$app/environment";
 
@@ -14,31 +14,32 @@ class AppState {
   theme = $state("dark");
   openrouterReady = $state(false);
   activeConversationId = $state<string | null>(null);
+  // Set while a database switch is in flight, so any screen showing results can
+  // put up a loading state — the switch is triggered from the shared shell.
+  switchingDatabase = $state(false);
+  workspaces = $state<any[]>([]);
+  activeWorkspace = $state<any | null>(null);
+  invites = $state<any[]>([]);
   tourCompleted = $state(false);
-  // True while a freshly connected user is walking the onboarding flow —
-  // stops /onboard's has_knowledge redirect from kicking them out (sample
-  // databases ship with seeded knowledge, so has_knowledge alone can't
-  // distinguish "already onboarded" from "just connected").
-  onboardingActive = $state(false);
+  // tourCompleted = $state(false);
+
+  /**
+   * The workspace's saved databases and conversations, held here rather than in
+   * the components that show them. Both the sidebar and the database switcher
+   * are re-created on every route change, and re-fetching each time made moving
+   * between chat and dashboards flash empty lists over a page that hadn't
+   * actually changed.
+   */
+  databases = $state<any[]>([]);
+  conversations = $state<Conversation[]>([]);
+  conversationsLoaded = $state(false);
+  databasesLoaded = $state(false);
 
   constructor() {
     if (typeof window !== "undefined") {
       const stored = localStorage.getItem("bolodb_theme");
       // Normalize legacy theme names to the two-theme system (dark / light)
       this.theme = stored === "dark" ? "dark" : stored ? "light" : "dark";
-      // Survive a page reload mid-onboarding: sample DBs ship with seeded
-      // knowledge, so without this /onboard would bounce a refreshed user
-      // straight to /chat before they finished.
-      this.onboardingActive =
-        sessionStorage.getItem("bolodb_onboarding_active") === "1";
-    }
-  }
-
-  private setOnboardingActive(active: boolean) {
-    this.onboardingActive = active;
-    if (typeof window !== "undefined") {
-      if (active) sessionStorage.setItem("bolodb_onboarding_active", "1");
-      else sessionStorage.removeItem("bolodb_onboarding_active");
     }
   }
 
@@ -59,7 +60,104 @@ class AppState {
     return trustFor(this.verifiedCount).key;
   }
 
+  /**
+   * Invite ids already seen, so a refresh only announces genuinely new ones.
+   * `null` until the first load — the invitations waiting when you sign in are
+   * shown by the bell, not thrown at you as a toast.
+   */
+  private seenInviteIds: Set<string> | null = null;
+
+  async loadWorkspaces() {
+    try {
+      const previousWorkspaceId = this.activeWorkspace?.id;
+      this.workspaces = await apiCall("/api/workspaces");
+      this.invites = await apiCall("/api/workspaces/invites/me");
+      this.announceNewInvites();
+      const stored = localStorage.getItem("bolodb_active_workspace_id");
+      if (stored && this.workspaces.find((w: any) => w.id === stored)) {
+        this.activeWorkspace = this.workspaces.find(
+          (w: any) => w.id === stored,
+        );
+      } else if (this.workspaces.length > 0) {
+        this.activeWorkspace = this.workspaces[0];
+        localStorage.setItem(
+          "bolodb_active_workspace_id",
+          this.activeWorkspace.id,
+        );
+      } else {
+        this.activeWorkspace = null;
+        localStorage.removeItem("bolodb_active_workspace_id");
+      }
+      if (this.activeWorkspace?.id !== previousWorkspaceId) {
+        this.resetWorkspaceData();
+      }
+    } catch (e) {
+      console.error("Failed to load workspaces:", e);
+    }
+  }
+
+  /**
+   * Load the workspace's saved databases. `force` refetches even when a list is
+   * already held — used after connecting, renaming or removing one.
+   */
+  async loadDatabases(force = false) {
+    if (this.databasesLoaded && !force) return;
+    try {
+      this.databases = await listDatabases();
+      this.databasesLoaded = true;
+    } catch (e) {
+      console.error("Failed to load databases:", e);
+    }
+  }
+
+  async loadConversations(force = false) {
+    if (this.conversationsLoaded && !force) return;
+    try {
+      const res = await getConversations();
+      this.conversations = res?.conversations || [];
+      this.conversationsLoaded = true;
+    } catch (e) {
+      console.error("Failed to load conversations:", e);
+    }
+  }
+
+  /** Drop cached per-workspace data when the active workspace changes. */
+  resetWorkspaceData() {
+    this.databases = [];
+    this.databasesLoaded = false;
+    this.conversations = [];
+    this.conversationsLoaded = false;
+  }
+
+  private announceNewInvites() {
+    const ids = new Set<string>((this.invites || []).map((i: any) => i.id));
+    if (this.seenInviteIds === null) {
+      this.seenInviteIds = ids;
+      return;
+    }
+    const fresh = (this.invites || []).filter(
+      (i: any) => !this.seenInviteIds!.has(i.id),
+    );
+    this.seenInviteIds = ids;
+    if (fresh.length === 0) return;
+    this.showToast({
+      title:
+        fresh.length === 1
+          ? "New workspace invitation"
+          : `${fresh.length} new workspace invitations`,
+      body:
+        fresh.length === 1
+          ? `You've been invited to ${fresh[0].workspace_name}. Open the bell to accept.`
+          : "Open the bell in the header to accept them.",
+    });
+  }
+
   async init(redirect: boolean = true) {
+    await this.loadWorkspaces();
+    if (this.activeWorkspace) {
+      this.loadDatabases();
+      this.loadConversations();
+    }
     try {
       const s = await apiCall("/api/state");
       this.openrouterReady = s.openrouter_ready ?? false;
@@ -75,16 +173,18 @@ class AppState {
           console.error("Failed to load schema:", e);
         }
         this.isLoaded = true;
-        if (redirect) {
-          if (this.dbInfo?.has_knowledge) {
-            goto("/chat");
-          } else {
-            goto("/onboard");
-          }
+        if (this.workspaces.length === 0) {
+          goto("/workspaces/setup");
+        } else if (redirect) {
+          goto("/chat");
         }
       } else {
         this.isLoaded = true;
-        if (redirect) goto("/connect");
+        if (this.workspaces.length === 0) {
+          goto("/workspaces/setup");
+        } else if (redirect) {
+          goto("/connect");
+        }
       }
     } catch (e: any) {
       this.isLoaded = true;
@@ -121,10 +221,7 @@ class AppState {
       posthog.reset();
     }
     try {
-      this.setOnboardingActive(false);
-      // Navigate to the landing page BEFORE clearing dbInfo. Clearing it while
-      // still on /chat (or /dashboard/onboard) would trip those pages' own
-      // "no database → /connect" redirect effect and race it to /connect.
+      // Navigate to the landing page BEFORE clearing dbInfo.
       await goto("/");
     } finally {
       this.dbInfo = null;
@@ -133,30 +230,80 @@ class AppState {
       this.starters = [];
       this.tourCompleted = false;
       this.activeConversationId = null;
+      this.resetWorkspaceData();
     }
   }
 
   async setConnect(isSample: boolean, res: DbInfo) {
     if (res) {
+      if (typeof window !== "undefined" && res.db_id) {
+        if (this.activeWorkspace)
+          localStorage.setItem(
+            `bolodb_active_db_id_${this.activeWorkspace.id}`,
+            res.db_id,
+          );
+      }
       this.dbInfo = res;
       this.verifiedCount = res.trust?.verified || 0;
       if (res.starters) this.starters = res.starters;
+      // The database this just connected has to appear in the switcher and on
+      // the connect screen straight away.
+      this.loadDatabases(true);
+      if (res.save_error)
+        this.showError(res.save_error, "Connection not saved");
       try {
         const schema = await apiCall("/api/schema");
         this.realSchema = schemaObjToDisplay(schema);
       } catch (e) {
         console.error("Failed to load schema:", e);
       }
-      // Sample databases always walk through onboarding (they ship with
-      // seeded knowledge, so has_knowledge can't mean "already onboarded").
-      // Own databases with existing knowledge (reconnects) skip straight in.
-      if (!isSample && res.has_knowledge) {
-        goto("/chat");
-        return;
-      }
+      // Always go to chat
+      goto("/chat");
     }
-    this.setOnboardingActive(true);
-    goto("/onboard");
+  }
+
+  /**
+   * Reconnect the workspace to `dbId`.
+   *
+   * Switching database normally abandons the open conversation, since its
+   * answers came from the database being left behind. Opening a conversation
+   * that belongs to another database is the exception — that switch exists to
+   * serve the conversation, so it passes `keepConversation`.
+   */
+  async switchDatabase(dbId: string, { keepConversation = false } = {}) {
+    if (typeof window !== "undefined") {
+      if (this.activeWorkspace)
+        localStorage.setItem(
+          `bolodb_active_db_id_${this.activeWorkspace.id}`,
+          dbId,
+        );
+    }
+    this.switchingDatabase = true;
+    try {
+      await apiCall("/api/reconnect", { db_id: dbId });
+      const s = await apiCall("/api/state");
+      if (s.database) {
+        this.dbInfo = s.database;
+      }
+      if (s.starters) {
+        this.starters = s.starters;
+      }
+      if (!keepConversation) this.activeConversationId = null;
+      this.realSchema = null;
+      this.fetchSchemaAsync(true);
+      this.loadDatabases(true);
+      return true;
+    } catch (e: any) {
+      console.error("Failed to switch DB:", e);
+      // The backend explains *why* (unreachable, undecryptable credentials, no
+      // longer present); a generic message would hide all of that.
+      this.showError(
+        e?.message || "Failed to switch database. It may have been deleted.",
+      );
+      return false;
+    } finally {
+      this.switchingDatabase = false;
+    }
   }
 
   async setOnboardDone(seedCount: number) {
@@ -176,7 +323,6 @@ class AppState {
         dialect: this.dbInfo?.dialect,
       });
     }
-    this.setOnboardingActive(false);
     goto("/chat");
   }
 
@@ -224,23 +370,33 @@ class AppState {
   }
 
   async disconnect() {
-    try {
-      await apiCall("/api/disconnect", {});
-    } catch (e) {
-      console.error("Failed to disconnect:", e);
+    if (typeof window !== "undefined") {
+      if (this.activeWorkspace)
+        localStorage.removeItem(
+          `bolodb_active_db_id_${this.activeWorkspace.id}`,
+        );
     }
     this.dbInfo = null;
     this.realSchema = null;
     this.verifiedCount = 0;
     this.starters = [];
     this.activeConversationId = null;
-    this.setOnboardingActive(false);
     goto("/connect");
   }
 
   async restoreSession(id: string) {
     this.activeConversationId = id;
     goto(`/chat?id=${id}`);
+  }
+
+  async fetchSchemaAsync(forceRefresh = false) {
+    try {
+      const qs = forceRefresh ? "?refresh=true" : "";
+      const schema = await apiCall(`/api/schema${qs}`);
+      this.realSchema = schemaObjToDisplay(schema);
+    } catch (e) {
+      console.error("Failed to load async schema:", e);
+    }
   }
 
   async fetchStartersAsync() {

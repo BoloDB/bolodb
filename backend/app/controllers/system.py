@@ -4,6 +4,7 @@ import logging
 from fastapi import HTTPException
 
 from backend.app import config as cfgmod
+import backend.app.controllers.database as dbctrl
 from backend.app.secrets import (
     get_jwt_secret,
     get_supabase_url,
@@ -14,7 +15,7 @@ import backend.app.pgdatabase as mdb
 log = logging.getLogger(__name__)
 
 
-async def get_state(user_id, db, cfg, kb):
+async def get_state(user_id, workspace_id, db_id, db, cfg, kb):
     """
     Assemble the user's connection, configuration, onboarding, and knowledge state.
 
@@ -29,25 +30,37 @@ async def get_state(user_id, db, cfg, kb):
     config = cfgmod.public_config(cfg)
     config.pop("last_db_url", None)
     user = await mdb.get_user_by_id(user_id)
+    # Restore the workspace's database from its stored credentials if this
+    # process doesn't hold a live engine for it — otherwise a restart reads to
+    # the user as their database having disconnected itself.
+    actual_db_id = await dbctrl.ensure_connection(db, workspace_id, db_id)
     s = {
-        "connected": db.connected(user_id),
+        "connected": bool(actual_db_id),
         "config": config,
         "openrouter_ready": bool(os.environ.get("OPENROUTER_API_KEY")),
         "tour_completed": user.get("tour_completed", False) if user else False,
     }
-    if db.connected(user_id):
-        dbid = db.get_db_id(user_id)
+    if actual_db_id:
+        try:
+            conn = await mdb.get_recent_connection_by_db_id(workspace_id, actual_db_id)
+        except RuntimeError:
+            # Only the alias is needed here; an unreadable stored URL must not
+            # take down the whole state response.
+            log.warning("Could not read stored connection for db_id=%s", actual_db_id)
+            conn = None
         s["database"] = {
-            "url": db.get_info(user_id)["url"],
-            "dialect": db.get_dialect(user_id),
-            "db_id": db.get_info(user_id)["db_id"],
-            "tables": db.get_info(user_id)["tables"],
-            "has_knowledge": (await kb.count_verified(user_id, dbid)) > 0,
+            "url": db.get_info(workspace_id, actual_db_id)["url"],
+            "dialect": db.get_dialect(workspace_id, actual_db_id),
+            "db_id": actual_db_id,
+            "tables": db.get_info(workspace_id, actual_db_id)["tables"],
+            "has_knowledge": (await kb.count_verified(workspace_id, actual_db_id)) > 0,
+            "alias_name": conn.get("alias_name") if conn else None,
         }
-        s["trust"] = await kb.trust_level(user_id, dbid)
-        s["glossary"] = await kb.get_glossary(user_id, dbid)
+        s["trust"] = await kb.trust_level(workspace_id, actual_db_id)
+        s["glossary"] = await kb.get_glossary(workspace_id, actual_db_id)
         s["starters"] = [
-            v["question"] for v in (await kb.get_verified(user_id, dbid))[:6]
+            v["question"]
+            for v in (await kb.get_verified(workspace_id, actual_db_id))[:6]
         ]
     return s
 

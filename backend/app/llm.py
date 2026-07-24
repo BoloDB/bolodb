@@ -47,6 +47,15 @@ def parse_json(text):
     return json.loads(s)
 
 
+CHART_TYPES = ["table", "bar", "line", "area", "pie", "number"]
+DEFAULT_CHART = {
+    "type": "table",
+    "x_axis": "",
+    "y_axis": "",
+    "title": "",
+    "reason": "",
+}
+
 SQL_SCHEMA = {
     "name": "sql_result",
     "schema": {
@@ -65,8 +74,37 @@ SQL_SCHEMA = {
                 "items": {"type": "string"},
                 "description": "Any assumptions made while interpreting the question.",
             },
+            "chart": {
+                "type": "object",
+                "description": "How this result is best visualised.",
+                "properties": {
+                    "type": {
+                        "type": "string",
+                        "enum": CHART_TYPES,
+                        "description": "Chart best suited to the shape of the result.",
+                    },
+                    "x_axis": {
+                        "type": "string",
+                        "description": "Column alias for the category/time axis. Empty for table/number.",
+                    },
+                    "y_axis": {
+                        "type": "string",
+                        "description": "Column alias for the numeric value. Empty for table.",
+                    },
+                    "title": {
+                        "type": "string",
+                        "description": "Short chart title, e.g. 'Revenue by month'.",
+                    },
+                    "reason": {
+                        "type": "string",
+                        "description": "One short clause on why this chart fits.",
+                    },
+                },
+                "required": ["type", "x_axis", "y_axis", "title", "reason"],
+                "additionalProperties": False,
+            },
         },
-        "required": ["sql", "restatement", "assumptions"],
+        "required": ["sql", "restatement", "assumptions", "chart"],
         "additionalProperties": False,
     },
 }
@@ -191,6 +229,31 @@ SHORTLIST_SCHEMA = {
 }
 
 
+def parse_chart_spec(raw):
+    """Normalise the model's chart choice, falling back to a plain table.
+
+    A bad or missing chart must never fail the query — the answer is still
+    useful rendered as a table.
+    """
+    if not isinstance(raw, dict):
+        return dict(DEFAULT_CHART)
+    chart_type = raw.get("type")
+    if not isinstance(chart_type, str) or chart_type.lower() not in CHART_TYPES:
+        return dict(DEFAULT_CHART)
+
+    def _text(key):
+        v = raw.get(key)
+        return v.strip() if isinstance(v, str) else ""
+
+    return {
+        "type": chart_type.lower(),
+        "x_axis": _text("x_axis"),
+        "y_axis": _text("y_axis"),
+        "title": _text("title"),
+        "reason": _text("reason"),
+    }
+
+
 def parse_sql_output(raw):
     if isinstance(raw, dict):
         obj = raw
@@ -216,7 +279,12 @@ def parse_sql_output(raw):
         if isinstance(restatement, str)
         else ("" if restatement is None else str(restatement))
     ).strip()
-    return {"sql": sql, "restatement": restatement, "assumptions": assumptions}
+    return {
+        "sql": sql,
+        "restatement": restatement,
+        "assumptions": assumptions,
+        "chart": parse_chart_spec(obj.get("chart")),
+    }
 
 
 class LLMProvider(ABC):
@@ -501,7 +569,7 @@ def build_sql_system_prompt(
 ):
     hint = _DIALECT_HINTS.get(dialect, "")
     return (
-        "Answer in English\n"
+        "CRITICAL: You MUST answer entirely in English. Do not use Chinese or Japanese.\n"
         f"You are an expert {dialect} analyst. Convert the user's question into "
         "exactly one read-only SELECT query.\n\n"
         "Rules:\n"
@@ -515,7 +583,19 @@ def build_sql_system_prompt(
         "[brackets], match those values exactly.\n"
         "6. Qualify column names with table aliases whenever more than one "
         "table is involved.\n"
-        f"7. {hint}\n\n"
+        f"7. {hint}\n"
+        "8. Also choose how the result should be visualised, based on the shape "
+        "of the rows your query returns:\n"
+        "   - line: a measure over time (dates, months, quarters).\n"
+        "   - area: a cumulative or stacked measure over time.\n"
+        "   - bar: a measure compared across categories.\n"
+        "   - pie: parts of one whole, only when there are 2-6 categories and "
+        "the values are all positive.\n"
+        "   - number: a single row with a single aggregate value.\n"
+        "   - table: anything else — many columns, raw records, or no clear "
+        "numeric measure. Prefer table when no chart genuinely helps.\n"
+        "   x_axis and y_axis must be column aliases that appear in your SELECT "
+        "list. Leave them empty for table, and set only y_axis for number.\n\n"
         f"Schema (col PK = primary key, col->t.c = foreign key, [v1,v2] = "
         f"example values):\n{schema_text}\n\n"
         f"{_glossary_block(glossary)}"
@@ -526,7 +606,10 @@ def build_sql_system_prompt(
         '{"sql":"<one SELECT query>",'
         '"restatement":"<one plain sentence of what the query returns, no jargon>",'
         '"assumptions":["<any assumption you made, e.g. how you read a vague term '
-        'or date range; empty list if none>"]}'
+        'or date range; empty list if none>"],'
+        '"chart":{"type":"<table|bar|line|area|pie|number>","x_axis":"<column alias>",'
+        '"y_axis":"<column alias>","title":"<short chart title>",'
+        '"reason":"<why this chart fits>"}}'
     )
 
 
@@ -573,6 +656,7 @@ async def shortlist_tables(provider, question, schema, max_columns=4):
         lines.append(f"{t}({head}{more})")
     catalog = "\n".join(lines)
     system = (
+        "CRITICAL: You MUST answer entirely in English. Do not use Chinese or Japanese.\n"
         "You map questions to database tables. Below is the complete catalog "
         "of tables (name and columns only).\n"
         "Return every table that might be needed to answer the user's "
@@ -607,7 +691,7 @@ async def shortlist_tables(provider, question, schema, max_columns=4):
 
 async def explain_sql(provider, sql, dialect):
     system = (
-        "Answer in English\n"
+        "CRITICAL: You MUST answer entirely in English. Do not use Chinese or Japanese.\n"
         f"You explain {dialect} SQL to non-technical business users.\n"
         "Describe what the query returns in 2-4 short plain sentences: which "
         "data it looks at, how it filters/groups, and how results are ordered "
@@ -621,7 +705,7 @@ async def explain_sql(provider, sql, dialect):
 
 async def suggest_catalog(provider, schema_text):
     system = (
-        "Answer in English\n"
+        "CRITICAL: You MUST answer entirely in English. Do not use Chinese or Japanese.\n"
         "You are a data analyst documenting a database for non-technical users.\n"
         f"{schema_text}\n\n"
         "Produce a concise semantic catalog:\n"
@@ -660,7 +744,7 @@ async def generate_starters(provider, schema_text, dialect):
         schema_text[:300],
     )
     system = (
-        "Answer in English\n"
+        "CRITICAL: You MUST answer entirely in English. Do not use Chinese or Japanese.\n"
         f"You are a database analyst. {dialect} database.\n{schema_text}\n\n"
         "Generate 3 common useful questions a non-technical user would ask, each with the SQL and "
         "a one-sentence plain-English description.\n"

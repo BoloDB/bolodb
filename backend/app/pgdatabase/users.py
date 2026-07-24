@@ -8,7 +8,7 @@ from sqlalchemy.exc import IntegrityError
 
 from backend.app.models.user import UserInDB
 from backend.app.pgdatabase.engine import async_session
-from backend.app.pgdatabase.models import User
+from backend.app.models.orm_user import User
 from backend.app.pgdatabase.serialization import _to_uuid, serialize_doc
 
 logger = logging.getLogger(__name__)
@@ -40,6 +40,10 @@ def _user_to_dict(user) -> dict:
             "email_verified": user.email_verified,
             "tour_completed": user.tour_completed,
             "created_at": user.created_at,
+            "first_name": user.first_name,
+            "last_name": user.last_name,
+            "avatar_url": user.avatar_url,
+            "metadata": user.metadata_,
         }
     )
 
@@ -116,6 +120,10 @@ _ALLOWED_USER_FIELDS = frozenset(
         "email_verified",
         "email",
         "tour_completed",
+        "first_name",
+        "last_name",
+        "avatar_url",
+        "metadata",
     }
 )
 
@@ -125,6 +133,10 @@ async def update_user(user_id: str, **fields):
     if unexpected:
         logger.warning("Blocked update of disallowed user fields: %s", unexpected)
         return False
+
+    if "metadata" in fields:
+        fields["metadata_"] = fields.pop("metadata")
+
     try:
         uid = _to_uuid(user_id)
     except (ValueError, TypeError):

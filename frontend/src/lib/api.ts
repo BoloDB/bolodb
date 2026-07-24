@@ -2,6 +2,27 @@
 
 import type { StreamEvent } from "$lib/types";
 
+/**
+ * Turn a FastAPI error body's `detail` into a readable string. `detail` is
+ * usually a plain string, but 422 validation errors return it as an array of
+ * `{ loc, msg, type }` objects — passing that straight to `new Error()` renders
+ * as the useless "[object Object]".
+ */
+function extractDetail(data: any, status: number): string {
+  const detail = data?.detail;
+  if (typeof detail === "string" && detail) return detail;
+  if (Array.isArray(detail)) {
+    const msg = detail
+      .map((d) => (typeof d === "string" ? d : d?.msg))
+      .filter(Boolean)
+      .join("; ");
+    if (msg) return msg;
+  } else if (detail && typeof detail === "object" && detail.msg) {
+    return detail.msg;
+  }
+  return `Request failed: ${status}`;
+}
+
 export async function apiCall(
   path: string,
   body?: unknown,
@@ -10,15 +31,30 @@ export async function apiCall(
   const opts: RequestInit = {
     method: method || (body ? "POST" : "GET"),
   };
+  const activeWorkspaceId =
+    typeof window !== "undefined"
+      ? localStorage.getItem("bolodb_active_workspace_id")
+      : null;
+  const activeDbId =
+    typeof window !== "undefined" && activeWorkspaceId
+      ? localStorage.getItem(`bolodb_active_db_id_${activeWorkspaceId}`)
+      : null;
+  const headers: Record<string, string> = {};
+  if (activeWorkspaceId) headers["X-Workspace-Id"] = activeWorkspaceId;
+  if (activeDbId) headers["X-Db-Id"] = activeDbId;
+
   if (body) {
-    opts.headers = { "Content-Type": "application/json" };
+    headers["Content-Type"] = "application/json";
     opts.body = JSON.stringify(body);
+  }
+  if (Object.keys(headers).length > 0) {
+    opts.headers = headers;
   }
   opts.credentials = "include";
   const r = await fetch(path, opts);
   const data = await r.json().catch(() => ({}));
   if (!r.ok) {
-    const error: any = new Error(data.detail || `Request failed: ${r.status}`);
+    const error: any = new Error(extractDetail(data, r.status));
     error.status = r.status;
     throw error;
   }
@@ -46,16 +82,30 @@ export async function streamApiCall(
   signal?: AbortSignal,
 ): Promise<void> {
   try {
+    const activeWorkspaceId =
+      typeof window !== "undefined"
+        ? localStorage.getItem("bolodb_active_workspace_id")
+        : null;
+    const activeDbId =
+      typeof window !== "undefined" && activeWorkspaceId
+        ? localStorage.getItem(`bolodb_active_db_id_${activeWorkspaceId}`)
+        : null;
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json",
+    };
+    if (activeWorkspaceId) headers["X-Workspace-Id"] = activeWorkspaceId;
+    if (activeDbId) headers["X-Db-Id"] = activeDbId;
+
     const response = await fetch(path, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers,
       credentials: "include",
       body: JSON.stringify(body),
       signal,
     });
     if (!response.ok) {
       const data = await response.json().catch(() => ({}));
-      throw new Error(data.detail || `Request failed: ${response.status}`);
+      throw new Error(extractDetail(data, response.status));
     }
     if (!response.body) throw new Error("Streaming not supported");
 
@@ -183,6 +233,201 @@ export async function supabaseGoogleLogin(accessToken: string): Promise<any> {
   return apiCall("/api/auth/supabase-google", {
     access_token: accessToken,
   });
+}
+
+export async function updateProfile(fields: any): Promise<any> {
+  return apiCall("/api/auth/me", fields, "PATCH");
+}
+
+// --- Workspaces ---
+
+export interface WorkspaceSettings {
+  workspace_id?: string;
+  default_invite_role?: "member" | "admin" | string;
+  invite_expiry_days?: number;
+  activity_retention_days?: number;
+  role_permissions?: Record<string, any>;
+  resolved_matrix?: Record<string, Record<string, boolean>>;
+  /** The matrix with nothing customised, so the UI can mark what is default. */
+  default_matrix?: Record<string, Record<string, boolean>>;
+}
+
+export async function getWorkspaceSettings(
+  workspaceId: string,
+): Promise<WorkspaceSettings> {
+  return apiCall(`/api/workspaces/${workspaceId}/settings`);
+}
+
+export async function updateWorkspaceSettings(
+  workspaceId: string,
+  data: Partial<WorkspaceSettings>,
+): Promise<WorkspaceSettings> {
+  return apiCall(`/api/workspaces/${workspaceId}/settings`, data, "PATCH");
+}
+
+export async function createWorkspace(name: string): Promise<any> {
+  return apiCall("/api/workspaces", { name });
+}
+
+export async function updateWorkspace(id: string, name: string): Promise<any> {
+  return apiCall(`/api/workspaces/${id}`, { name }, "PATCH");
+}
+
+export async function deleteWorkspace(id: string): Promise<any> {
+  return apiCall(`/api/workspaces/${id}`, undefined, "DELETE");
+}
+
+export async function leaveWorkspace(id: string): Promise<any> {
+  return apiCall(`/api/workspaces/${id}/leave`, undefined, "POST");
+}
+
+export async function updateConnectionAlias(
+  id: string,
+  aliasName: string,
+): Promise<any> {
+  return apiCall(`/api/connections/${id}`, { alias_name: aliasName }, "PATCH");
+}
+
+export async function getWorkspaceMembers(id: string): Promise<any> {
+  return apiCall(`/api/workspaces/${id}/members`);
+}
+
+export async function inviteWorkspaceMember(
+  id: string,
+  email: string,
+  role: string,
+): Promise<any> {
+  return apiCall(`/api/workspaces/${id}/members`, { email, role }, "POST");
+}
+
+/** Invite many people at once; the response reports a status per address. */
+export async function bulkInviteMembers(
+  id: string,
+  emails: string[],
+  role: string,
+): Promise<any> {
+  return apiCall(
+    `/api/workspaces/${id}/members/bulk`,
+    { emails, role },
+    "POST",
+  );
+}
+
+export async function transferOwnership(
+  workspaceId: string,
+  userId: string,
+): Promise<any> {
+  return apiCall(
+    `/api/workspaces/${workspaceId}/transfer-ownership`,
+    { user_id: userId },
+    "POST",
+  );
+}
+
+export async function updateWorkspaceMemberRole(
+  workspaceId: string,
+  userId: string,
+  role: string,
+): Promise<any> {
+  return apiCall(
+    `/api/workspaces/${workspaceId}/members/${userId}`,
+    { role },
+    "PUT",
+  );
+}
+
+export async function removeWorkspaceMember(
+  workspaceId: string,
+  userId: string,
+): Promise<any> {
+  return apiCall(
+    `/api/workspaces/${workspaceId}/members/${userId}`,
+    undefined,
+    "DELETE",
+  );
+}
+
+/** Invites sent from this workspace that are still awaiting acceptance. */
+export async function getPendingInvites(workspaceId: string): Promise<any> {
+  return apiCall(`/api/workspaces/${workspaceId}/invites`);
+}
+
+export async function rescindInvite(
+  workspaceId: string,
+  inviteId: string,
+): Promise<any> {
+  return apiCall(
+    `/api/workspaces/${workspaceId}/invites/${inviteId}`,
+    undefined,
+    "DELETE",
+  );
+}
+
+export async function resendInvite(
+  workspaceId: string,
+  inviteId: string,
+): Promise<any> {
+  return apiCall(
+    `/api/workspaces/${workspaceId}/invites/${inviteId}/resend`,
+    undefined,
+    "POST",
+  );
+}
+
+export async function acceptWorkspaceInvite(token: string): Promise<any> {
+  return apiCall(`/api/workspaces/invites/${token}/accept`, undefined, "POST");
+}
+
+export async function getWorkspaceActivity(
+  workspaceId: string,
+  page: number = 1,
+): Promise<any> {
+  const limit = 50;
+  const offset = (page - 1) * limit;
+  return apiCall(
+    `/api/workspaces/${workspaceId}/activity?limit=${limit}&offset=${offset}`,
+  );
+}
+
+/**
+ * Download the workspace activity log as CSV.
+ *
+ * Goes through fetch rather than a plain link because the endpoint needs the
+ * workspace header and session cookie that `apiCall` attaches.
+ */
+export async function downloadWorkspaceActivity(
+  workspaceId: string,
+): Promise<void> {
+  const headers: Record<string, string> = { "X-Workspace-Id": workspaceId };
+  const r = await fetch(`/api/workspaces/${workspaceId}/activity/export`, {
+    credentials: "include",
+    headers,
+  });
+  if (!r.ok) {
+    const data = await r.json().catch(() => ({}));
+    const error: any = new Error(extractDetail(data, r.status));
+    error.status = r.status;
+    throw error;
+  }
+  const blob = await r.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `activity-${new Date().toISOString().slice(0, 10)}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
+// --- Databases ---
+
+export async function listDatabases(): Promise<any[]> {
+  return apiCall("/api/databases");
+}
+
+export async function removeDatabase(): Promise<any> {
+  return apiCall("/api/disconnect", undefined, "POST");
 }
 
 /** Convert API rows (array of objects) to 2D string arrays for ResultTable */

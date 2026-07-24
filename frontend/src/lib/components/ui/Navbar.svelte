@@ -4,6 +4,7 @@
   import { onMount } from 'svelte';
   import { apiCall } from '$lib/api';
   import Logo from './Logo.svelte';
+  import InviteBell from './InviteBell.svelte';
 
   let userEmail = $state<string>('');
   let menuOpen = $state(false);
@@ -47,6 +48,7 @@
   </div>
 
   <div class="navbar-right">
+    <InviteBell />
     <button class="theme-toggle" data-testid="app-theme-toggle" onclick={() => appState.toggleTheme()} aria-label="Toggle Theme">
       {#if appState.theme === 'dark'}
         <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>
@@ -64,7 +66,12 @@
         aria-label="Open profile menu"
         data-testid="profile-menu-button"
       >
-        <span class="avatar" aria-hidden="true">{initials || '?'}</span>
+        <div style="position:relative;display:inline-flex">
+          <span class="avatar" aria-hidden="true">{initials || '?'}</span>
+          {#if (appState.invites?.length || 0) > 0}
+            <span style="position:absolute;top:-2px;right:-2px;width:10px;height:10px;background:#e53e3e;border-radius:50%;border:2px solid var(--surface)"></span>
+          {/if}
+        </div>
       </button>
       {#if menuOpen}
         <div class="profile-menu" data-testid="profile-menu">
@@ -79,6 +86,15 @@
           <button class="menu-item" onclick={() => { closeMenu(); goto('/profile'); }} data-testid="profile-menu-profile">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4.4 3.6-8 8-8s8 3.6 8 8"/></svg>
             Profile
+          </button>
+          <button class="menu-item" style="justify-content:space-between" onclick={() => { closeMenu(); goto('/workspaces'); }} data-testid="profile-menu-workspaces">
+            <div style="display:flex;align-items:center;gap:10px">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+              Workspaces
+            </div>
+            {#if (appState.invites?.length || 0) > 0}
+              <span style="background:#e53e3e;color:white;font-size:10px;font-weight:700;padding:2px 6px;border-radius:10px">{appState.invites.length}</span>
+            {/if}
           </button>
           <button class="menu-item" onclick={() => { closeMenu(); goto('/connect'); }} data-testid="profile-menu-connect">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="6" rx="7" ry="3"/><path d="M5 6v6c0 1.66 3.13 3 7 3s7-1.34 7-3V6M5 12v6c0 1.66 3.13 3 7 3s7-1.34 7-3v-6"/></svg>

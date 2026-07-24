@@ -3,24 +3,35 @@
 from sqlalchemy import select, delete, func, text
 
 from backend.app.pgdatabase.engine import async_session
-from backend.app.pgdatabase.models import QueryHistory
+from backend.app.models.conversation import QueryHistory
 from backend.app.pgdatabase.serialization import _to_uuid, serialize_doc
 
 
 async def save_query(
-    user_id, question, sql, result, confidence, conversation_id=None, restatement=""
+    workspace_id,
+    question,
+    sql,
+    result,
+    confidence,
+    conversation_id=None,
+    restatement="",
+    user_id=None,
+    chart=None,
 ):
-    uid = _to_uuid(user_id)
+    wid = _to_uuid(workspace_id)
+    uid = _to_uuid(user_id) if user_id else None
     conv_id = _to_uuid(conversation_id) if conversation_id else None
     async with async_session() as session:
         try:
             qh = QueryHistory(
+                workspace_id=wid,
                 user_id=uid,
                 question=question,
                 sql=sql,
                 result=result,
                 confidence=confidence,
                 restatement=restatement,
+                chart=chart,
                 conversation_id=conv_id,
             )
             session.add(qh)
@@ -30,12 +41,12 @@ async def save_query(
             raise
 
 
-async def get_query_history(user_id: str, limit: int = 100):
-    uid = _to_uuid(user_id)
+async def get_query_history(workspace_id: str, limit: int = 100):
+    uid = _to_uuid(workspace_id)
     async with async_session() as session:
         result = await session.execute(
             select(QueryHistory)
-            .where(QueryHistory.user_id == uid)
+            .where(QueryHistory.workspace_id == uid)
             .order_by(QueryHistory.timestamp.desc())
             .limit(limit)
         )
@@ -44,6 +55,7 @@ async def get_query_history(user_id: str, limit: int = 100):
         for row in rows:
             d = {
                 "id": row.id,
+                "workspace_id": row.workspace_id,
                 "user_id": row.user_id,
                 "question": row.question,
                 "sql": row.sql,
@@ -57,18 +69,18 @@ async def get_query_history(user_id: str, limit: int = 100):
         return out
 
 
-async def get_query_stats(user_id: str):
-    uid = _to_uuid(user_id)
+async def get_query_stats(workspace_id: str):
+    uid = _to_uuid(workspace_id)
     async with async_session() as session:
         total_q = await session.scalar(
-            select(func.count()).where(QueryHistory.user_id == uid)
+            select(func.count()).where(QueryHistory.workspace_id == uid)
         )
         total = total_q or 0
 
         conf_rows = await session.execute(
             text(
                 "SELECT LOWER(COALESCE(confidence, 'low')) AS level, COUNT(*) AS count "
-                "FROM query_history WHERE user_id = :uid GROUP BY LOWER(COALESCE(confidence, 'low'))"
+                "FROM query_history WHERE workspace_id = :uid GROUP BY LOWER(COALESCE(confidence, 'low'))"
             ).bindparams(uid=uid)
         )
         confidence_counts = {"High": 0, "Medium": 0, "Low": 0}
@@ -79,7 +91,7 @@ async def get_query_stats(user_id: str):
         day_rows = await session.execute(
             text(
                 "SELECT DATE(timestamp) AS date, COUNT(*) AS count "
-                "FROM query_history WHERE user_id = :uid "
+                "FROM query_history WHERE workspace_id = :uid "
                 "GROUP BY DATE(timestamp) ORDER BY date DESC LIMIT 90"
             ).bindparams(uid=uid)
         )
@@ -88,7 +100,7 @@ async def get_query_stats(user_id: str):
 
         sql_rows = await session.execute(
             text(
-                "SELECT sql FROM query_history WHERE user_id = :uid "
+                "SELECT sql FROM query_history WHERE workspace_id = :uid "
                 "ORDER BY timestamp DESC LIMIT 200"
             ).bindparams(uid=uid)
         )
@@ -140,9 +152,9 @@ async def get_query_stats(user_id: str):
         }
 
 
-async def delete_history_entry(user_id: str, entry_id: str) -> bool:
+async def delete_history_entry(workspace_id: str, entry_id: str) -> bool:
     try:
-        uid = _to_uuid(user_id)
+        uid = _to_uuid(workspace_id)
         eid = _to_uuid(entry_id)
     except (ValueError, TypeError):
         return False
@@ -150,7 +162,7 @@ async def delete_history_entry(user_id: str, entry_id: str) -> bool:
         try:
             result = await session.execute(
                 delete(QueryHistory).where(
-                    QueryHistory.id == eid, QueryHistory.user_id == uid
+                    QueryHistory.id == eid, QueryHistory.workspace_id == uid
                 )
             )
             await session.commit()
@@ -160,12 +172,12 @@ async def delete_history_entry(user_id: str, entry_id: str) -> bool:
             raise
 
 
-async def clear_history(user_id: str):
-    uid = _to_uuid(user_id)
+async def clear_history(workspace_id: str):
+    uid = _to_uuid(workspace_id)
     async with async_session() as session:
         try:
             await session.execute(
-                delete(QueryHistory).where(QueryHistory.user_id == uid)
+                delete(QueryHistory).where(QueryHistory.workspace_id == uid)
             )
             await session.commit()
         except Exception:

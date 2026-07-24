@@ -7,6 +7,7 @@ class ConfigUpdate(BaseModel):
 
 class ConnectReq(BaseModel):
     db_url: str
+    alias_name: str | None = None
 
 
 class ContextTurn(BaseModel):
@@ -39,6 +40,8 @@ class FeedbackReq(BaseModel):
 class RawSQLReq(BaseModel):
     sql: str
     conversation_id: str | None = None
+    # Re-running SQL that is already in history shouldn't create a duplicate entry.
+    save_history: bool = True
 
 
 class GlossaryItem(BaseModel):

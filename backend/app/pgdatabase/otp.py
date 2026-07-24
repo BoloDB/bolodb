@@ -8,7 +8,7 @@ from datetime import datetime, timedelta, timezone
 from sqlalchemy import delete as sqlalchemy_delete, select, update as sqlalchemy_update
 
 from backend.app.pgdatabase.engine import get_engine
-from backend.app.pgdatabase.models import OtpCode
+from backend.app.models.auth_token import OtpCode
 
 logger = logging.getLogger(__name__)
 

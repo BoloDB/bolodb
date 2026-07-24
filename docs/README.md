@@ -1,44 +1,31 @@
 # BoloDB Documentation
 
-Welcome! These docs explain **what BoloDB does, how it does it, and where in
-the code each piece lives**. They are written so that:
+Welcome! These docs explain **what BoloDB does, how it does it, and where in the code each piece lives**.
 
-- a **non-technical reader** can follow every chapter top-to-bottom and
-  understand the product, and
-- a **developer** (or a curious founder) can jump from any paragraph straight
-  into the code, because every mechanism is annotated with the file — and
-  usually the exact function — where it happens.
+- A **non-technical reader** can follow every chapter top-to-bottom and understand the product architecture.
+- A **developer** can jump from any paragraph straight into the codebase, annotated with file and function references.
 
-## How to read these docs
-
-If you are new, read chapters 1 → 2 first. After that, each chapter stands on
-its own. Code pointers look like this:
-
-> `backend/app/llm.py` → `generate_sql()`
-
-which means: open that file, find that function.
+---
 
 ## Chapters
 
 | # | Chapter | What it answers |
 |---|---------|-----------------|
-| 1 | [What is BoloDB?](01-what-is-bolodb.md) | The product in plain language. What happens when you connect a database and ask a question. |
-| 2 | [How a question becomes an answer](02-how-a-question-becomes-an-answer.md) | The full pipeline, step by step, with the exact code location for every step. **The most important chapter.** |
-| 3 | [The AI layer (OpenRouter)](03-the-ai-layer-openrouter.md) | Everything about the AI: what is sent to Google, which models we use, API keys, retries, errors, and how to add another AI vendor later. |
-| 4 | [Schema linking — choosing tables](04-schema-linking.md) | How BoloDB decides which tables the AI gets to see, and why that makes answers cheaper *and* more accurate. |
-| 5 | [Safety, validation and self-repair](05-safety-validation-and-self-repair.md) | The three safety nets: read-only enforcement, SQL validation before execution, and the automatic repair loop. |
-| 6 | [Learning, trust and confidence](06-learning-trust-and-confidence.md) | How BoloDB learns from your confirmations, and how the High/Medium/Low confidence badge is computed. |
-| 7 | [File map](07-file-map.md) | Every file in the repository with a one-line description. Use it as an index. |
-| 8 | [Troubleshooting](08-troubleshooting.md) | "Something is wrong" → what it probably is → where to look in the code → how to fix it. |
-| 9 | [Cost optimisation](09-cost-optimisation.md) | Where AI costs come from and every mechanism BoloDB uses to keep them low without hurting answer quality. |
+| 1 | [What is BoloDB?](01-what-is-bolodb.md) | Multi-tenant product introduction, security model, and 30-second architecture overview. |
+| 2 | [How a question becomes an answer](02-how-a-question-becomes-an-answer.md) | The full execution pipeline step by step. **The most important chapter.** |
+| 3 | [The AI layer (OpenRouter)](03-the-ai-layer-openrouter.md) | OpenRouter provider (`deepseek/deepseek-v4-flash`), structured JSON outputs, streaming SSE, and prompt assembly. |
+| 4 | [Schema linking — choosing tables](04-schema-linking.md) | How table scoring, FK expansion, and two-stage linking optimize context windows. |
+| 5 | [Safety, validation and self-repair](05-safety-validation-and-self-repair.md) | SSRF defense, read-only AST safety, static SQL validation, statement timeouts, and self-repair. |
+| 6 | [Learning, trust and confidence](06-learning-trust-and-confidence.md) | PostgreSQL knowledge base, Jaccard/sequence similarity, and confidence badges. |
+| 7 | [File map](07-file-map.md) | Complete codebase index mapping backend, frontend, tests, and configurations. |
+| 8 | [Troubleshooting](08-troubleshooting.md) | Symptom-based troubleshooting guide for users and maintainers. |
+| 9 | [Cost optimisation](09-cost-optimisation.md) | Token optimization mechanisms, structured output contracts, and budget controls. |
+| 10 | [Authentication and Workspaces](10-auth-and-workspaces.md) | JWT auth, Google OAuth, workspace multi-tenancy, and RBAC permission matrix. |
+| 11 | [Dashboards and Charts](11-dashboards-and-charts.md) | Interactive ECharts visualizations, saved queries, and dashboard panel CRUD. |
+| 12 | [The Semantic Layer](12-semantic-layer.md) | Business metrics, join rules, synonyms, value mappings, and domain context injection. |
 
-## The one-paragraph summary
+---
 
-BoloDB lets anyone ask questions about a SQL database in plain English. When
-you ask a question, BoloDB picks the handful of tables that matter
-(chapter 4), sends the question plus that trimmed schema to OpenRouter
-(chapter 3), checks the SQL that comes back before running it and
-automatically fixes it if it's broken (chapter 5), runs it **read-only**
-against your database, and shows the results with a plain-English restatement
-and a confidence level (chapter 6). Every answer you confirm as correct is
-remembered and makes future answers better.
+## The Summary
+
+BoloDB lets anyone talk to their database in plain English. Built as a multi-tenant FastAPI + SvelteKit web application, it translates questions into SQL using OpenRouter AI (`deepseek/deepseek-v4-flash`), validates and executes queries safely in read-only mode, and renders interactive ECharts visualizations and restatements. Every request is scoped to a workspace and database connection via `X-Workspace-Id` and `X-Db-Id` headers. Every confirmed query enriches the workspace's PostgreSQL knowledge base to improve future accuracy.
