@@ -1,0 +1,10 @@
+# Pin the lint rule set so it does not drift with the ruff version.
+#
+# The repo previously had no ruff config, so linting used whatever defaults the
+# installed ruff shipped. Ruff 0.16.0 broadened its defaults (adding B, UP, I,
+# DTZ and more), and because CI installs the latest ruff, the whole backend
+# started failing there while an older local ruff still passed. These four are
+# ruff's historical defaults — the set this codebase was written against — now
+# stated explicitly so every ruff version enforces the same rules.
+[lint]
+select = ["E4", "E7", "E9", "F"]
