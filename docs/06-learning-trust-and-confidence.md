@@ -1,42 +1,30 @@
-# 6. Learning, trust and confidence
+# 6. Learning, trust, and confidence
 
-BoloDB's accuracy is not static — it improves with use, per database, because
-of a simple loop: **every answer you confirm becomes an example the AI sees
-next time.** This chapter covers the knowledge base, the confidence badge,
-and the trust level.
+BoloDB's accuracy is not static — it improves with use, per workspace and database connection, because of a simple loop: **every answer you confirm becomes an example the AI sees next time.**
 
-## The knowledge base (`backend/app/knowledge.py`)
+---
 
-A small local SQLite file (`~/.bolodb/knowledge.db`, path set in
-`backend/app/config.py`) with two tables, both keyed by a database
-fingerprint (`db_id`, derived in `backend/app/database.py` → `db_id_for()` —
-so knowledge for one connected database never leaks into another):
+## 1. The Knowledge Base (`backend/app/pgdatabase/knowledge.py`)
 
-1. **`verified`** — question, SQL, restatement of every answer you confirmed.
-   Written by `KnowledgeBase.add_verified()` (near-duplicate questions are
-   skipped — similarity > 0.92).
-2. **`glossary`** — your confirmed business terms:
-   term → plain meaning → SQL hint. Written during onboarding
-   (`set_glossary()`).
+Knowledge is persisted asynchronously in PostgreSQL via `KnowledgeService`. All entries are strictly scoped by **Workspace ID** and **Database ID** (`db_id`), ensuring data from one workspace or database never leaks to another.
 
-### How verified answers are found again
+### Managed Entities
+1. **Verified Q&A (`VerifiedQA`)**: Question, SQL, restatement, and metadata of every answer confirmed by a workspace member (`add_verified()`). Near-duplicate questions are skipped if similarity > 0.92.
+2. **Business Glossary (`Glossary`)**: Workspace-confirmed business terms (`term` → `meaning` → `sql_hint`), managed via `set_glossary()`.
+3. **Semantic Layer**: Business metrics, join rules, synonyms, and value mappings (`CatalogMetric`, `CatalogJoin`, `CatalogSynonym`, `CatalogValueMapping`), managed via `set_catalog()`.
 
-When a new question arrives, `retrieve_similar()` scores it against every
-stored verified question:
+### Retrieval & Similar Question Matching
+When a new question arrives, `retrieve_similar()` retrieves up to 3 similar verified Q&A entries using Jaccard word-overlap and string distance algorithms (`_similarity()`):
 
-```text
-similarity = 0.6 × word-overlap (Jaccard) + 0.4 × character-sequence ratio
-```
+$$\text{similarity} = 0.6 \times \text{word-overlap} + 0.4 \times \text{sequence-similarity}$$
 
-(code: `_similarity()`). The top 3 above a 0.25 threshold are injected into
-the AI prompt as worked examples (`_examples_block()` in
-`backend/app/llm.py`) — few-shot examples of *your own verified SQL* are the
-strongest accuracy signal the system has.
+Matches above a 0.25 threshold are injected directly into the system prompt as worked examples (`_examples_block()` in `backend/app/llm.py`).
 
-## The confidence badge (`backend/app/schema_link.py` → `compute_confidence()`)
+---
 
-The High/Medium/Low badge is computed from **observable signals** — never
-from asking the AI how confident it feels. The exact rules:
+## 2. The Confidence Badge (`backend/app/schema_link.py` → `compute_confidence()`)
+
+The High/Medium/Low badge is derived strictly from **observable runtime signals**:
 
 | Situation | Badge | Reason shown |
 |---|---|---|
@@ -46,53 +34,36 @@ from asking the AI how confident it feels. The exact rules:
 | No match, query returned zero rows | **Low** | "no matching rows - the question may not match your data" |
 | No match, query returned rows | **Medium** | "new question - please confirm it is right" |
 
-Note what this implies: **the only way to see High confidence is to verify
-answers.** That's intentional — high confidence is earned from your
-confirmations, not claimed.
+---
 
-## The trust level (Supervised → Assisted → Trusted)
+## 3. The Trust Level (Supervised → Assisted → Trusted)
 
-A per-database summary of how much verified knowledge exists — computed in
-`KnowledgeBase.trust_level()` and mirrored in the frontend
-(`frontend/src/lib/data.ts` → `trustFor()`):
+A workspace database trust summary computed in `KnowledgeService` and reflected in the UI (`frontend/src/lib/data.ts` → `trustFor()`):
 
 | Verified answers | Level | Product behaviour |
 |---|---|---|
-| 0–2 | **Supervised** | Every answer waits for your confirmation while it learns. |
-| 3–6 | **Assisted** | Confident answers shown; novel ones get a second look. |
-| 7+ | **Trusted** | Answers shown directly; reasoning on tap. |
+| 0–2 | **Supervised** | Every answer prompts for confirmation while learning. |
+| 3–6 | **Assisted** | Confident answers displayed; novel ones get a second look. |
+| 7+ | **Trusted** | Answers displayed directly; reasoning on tap. |
 
-Displayed as the pill in the chat top bar
-(`frontend/src/lib/components/ui/TrustPill.svelte`) and the meter in
-onboarding (`TrustMeter.svelte`).
+---
 
-## The feedback flow, end to end
+## 4. End-to-End Feedback & Verification Flow
 
-1. You click **"Yes, correct"** on an answer card
-   (`frontend/src/lib/components/AnswerCard.svelte`).
-2. `POST /api/feedback` → `backend/app/controllers/query.py` →
-   `feedback()`.
-3. The verdict is logged (`backend/app/logbook.py` — an append-only JSONL
-   file per session in `~/.bolodb/sessions/`, useful for auditing what was
-   asked and answered).
-4. If the verdict is "correct", the pair is stored via `add_verified()` and
-   the new trust level is returned to the UI.
-5. Clicking **"Something's wrong"** logs the verdict + reason (wrong numbers /
-   wrong filter / not what I meant …) without storing the answer.
+1. User clicks **"Yes, correct"** or **"Verify"** on an answer card (`frontend/src/lib/components/AnswerCard.svelte`).
+2. Frontend issues `POST /api/feedback` or `POST /api/verify` → `backend/app/routes/query.py` → `backend/app/controllers/query.py`.
+3. The verified pair is saved into PostgreSQL via `KnowledgeService.add_verified()`.
+4. Workspace activity is recorded in `WorkspaceActivityLog`.
 
-## Explain — trust without reading SQL
+---
 
-For any query, `POST /api/explain` (`backend/app/llm.py` → `explain_sql()`)
-returns 2–4 plain-English sentences describing what the SQL actually does —
-which data it looks at, how it filters and groups, how it's ordered. It's the
-"reverse translation" that lets a non-technical user audit an answer without
-learning SQL.
+## 5. Persistence Map in BoloDB v2
 
-## Where each artifact lives on disk
-
-| Artifact | Location | Written by |
+| Entity | Storage | Managed by |
 |---|---|---|
-| Settings (model, API key — key encrypted at rest) | `~/.bolodb/config.json` + `~/.bolodb/.secret` | `backend/app/config.py` |
-| Verified answers + glossary | `~/.bolodb/knowledge.db` | `backend/app/knowledge.py` |
-| Session query/feedback log | `~/.bolodb/sessions/session-*.jsonl` | `backend/app/logbook.py` |
-| Per-user query history | MongoDB (Docker volume) | `backend/app/mongodatabase.py` |
+| Users & Workspaces | PostgreSQL | `backend/app/pgdatabase/users.py`, `workspaces.py` |
+| Verified Q&A, Glossary, Catalog | PostgreSQL | `backend/app/pgdatabase/knowledge.py` |
+| Encrypted DB Connections | PostgreSQL | `backend/app/pgdatabase/connections.py` |
+| Query History | PostgreSQL | `backend/app/pgdatabase/history.py` |
+| Dashboards & Saved Queries | PostgreSQL | `backend/app/pgdatabase/dashboards.py`, `saved_queries.py` |
+| Audit Trail / Session Log | PostgreSQL | `backend/app/models/activity.py` |

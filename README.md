@@ -4,116 +4,98 @@
 
 **Ask your data. Trust the answer.**
 
-A text-to-SQL product for non-technical users. Connect any SQL database, ask
-questions in plain English, get answers with a plain-English explanation and a
-confidence level. Every answer you confirm teaches it your database — accuracy
-improves with use.
+A multi-tenant text-to-SQL web application for non-technical users and teams. Connect your database, ask questions in plain English, and get instant answers with plain-English restatements, ECharts visualizations, and confidence levels. Save queries to interactive dashboards and manage multi-user workspaces with role-based access control (RBAC).
 
-**📚 Full documentation lives in [`docs/`](docs/README.md)** — written for
-non-technical readers, with code pointers for developers at every step.
+**📚 Full documentation lives in [`docs/`](docs/README.md)** — written for non-technical readers, with code pointers for developers at every step.
+
+---
 
 ## Quick Start (Docker)
 
-The easiest and recommended way to run BoloDB is using Docker. This ensures all services (FastAPI Backend, SvelteKit Frontend, and Nginx) run seamlessly.
+The easiest and recommended way to run BoloDB is using Docker Compose (FastAPI backend + SvelteKit frontend + Nginx + PostgreSQL).
 
-1. Install [Docker Desktop](https://www.docker.com/products/docker-desktop/) (Windows/Mac) or Docker Engine (Linux).
-2. Open a terminal in the project directory.
-3. Copy `.env.example` to `.env` and fill in required secrets.
-4. Start the application:
+1. Install [Docker Desktop](https://www.docker.com/products/docker-desktop/) or Docker Engine.
+2. Clone the repository and navigate into the root directory.
+3. Copy `.env.example` to `.env` and fill in required secrets (`OPENROUTER_API_KEY`, `JWT_SECRET`, `DATABASE_URL`, `RECENT_CONNECTIONS_KEY`, `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_JWT_SECRET`).
+4. Start the application stack:
 
-   **Production / Coolify preview** (static frontend baked into nginx):
+   **Production / Deployment**:
    ```bash
    docker compose up --build -d
    ```
    Open [http://localhost:8080](http://localhost:8080).
 
-   **Local development** (Vite HMR):
+   **Local Development (Vite HMR)**:
    ```bash
    docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build
    ```
-   Open [http://localhost:8080](http://localhost:8080) (nginx) or [http://localhost:5174](http://localhost:5174) (Vite).
+   Open [http://localhost:8080](http://localhost:8080) (Nginx proxy) or [http://localhost:5174](http://localhost:5174) (Vite frontend).
 
-5. Set the `OPENROUTER_API_KEY` environment variable in your `.env` file, connect a database (or click "Try with sample data"), and start asking!
+---
 
-## The AI engine
+## Key Features
 
-BoloDB uses **OpenRouter** (specifically the `deepseek/deepseek-v4-flash` model) for all AI operations. You only need one thing:
-an OpenRouter API key.
+- **Multi-Tenant Workspaces & RBAC**: Isolate connections, dashboards, and knowledge bases per workspace. Assign Owner, Admin, or Member roles with fine-grained capability checks.
+- **OpenRouter AI Engine**: Powered by `deepseek/deepseek-v4-flash` via OpenRouter.
+- **Interactive Dashboards & Charts**: Automated ECharts visual inference (Bar, Line, Area, Pie, Number, Table) with query panel customization.
+- **Semantic Layer**: Define custom business metrics, explicit join paths, synonyms, and value mappings to guide AI SQL generation.
+- **Safety & Defense in Depth**: Read-only AST validation, SSRF protection, host allowlisting, and 5s statement timeouts.
+- **PostgreSQL Persistence**: All state (users, workspaces, connections encrypted at rest, query history, dashboards, verified Q&A) is persisted asynchronously in PostgreSQL.
 
-1. Go to https://openrouter.ai/keys.
-2. Click **Create Key** and copy it.
-3. Set it as the `OPENROUTER_API_KEY` environment variable for your deployment.
+---
 
-| Model | Best for |
+## Supported Database Connections
+
+| Database | Connection URL Format |
 |---|---|
-| `deepseek/deepseek-v4-flash` (default) | Best cost/accuracy balance for most uses |
-
-**Privacy:** what's sent to the AI to generate SQL is your question plus the
-context BoloDB builds around it: the database *structure* (table/column names,
-keys), a few sample values and sample rows per table, your confirmed
-business-term glossary, previously verified question→SQL examples, and the
-last couple of conversation turns. **The prompt never includes** bulk table
-contents, query results, or credentials — the OpenRouter API key travels only in
-the request's authentication header. See
-[docs/03-the-ai-layer-openrouter.md](docs/03-the-ai-layer-openrouter.md) for exactly
-what's in every prompt.
-
-## Database connection strings
-
-| Database | Format |
-|---|---|
-| SQLite | `sqlite:///C:/path/to/file.db` |
 | PostgreSQL | `postgresql://user:pass@host:5432/dbname` |
 | MySQL | `mysql+pymysql://user:pass@host:3306/dbname` |
+| SQLite | `sqlite:///C:/path/to/file.db` |
 | SQL Server | `mssql+pyodbc://user:pass@server/db?driver=ODBC+Driver+17+for+SQL+Server` |
+| DuckDB | `duckdb:///path/to/file.duckdb` |
 
-Tip: connect with a **read-only database account** for safety (BoloDB also
-enforces read-only itself — see
-[docs/05-safety-validation-and-self-repair.md](docs/05-safety-validation-and-self-repair.md)).
+---
 
-## How it works
+## Architecture & Code Map
 
-1. **Connect** a database and ensure your OpenRouter API key is set in the environment.
-2. **Onboard** (first time) — BoloDB profiles the tables, confirms business-term meanings with you, and runs a few starter questions for you to verify
-3. **Ask** questions in plain English. Every answer includes:
-   - A plain-English restatement ("I summed completed orders for this month")
-   - A confidence level (High/Medium/Low) based on real signals
-   - The results table and SQL on a toggle
-   - Automatic self-repair: generated SQL is validated against your schema and fixed before you ever see an error
-4. **Verify** — click "Yes, correct" to save the answer. Similar future questions reuse it and show higher confidence. The trust level climbs from Supervised to Assisted to Trusted
+Full file and directory index is available in [`docs/07-file-map.md`](docs/07-file-map.md).
 
-The full pipeline, step by step with code pointers:
-[docs/02-how-a-question-becomes-an-answer.md](docs/02-how-a-question-becomes-an-answer.md).
-
-## Useful Docker Commands
-
-```bash
-# Production / Coolify
-docker compose up -d --build
-docker compose logs -f
-docker compose down
-
-# Local development (Vite HMR)
-docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build
-docker compose -f docker-compose.yml -f docker-compose.dev.yml down
+```text
+ Browser (SvelteKit 5 Frontend, frontend/src)
+    │  HTTP / SSE streaming (JWT cookie auth, X-Workspace-Id and X-Db-Id headers)
+    ▼
+ FastAPI Backend (backend/app)
+    ├── controllers/query.py ─── The query pipeline (knowledge → schema link → LLM → repair)
+    ├── llm.py ───────────────── OpenRouter provider (deepseek/deepseek-v4-flash)
+    ├── schema_link.py ───────── Schema linking, budget management & table scoring
+    ├── sqlvalidate.py ───────── AST static SQL validation
+    ├── repair.py ────────────── Self-repair loop for auto-correcting broken SQL
+    ├── semantic.py ──────────── Semantic layer catalog & inference
+    ├── database.py ──────────── DB introspection & read-only execution guard
+    └── pgdatabase/ ──────────── Async PostgreSQL persistence (KnowledgeService, Users, Workspaces, Dashboards)
 ```
 
-## Running tests
+---
+
+## Running Unit Tests
 
 ```bash
 pip install -r backend/requirements.txt
-pytest tests
+pytest tests -v
 ```
 
-The test suite needs no network and no API key — all AI calls are faked.
+The test suite runs entirely offline using mock OpenRouter providers.
 
-## Privacy
+---
 
-- All learned knowledge and user settings are stored locally (`~/.bolodb/`) and in the local MongoDB container volume. The API key is read from the environment and never stored on disk.
-- To generate SQL, the AI is sent your question plus context: the schema, a few sample values/rows per table, your confirmed glossary terms, verified question→SQL examples, and recent conversation turns. The prompt never includes bulk table data, query results, or credentials (the API key is used only as the request's authentication header).
-- Queries run strictly read-only.
-- No telemetry, no cloud sync.
+## Privacy & Security
+
+- Connection credentials are **encrypted at rest** using Fernet symmetric encryption key (`RECENT_CONNECTIONS_KEY`).
+- AI prompts include only database structure, compact column schemas, verified Q&A examples, and business glossary definitions. Bulk data rows, query results, and credentials are **never sent** to the AI model.
+- All SQL execution runs in strict **read-only** mode with statement timeout protection.
+
+---
 
 ## License
 
-MIT &mdash; see [LICENSE](LICENSE).
+MIT — see [LICENSE](LICENSE).

@@ -20,7 +20,7 @@ def _get_api_key() -> str | None:
 
 
 def _get_from_email() -> str:
-    return os.environ.get("RESEND_FROM_EMAIL", "onboard@bolodb.dev")
+    return os.environ.get("RESEND_FROM_EMAIL", "noreply@bolodb.dev")
 
 
 async def send_email(to: str, subject: str, html: str) -> bool:

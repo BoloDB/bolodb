@@ -1,146 +1,79 @@
 # 2. How a question becomes an answer
 
-This is the most important chapter: it follows **one question** through the
-entire system, in order, with the exact code location for every step. If you
-ever wonder "where does X happen?" or "why did I get this answer?", start here.
+This chapter follows **one question** through the entire BoloDB system, in order, with exact code locations for every step.
 
-Our example question, asked against a demo e-commerce database:
+Our example question:
 
 > **"How much revenue did we make from laptops last month?"**
 
+---
+
 ## Step 0 — The browser sends the question
 
-You type into the chat screen and press *Ask*.
+You type into the chat screen (`frontend/src/lib/components/AskScreen.svelte`) and submit.
 
-- **Where:** `frontend/src/lib/components/AskScreen.svelte` → the `ask()`
-  function sends `POST /api/query` with the question, plus the previous couple
-  of question/SQL pairs (so follow-up questions like "now just 2023" work).
-- The request lands in `backend/app/routes/query.py` → `query()`, which calls
-  the pipeline: `backend/app/controllers/query.py` → `run_query()`.
+- **Request**: Sends `POST /api/query` containing:
+  - Natural language question
+  - Conversation context (previous question/SQL pairs for follow-up resolution)
+  - `X-Workspace-Id` and `X-Db-Id` headers (Workspace and Database selection)
+  - JWT authentication cookie (`backend/app/dependencies.py` → `get_current_user`)
+- **Route**: `backend/app/routes/query.py` → `query()`, which invokes `backend/app/controllers/query.py` → `run_query()`.
 
-Everything below happens inside `run_query()`. The step numbers here match
-the numbered comments in that function — you can read them side by side.
+---
 
-## Step 1 — Look up what BoloDB already knows
+## Step 1 — Knowledge Lookup & Semantic Layer Injection
 
-Two lookups against the local knowledge base (a small SQLite file at
-`~/.bolodb/knowledge.db`, managed by `backend/app/knowledge.py`):
+BoloDB queries the PostgreSQL workspace knowledge base (`backend/app/pgdatabase/knowledge.py` → `KnowledgeService`):
 
-1. **Glossary** — the business terms you confirmed during onboarding.
-   For our question, the glossary might contain
-   `revenue = sum of total_amount on completed orders`.
-   *Code:* `KnowledgeBase.get_glossary()`.
-2. **Similar verified answers** — up to 3 previously-confirmed
-   question→SQL pairs that resemble this question, found with a text
-   similarity score (word overlap + sequence similarity).
-   *Code:* `KnowledgeBase.retrieve_similar()`, scoring in `_similarity()`.
+1. **Business Glossary**: Confirmed business term definitions (e.g., `revenue = sum of total_amount on completed orders`).
+2. **Semantic Layer Catalog**: Active metrics (`CatalogMetric`), join paths (`CatalogJoin`), synonyms (`CatalogSynonym`), and value mappings (`CatalogValueMapping`).
+3. **Verified Answer Examples**: Up to 3 similar verified question→SQL pairs retrieved via similarity scoring (`retrieve_similar()`).
 
-Both are later placed into the AI prompt: the glossary as ground-truth term
-definitions, the verified answers as worked examples to imitate.
+---
 
-## Step 2 — Pick which tables the AI gets to see (schema linking)
+## Step 2 — Schema Linking (Table Selection)
 
-A real database may have 40+ tables. Sending them all would cost more AND
-confuse the AI. So BoloDB scores every table against the question and keeps
-only the relevant ones.
+To optimize cost and avoid confusing the AI, BoloDB filters the database schema down to only the relevant tables.
 
-- **Where:** `backend/app/schema_link.py` → `link_relevant_tables()`.
-- For our question, tables named `orders`, `order_items`, `products` score
-  high (name/column matches on "revenue"→glossary→"total_amount",
-  "laptops" matches a known value of `products.category`), and tables like
-  `employees` or `audit_log` score zero and are dropped.
-- Foreign keys are then followed so the chosen tables can be JOINed
-  (details in [chapter 4](04-schema-linking.md)).
-- How many tables are allowed depends on the OpenRouter model configured —
-  `model_budget()` in the same file.
-- On big databases (30+ tables), a cheap AI pre-pass shortlists candidate
-  tables from a names-only catalog first — "two-stage linking", chapter 4.
+- **Location**: `backend/app/schema_link.py` → `link_relevant_tables()`.
+- Tables matching "revenue" (via glossary `total_amount`), "laptops" (via product category value match), and "orders" are selected.
+- Foreign keys and junction tables (e.g. `order_items`) are expanded (`expand_linked_tables()`).
+- On large databases (30+ tables), a cheap pre-pass shortlists candidates (`llm.py` → `shortlist_tables()`).
+- Selected tables are formatted into compact text representations via `compact_schema()`.
 
-The chosen tables are rendered into a compact text form the AI reads —
-`compact_schema()` produces lines like:
+---
 
-```text
-orders(id PK, customer_id->customers.id, status[completed,pending,cancelled], total_amount, created_at) ~38104 rows
-```
+## Step 3 — Generation, Validation, Execution & Self-Repair
 
-## Step 3 — Generate, validate, execute — and self-repair if needed
+Orchestrated by `backend/app/repair.py` → `run_repair_loop()`:
 
-This is the loop that actually produces the answer. **Where:**
-`backend/app/repair.py` → `run_repair_loop()`, wired up in `run_query()`.
+1. **Generate**: OpenRouter AI is invoked (`backend/app/llm.py` → `generate_sql()`). The system prompt is constructed by `build_sql_system_prompt()`. The response returns structured JSON containing:
+   - `sql`: The generated query
+   - `restatement`: Plain English summary of what was computed
+   - `assumptions`: List of assumptions made by the model
+   - `chart`: Inferred visualization specification (chart type, x/y columns, title)
+2. **Validate**: The SQL is parsed into an AST via `sqlglot` (`backend/app/sqlvalidate.py` → `validate_sql()`) to verify that all referenced tables and columns exist.
+3. **Execute**: The query runs in **read-only** mode with statement timeouts and SSRF protection (`backend/app/database.py` → `DatabaseManager.execute()`).
+4. **Self-Repair (if step 2 or 3 failed)**: The exact error is appended to the prompt (`_feedback()`), and the loop retries (up to 3 attempts within a 60-second window).
 
-Each iteration (at most 3, and no new attempt after 60 seconds):
+---
 
-1. **Generate.** The OpenRouter AI is asked for the SQL.
-   *Code:* `backend/app/llm.py` → `generate_sql()`; the exact prompt text is
-   assembled in `build_sql_system_prompt()` in the same file — open it to see
-   precisely what the AI is told. The AI must reply in a fixed JSON shape
-   (`SQL_SCHEMA`): the SQL, a plain-English restatement, and any assumptions
-   it made.
-2. **Validate.** Before anything touches your database, the SQL is parsed
-   and every table and column it mentions is checked against your real
-   schema. A hallucinated column like `orders.revenue` is caught here.
-   *Code:* `backend/app/sqlvalidate.py` → `validate_sql()`.
-3. **Execute.** The query runs against your database — read-only, with the
-   safety guard described in [chapter 5](05-safety-validation-and-self-repair.md).
-   *Code:* `backend/app/database.py` → `DatabaseManager.execute()`.
-4. **Repair (only if 2 or 3 failed).** The specific error — "Unknown column:
-   'revenue' does not exist in table 'orders'" or the database's own error
-   message — is appended to the question and the loop starts over. The AI
-   sees exactly what broke and fixes it. *Code:* the feedback text is built
-   by `_feedback()` in `repair.py`. And if the failed SQL referenced a real
-   table that step 2 didn't select, that table is added to the prompt for
-   the retry ("schema-retry" — chapter 4).
+## Step 4 — Confidence Scoring, Logging & Visualization
 
-The response records how many attempts were needed (`attempts` field) and
-whether a repair happened (`repaired`) — useful when debugging.
+- **Confidence**: Derived from real runtime signals (`schema_link.py` → `compute_confidence()`).
+- **Persistence**: Recorded in PostgreSQL query history (`backend/app/pgdatabase/history.py`) and workspace activity log.
+- **Rendering**: Returned as JSON (or streamed via Server-Sent Events). The frontend renders an `AnswerCard.svelte` (`frontend/src/lib/components/AnswerCard.svelte`) featuring:
+  - Plain English restatement
+  - Interactive data table
+  - **ECharts visualization** (`frontend/src/lib/components/ChartPanel.svelte`) based on the inferred `chart` spec
+  - Confidence pill and SQL view toggle
+  - **"Save to Dashboard"** button (`frontend/src/lib/components/SaveQueryDialog.svelte`)
 
-## Step 4 — Score confidence, log, and answer
+---
 
-- **Confidence** is computed from real signals — did the query run, did it
-  return rows, and how closely does the question match something you already
-  verified. *Code:* `backend/app/schema_link.py` → `compute_confidence()`.
-  The exact thresholds are in [chapter 6](06-learning-trust-and-confidence.md).
-- The query is **logged** to the session log (`backend/app/logbook.py`) and
-  the per-user history (MongoDB, `backend/app/mongodatabase.py`, called from
-  `routes/query.py`).
-- The JSON response goes back to the browser, which renders it as an answer
-  card: `frontend/src/lib/components/AnswerCard.svelte`.
+## Step 5 — Feedback & Verification Flywheel
 
-## Step 5 — You give feedback (optional but powerful)
-
-If you click **"Yes, correct"**, the browser calls `POST /api/feedback` →
-`backend/app/controllers/query.py` → `feedback()`, which saves the
-question+SQL into the knowledge base (`KnowledgeBase.add_verified()`).
-From now on, similar questions retrieve this example in Step 1 and show
-higher confidence in Step 4. This loop — ask, verify, improve — is the
-product's core flywheel.
-
-## The full picture
-
-```text
- Question ─▶ [1] knowledge lookup      knowledge.py
-             [2] schema linking        schema_link.py
-             [3] generate ◀────┐       llm.py (OpenRouter)
-                 validate      │       sqlvalidate.py
-                 execute       │       database.py
-                 (repair) ─────┘       repair.py
-             [4] confidence + log      schema_link.py, logbook.py
- Answer  ◀── JSON: sql, restatement, rows, confidence, attempts
-```
-
-## What the response actually contains
-
-`POST /api/query` returns (shape assembled at the end of `run_query()`):
-
-| Field | Meaning |
-|---|---|
-| `sql` | The SQL that was run (empty if generation failed entirely) |
-| `restatement` | One plain sentence describing what the query computes |
-| `assumptions` | Assumptions the AI made (e.g. "interpreted 'last month' as the previous calendar month") |
-| `columns`, `rows` | The results (max 500 rows; `truncated` is true if capped) |
-| `confidence`, `confidence_reason` | High/Medium/Low + why |
-| `based_on_verified` | Whether a previously verified answer informed this one |
-| `tables_used` | Which tables schema linking selected |
-| `attempts`, `repaired` | How many generation attempts were needed; whether a self-repair happened |
-| `execution_error` | Present only if the final attempt still failed |
-| `query_id` | Handle for feedback ("Yes, correct" / "Something's wrong") |
+If a user clicks **"Yes, correct"** or **"Verify"**:
+1. Frontend calls `POST /api/feedback` → `backend/app/routes/query.py` → `controllers/query.py`.
+2. The question-and-SQL pair is added to PostgreSQL via `KnowledgeService.add_verified()`.
+3. Subsequent similar queries retrieve this verified example during Step 1.

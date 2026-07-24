@@ -1,76 +1,46 @@
-# 9. Cost optimisation — good answers without burning tokens
+# 9. Cost Optimization — High Accuracy without Burning Tokens
 
-Design goal, in order: **(1) the user's experience is never compromised,
-(2) every avoidable token is avoided.** It turns out these rarely conflict —
-most of what makes prompts cheaper (less irrelevant schema, structured
-output, verified examples) also makes answers *better*.
+BoloDB follows a clear design rule: **(1) the user's experience is never compromised, (2) every avoidable token is avoided.**
 
-## Where AI cost comes from
+Because OpenRouter bills per token, optimizing prompt construction and output format directly reduces operational cost while simultaneously improving model accuracy.
 
-OpenRouter bills per token, input and output separately. For BoloDB, a
-question's cost ≈
+---
 
-```text
-(prompt: instructions + schema + glossary + examples + context)   ← input tokens
-+ (the model's reply: SQL + restatement + assumptions)            ← output tokens
-+ (invisible "thinking" tokens, if enabled)                       ← output tokens
-× (number of attempts, if self-repair fires)
-```
+## 1. Where AI Cost Comes From
 
-Every mechanism below trims one of those factors. Each row names the code
-that implements it.
+Query generation cost is governed by:
 
-## The mechanisms
+$$\text{Cost} = \left( \text{Tokens}_{\text{prompt}} + \text{Tokens}_{\text{output}} \right) \times \text{Attempts}_{\text{repair}}$$
 
-| # | Mechanism | Effect | Code |
+Where:
+- **Prompt Tokens**: System instructions + compact schema + business glossary + semantic catalog rules + verified worked examples + conversation turns.
+- **Output Tokens**: Structured JSON containing SQL, plain-English restatement, assumptions, and chart specification.
+- **Attempts**: Number of self-repair retries (1 attempt for clean executions, up to 3 for repaired queries).
+
+---
+
+## 2. Optimization Mechanisms
+
+| # | Mechanism | Effect | Implementation File |
 |---|---|---|---|
-| 1 | **Schema linking** — only relevant tables are sent, not the whole database | Biggest single saving on input tokens; also *improves* accuracy | `backend/app/schema_link.py` → `link_relevant_tables()` ([chapter 4](04-schema-linking.md)) |
-| 2 | **Compact schema rendering** — one dense line per table instead of CREATE TABLE dumps | ~3–5× fewer tokens per table | `schema_link.py` → `compact_schema()` |
-| 3 | **Structured output** — the model is constrained to a JSON schema; it cannot ramble, apologise, or wrap answers in prose | Output tokens = exactly the fields we parse | `backend/app/llm.py` → `responseSchema` in `OpenRouterProvider._build_body()` |
-| 4 | **Thinking off for simple tasks** — glossary, starters and Explain don't need reasoning tokens | Removes the invisible thinking cost on 3 of 4 operations | `llm.py` → `thinking_budget=0` call sites |
-| 5 | **Thinking left dynamic for SQL generation** — the model spends reasoning only when the question is hard | Pay for reasoning only where it buys accuracy (deliberate: experience > cost) | `llm.py` → `generate_sql()` (no `thinking_budget` override) |
-| 6 | **Output caps** — `maxOutputTokens: 4096`, temperature 0.1 | Bounds worst-case output cost | `llm.py` → `_build_body()` |
-| 7 | **Bounded self-repair** — at most 3 attempts, 60-second budget | A stubborn failure can't loop forever | `backend/app/controllers/query.py` → `_MAX_ATTEMPTS`, `_MAX_SECONDS` |
-| 8 | **Retry with backoff, never blindly** — only transient statuses retry; a bad API key fails once, immediately | No token/HTTP waste on hopeless calls | `llm.py` → `_RETRYABLE_STATUS`, `complete()` |
-| 9 | **Verified-answer reuse** — similar past answers are injected as examples, so the model converges on attempt 1 instead of needing repairs | Fewer repair rounds over time; the system gets *cheaper as it's used* | `backend/app/knowledge.py` → `retrieve_similar()` |
-| 10 | **Per-model budgets** — cheaper models get smaller prompts (fewer tables/samples/examples) | Cost scales with the model tier you chose | `schema_link.py` → `model_budget()` |
-| 11 | **Schema introspection cache** — your database is profiled once per connection, not per question | No repeated DB scans; instant prompts | `backend/app/database.py` → `get_schema()` cache |
-| 12 | **Two-stage linking pays for itself** — the shortlist pre-pass (big schemas only, 30+ tables) is a names-only prompt with thinking off; picking the right tables up-front avoids repair rounds that cost far more | One tiny call replaces 1–2 full retries | `llm.py` → `shortlist_tables()`, threshold in `controllers/query.py` |
-| 13 | **Enrichment cap** — sample rows / known values are collected for at most 40 tables (largest first); structure is still collected for all | Bounded introspection cost on huge databases | `database.py` → `ENRICH_MAX` in `get_schema()` |
+| 1 | **Schema Linking** | Sends only relevant tables instead of dumping full database schema | `backend/app/schema_link.py` → `link_relevant_tables()` |
+| 2 | **Compact Schema Rendering** | Compresses table definitions into 1 line per table | `schema_link.py` → `compact_schema()` |
+| 3 | **Structured Output Contract** | Forces exact JSON schema (`SQL_SCHEMA`); eliminates rambling prose | `backend/app/llm.py` → `OpenRouterProvider` |
+| 4 | **Streaming Responses** | Streams chunks in real time, giving immediate user feedback without polling overhead | `backend/app/routes/query.py` & `frontend/src/lib/api.ts` |
+| 5 | **Bounded Self-Repair** | Enforces max 3 repair attempts and 60-second execution deadline | `backend/app/controllers/query.py` → `_MAX_ATTEMPTS` |
+| 6 | **PostgreSQL Verified Answer Reuse** | Injects verified Q&A pairs as few-shot prompt examples, maximizing first-pass success | `backend/app/pgdatabase/knowledge.py` → `retrieve_similar()`, `set_glossary()`, `set_catalog()` |
+| 7 | **Two-Stage Linking for Large Schemas** | Pre-filters candidate tables via cheap names-only shortlist on schemas with 30+ tables | `llm.py` → `shortlist_tables()` |
+| 8 | **Schema Introspection Caching** | Caches table introspections per workspace database connection | `backend/app/database.py` → `get_schema()` |
 
-## The one knob you control: the model
+---
 
-In Settings (persisted via `backend/app/config.py`):
+## 3. Deliberate Trade-Offs
 
-| Model | Relative cost | Guidance |
-|---|---|---|
-| `deepseek-v4-flash` | lowest | Small schema, straightforward questions, high volume |
-| `deepseek-v4-flash` (default) | low | The right answer for almost everyone |
-| `deepseek-v4-flash` | highest | Big schemas, complex analytical questions |
+- **No Over-Trimming**: Foreign key parents and junction tables are retained even beyond the initial table budget (`_FK_EXTRA_SLOTS`) to avoid broken SQL JOINs.
+- **Fail Fast**: Non-retryable errors (e.g., authentication or permissions) fail immediately to avoid wasting tokens.
 
-OpenRouter's API also has a **free tier** — for evaluation and light usage the
-cost is simply zero. Current pricing/quotas: https://ai.google.dev/pricing.
+---
 
-## What we deliberately do NOT do
+## 4. Benchmarking Cost and Accuracy
 
-- **We don't cut schema below what the question needs.** FK parents and
-  junction tables are always included even past the table budget
-  (`_FK_EXTRA_SLOTS`) — a cheap prompt that produces a broken JOIN costs
-  more after one repair round than the tokens it saved.
-- **We don't disable thinking for SQL generation.** Hard questions benefit;
-  dynamic thinking means simple questions barely spend any.
-- **We don't retry non-transient errors.** An invalid key or a blocked
-  prompt fails fast with a clear message ([chapter 3](03-the-ai-layer-openrouter.md)).
-
-## Ideas for later (not implemented)
-
-- **Context caching** for the schema block — OpenRouter can cache repeated
-  prompt prefixes at a discount; worth it once per-database question volume
-  is high. Would slot into `OpenRouterProvider._build_body()`.
-- **Semantic retrieval** (embeddings) instead of word-overlap for verified
-  answers — better example reuse at the same token cost. Would replace
-  `_similarity()` in `knowledge.py`.
-
-A [Spider](https://github.com/taoyds/spider)-based benchmark for measuring
-linking recall and execution accuracy before shipping prompt changes now
-exists — see `benchmarks/README.md`.
+The benchmark suite (`benchmarks/README.md`) measures schema linking recall, execution accuracy, and average token consumption against standard benchmark datasets like Spider.
