@@ -1,6 +1,6 @@
 import asyncio
 import logging
-from sqlalchemy import select, desc, delete
+from sqlalchemy import select, desc, delete, func
 from datetime import datetime, timedelta, timezone
 from backend.app.pgdatabase.engine import async_session
 from backend.app.models.workspace_settings import WorkspaceSettings
@@ -124,16 +124,34 @@ async def delete_old_activity(retention_days: int | None = None) -> int:
     """Prune activity rows past the retention window.
 
     Reads beyond the window are already filtered out by
-    ``get_workspace_activity``; this reclaims the storage behind them. Returns
-    the number of rows removed.
-    """
-    days = retention_days if retention_days is not None else ACTIVITY_LOG_RETENTION_DAYS
-    cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+    ``get_workspace_activity``; this reclaims the storage behind them.
 
+    When ``retention_days`` is given it overrides every workspace's window.
+    Otherwise each workspace is pruned by its own ``activity_retention_days``
+    setting, falling back to ``ACTIVITY_LOG_RETENTION_DAYS`` for workspaces
+    without a settings row. Returns the number of rows removed.
+    """
     async with async_session() as session:
-        result = await session.execute(
-            delete(WorkspaceActivityLog).where(WorkspaceActivityLog.created_at < cutoff)
-        )
+        if retention_days is not None:
+            cutoff = datetime.now(timezone.utc) - timedelta(days=retention_days)
+            stmt = delete(WorkspaceActivityLog).where(
+                WorkspaceActivityLog.created_at < cutoff
+            )
+        else:
+            retention = func.coalesce(
+                select(WorkspaceSettings.activity_retention_days)
+                .where(
+                    WorkspaceSettings.workspace_id == WorkspaceActivityLog.workspace_id
+                )
+                .scalar_subquery(),
+                ACTIVITY_LOG_RETENTION_DAYS,
+            )
+            stmt = delete(WorkspaceActivityLog).where(
+                WorkspaceActivityLog.created_at
+                < func.now() - func.make_interval(0, 0, 0, retention)
+            )
+
+        result = await session.execute(stmt)
         await session.commit()
         return result.rowcount or 0
 
