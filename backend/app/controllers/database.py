@@ -1,6 +1,6 @@
 from fastapi import HTTPException
-from backend.app.database import sanitize_url
-from backend.sample_data import ensure_sample_db
+from backend.app.database import sanitize_url, db_id_for
+from backend.sample_data import ensure_sample_db, sample_db_path
 import backend.app.pgdatabase as mdb
 from backend.app.pgdatabase.connections import ConnectionKeyError
 import logging
@@ -40,6 +40,27 @@ def _call_with_db_id(fn, workspace_id, db_id):
     return fn(workspace_id)
 
 
+def _sample_db_id() -> str:
+    """The db_id the sample database connects under, without building it.
+
+    `db_id` is a hash of the connection URL, so this matches whatever
+    `db.connect(ensure_sample_db())` would produce — letting us recognise a
+    request for the sample before deciding whether to rebuild it.
+    """
+    return db_id_for(f"sqlite:///{sample_db_path().as_posix()}")
+
+
+def _connect_sample_url(db, workspace_id):
+    """Build (if needed) and connect the sample database. Returns its db_id."""
+    url = ensure_sample_db()
+    result = db.connect(workspace_id, url)
+    if not result["ok"]:
+        logger.warning("Could not connect the sample database: %s", result["error"])
+        return None
+    logger.info("Restored the sample database for workspace")
+    return result["db_id"]
+
+
 async def ensure_connection(db, workspace_id, db_id=None):
     """Return the db_id this workspace is connected to, reconnecting if needed.
 
@@ -68,8 +89,18 @@ async def ensure_connection(db, workspace_id, db_id=None):
         # Undecryptable stored credentials — the user has to re-add the
         # connection, and /api/reconnect reports that explicitly.
         logger.exception("Could not decrypt stored connection for workspace")
-        return None
+        conn = None
+
     if not conn or not conn.get("db_url"):
+        # The sample database needs no stored credentials — it's regenerable
+        # from the vendored dump. So when the request explicitly targets the
+        # sample and there's nothing to restore, rebuild it rather than
+        # reporting no database. This keeps "try the sample" working with zero
+        # configuration, even if encryption isn't set up or the worker
+        # restarted and lost the live connection. A blank db_id is left alone so
+        # nothing silently auto-connects the sample.
+        if db_id and db_id == _sample_db_id():
+            return _connect_sample_url(db, workspace_id)
         return None
 
     result = db.connect(workspace_id, conn["db_url"])

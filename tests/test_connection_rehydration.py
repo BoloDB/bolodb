@@ -167,6 +167,43 @@ def test_missing_workspace_never_reaches_storage(stored_connection):
     assert seen["by_db_id"] == []
 
 
+# ── the sample database self-heals without stored credentials ───────
+
+
+def test_sample_is_rebuilt_when_targeted_with_nothing_stored(
+    stored_connection, tmp_path, monkeypatch
+):
+    """Requesting the sample after a restart must work with zero config.
+
+    The sample needs no saved credentials — it's regenerable — so even with no
+    stored row and no encryption key, targeting its db_id rebuilds and connects
+    it instead of returning "no database connected".
+    """
+    from backend.app.database import DatabaseManager
+    from backend import sample_data
+
+    monkeypatch.setattr(sample_data, "_DATA_DIR", tmp_path)
+    monkeypatch.delenv("RECENT_CONNECTIONS_KEY", raising=False)
+    stored_connection(by_db_id=None, latest=None)
+
+    db = DatabaseManager()
+    sample_id = db_ctrl._sample_db_id()
+
+    resolved = asyncio.run(db_ctrl.ensure_connection(db, WORKSPACE, sample_id))
+
+    assert resolved == sample_id, "the sample must reconnect from its own dump"
+    assert db.connected(WORKSPACE, sample_id)
+
+
+def test_non_sample_db_id_still_reports_no_connection(stored_connection):
+    """The rebuild path is only for the sample, not any missing database."""
+    stored_connection(by_db_id=None, latest=None)
+    db = RestartedDB()
+
+    assert asyncio.run(db_ctrl.ensure_connection(db, WORKSPACE, DB_ID)) is None
+    assert db.connect_calls == []
+
+
 # ── what the app actually sees ──────────────────────────────────────
 
 
