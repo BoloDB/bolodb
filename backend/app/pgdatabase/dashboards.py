@@ -2,6 +2,7 @@ from sqlalchemy import select, delete, update
 from sqlalchemy.orm import selectinload
 from backend.app.pgdatabase.engine import async_session
 from backend.app.models.dashboard import Dashboard, DashboardPanel
+from backend.app.models.saved_query import SavedQuery
 from backend.app.models.base import _utcnow
 from backend.app.pgdatabase.serialization import _to_uuid, serialize_doc
 
@@ -105,6 +106,16 @@ async def add_panel(workspace_id: str, dashboard_id: str, **kwargs):
             )
             if not d.scalar_one_or_none():
                 raise ValueError("Dashboard not found in workspace")
+
+            if kwargs.get("saved_query_id"):
+                sq = await session.execute(
+                    select(SavedQuery.id).where(
+                        SavedQuery.id == kwargs["saved_query_id"],
+                        SavedQuery.workspace_id == wid,
+                    )
+                )
+                if not sq.scalar_one_or_none():
+                    raise ValueError("Saved query not found in workspace")
 
             panel = DashboardPanel(dashboard_id=did, **kwargs)
             session.add(panel)
