@@ -123,7 +123,7 @@ async def delete_dashboard(
 async def get_dashboard_data(
     dashboard_id: str,
     request: Request,
-    workspace=Depends(require_permission("dashboards.view")),
+    workspace=Depends(require_permission("queries.execute")),
 ):
     try:
         db_manager = request.app.state.db

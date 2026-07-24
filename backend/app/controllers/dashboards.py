@@ -140,7 +140,6 @@ async def execute_dashboard_queries(workspace_id: str, dashboard_id: str, db_man
             return None
         sq_key = str(sq.get("id") or sq.get("_id") or sq_id)
         try:
-            # We call the target database
             sql = sq.get("sql")
             target_db_id = sq.get("database_id")
             if sql:
