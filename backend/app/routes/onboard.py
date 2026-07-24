@@ -2,7 +2,6 @@ import logging
 
 from fastapi import APIRouter, Depends, Request, HTTPException
 from backend.app.dependencies import (
-    require_permission,
     get_db,
     get_kb,
     get_providers,
