@@ -123,7 +123,8 @@ async def delete_dashboard(
 async def get_dashboard_data(
     dashboard_id: str,
     request: Request,
-    workspace=Depends(require_permission("queries.execute")),
+    workspace=Depends(require_permission("dashboards.view")),
+    _execute_permission=Depends(require_permission("queries.execute")),
 ):
     try:
         db_manager = request.app.state.db
@@ -170,11 +171,13 @@ async def batch_update_panels(
     workspace=Depends(require_permission("dashboards.manage")),
 ):
     try:
-        await ctrl.update_panels_batch(
+        success = await ctrl.update_panels_batch(
             workspace["workspace_id"],
             dashboard_id,
             req.model_dump(exclude_unset=True)["updates"],
         )
+        if not success:
+            raise HTTPException(404, "Dashboard not found")
         return JSONResponse({"message": "Updated successfully"})
     except HTTPException:
         raise

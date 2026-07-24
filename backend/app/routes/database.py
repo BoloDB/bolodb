@@ -25,6 +25,7 @@ async def list_databases(workspace=Depends(require_permission("connections.view"
 async def connect(
     req: ConnectReq,
     workspace=Depends(require_permission("connections.manage")),
+    _catalog_permission=Depends(require_permission("catalog.view")),
     db=Depends(get_db),
     kb=Depends(get_kb),
     cfg=Depends(get_cfg),
@@ -42,6 +43,7 @@ async def connect(
 @router.post("/api/connect-sample")
 async def connect_sample(
     workspace=Depends(require_permission("connections.manage")),
+    _catalog_permission=Depends(require_permission("catalog.view")),
     db=Depends(get_db),
     kb=Depends(get_kb),
     cfg=Depends(get_cfg),
@@ -92,6 +94,7 @@ async def reconnect(
     # adding a brand-new connection still requires connections.manage via
     # /api/connect.
     workspace=Depends(require_permission("connections.view")),
+    _catalog_permission=Depends(require_permission("catalog.view")),
     db=Depends(get_db),
     kb=Depends(get_kb),
     cfg=Depends(get_cfg),
