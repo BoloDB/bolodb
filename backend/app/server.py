@@ -35,6 +35,7 @@ from backend.app.routes import (
     workspaces,
     dashboards,
     saved_queries,
+    slack,
 )
 
 logger = logging.getLogger(__name__)
@@ -180,6 +181,7 @@ def create_app(initial_db_url="", readonly=True):
     app.include_router(workspaces.router)
     app.include_router(dashboards.router)
     app.include_router(saved_queries.router)
+    app.include_router(slack.router)
 
     # Catch-all for API 404app
 

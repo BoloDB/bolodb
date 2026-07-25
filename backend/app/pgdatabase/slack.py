@@ -84,3 +84,29 @@ async def delete_installation(team_id):
         except Exception:
             await session.rollback()
             raise
+
+
+async def get_installations_by_workspace(workspace_id):
+    wid = _to_uuid(workspace_id)
+    async with async_session() as session:
+        result = await session.execute(
+            select(SlackInstallation).where(SlackInstallation.workspace_id == wid)
+        )
+        return result.scalars().all()
+
+
+async def delete_installation_for_workspace(team_id, workspace_id):
+    wid = _to_uuid(workspace_id)
+    async with async_session() as session:
+        try:
+            result = await session.execute(
+                delete(SlackInstallation).where(
+                    SlackInstallation.team_id == team_id,
+                    SlackInstallation.workspace_id == wid,
+                )
+            )
+            await session.commit()
+            return result.rowcount > 0
+        except Exception:
+            await session.rollback()
+            raise

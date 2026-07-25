@@ -17,6 +17,7 @@ from backend.app.models.catalog import (
     CatalogValueMapping,
 )
 from backend.app.models.auth_token import PasswordResetToken, OtpCode
+from backend.app.models.orm_slack import SlackInstallation
 
 __all__ = [
     "Base",
@@ -43,4 +44,5 @@ __all__ = [
     "SavedQuery",
     "Dashboard",
     "DashboardPanel",
+    "SlackInstallation",
 ]
