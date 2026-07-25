@@ -19,6 +19,7 @@ from backend.app.models import (
     Workspace,
     WorkspaceMember,
     WorkspaceInvite,
+    SlackInstallation,
 )
 from backend.app.pgdatabase.users import (
     get_user_by_email,
@@ -53,6 +54,14 @@ from backend.app.pgdatabase.conversations import (
     touch_conversation,
     delete_conversation,
     clear_conversations,
+)
+from backend.app.pgdatabase.slack import (
+    save_installation,
+    get_installation_by_team,
+    get_installation_by_user,
+    get_installations_by_workspace,
+    delete_installation,
+    delete_installation_for_workspace,
 )
 from backend.app.pgdatabase.serialization import serialize_doc
 from backend.app.pgdatabase.knowledge import KnowledgeService
@@ -106,4 +115,11 @@ __all__ = [
     "clear_conversations",
     "serialize_doc",
     "KnowledgeService",
+    "SlackInstallation",
+    "save_installation",
+    "get_installation_by_team",
+    "get_installation_by_user",
+    "get_installations_by_workspace",
+    "delete_installation",
+    "delete_installation_for_workspace",
 ]

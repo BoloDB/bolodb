@@ -1,0 +1,113 @@
+"""Slack integration routes — OAuth install flow.
+
+A workspace owner/admin starts the install via ``GET /api/slack/install`` (returns
+the Slack authorize URL carrying a signed ``state``); Slack redirects the browser
+to ``GET /api/slack/oauth/callback``, which verifies the state, exchanges the code
+for a bot token, and persists the installation against the workspace.
+
+The callback is a top-level browser redirect from Slack, so it cannot receive the
+``X-Workspace-Id`` header that ``get_current_workspace`` relies on — the workspace
+and user identity ride through the signed ``state`` (a short-lived JWT), which also
+provides CSRF protection.
+"""
+
+import logging
+import time
+
+import jwt
+from fastapi import APIRouter, Depends
+from fastapi.responses import RedirectResponse
+
+import backend.app.pgdatabase as mdb
+from backend.app.crypto import encrypt_secret
+from backend.app.dependencies import require_permission
+from backend.app.integrations.slack.auth import get_oauth_url, handle_oauth_callback
+from backend.app.integrations.slack.models import SlackInstallationResponse
+from backend.app.secrets import get_frontend_url, get_jwt_secret
+
+log = logging.getLogger(__name__)
+router = APIRouter(prefix="/api/slack", tags=["slack"])
+
+STATE_TTL_SECONDS = 600
+
+
+def _frontend_base() -> str:
+    return (get_frontend_url() or "").rstrip("/")
+
+
+@router.get("/install")
+async def slack_install(workspace=Depends(require_permission("connections.manage"))):
+    """Return the Slack OAuth authorize URL for the frontend to open."""
+    state = jwt.encode(
+        {
+            "workspace_id": workspace["workspace_id"],
+            "user_id": workspace["user_id"],
+            "exp": int(time.time()) + STATE_TTL_SECONDS,
+        },
+        get_jwt_secret(),
+        algorithm="HS256",
+    )
+    return {"url": get_oauth_url(state)}
+
+
+@router.get("/oauth/callback")
+async def slack_callback(code: str = "", state: str = "", error: str = ""):
+    """Handle Slack's OAuth redirect: verify state, exchange code, persist install."""
+    fe = _frontend_base()
+    if error or not code or not state:
+        return RedirectResponse(f"{fe}/profile?slack=error")
+
+    try:
+        payload = jwt.decode(state, get_jwt_secret(), algorithms=["HS256"])
+    except jwt.InvalidTokenError:
+        log.warning("Slack OAuth callback with invalid or expired state")
+        return RedirectResponse(f"{fe}/profile?slack=error")
+
+    try:
+        data = await handle_oauth_callback(code)
+        await mdb.save_installation(
+            team_id=data["team"]["id"],
+            team_name=data["team"]["name"],
+            bot_token=encrypt_secret(data["access_token"]),
+            bot_user_id=data["bot_user_id"],
+            user_id=payload["user_id"],
+            workspace_id=payload["workspace_id"],
+            scopes=data.get("scope", ""),
+        )
+    except Exception:
+        log.exception("Slack OAuth token exchange or persistence failed")
+        return RedirectResponse(f"{fe}/profile?slack=error")
+
+    return RedirectResponse(f"{fe}/profile?slack=connected")
+
+
+@router.get("/installations")
+async def slack_installations(
+    workspace=Depends(require_permission("connections.view")),
+):
+    """List Slack installations for the workspace (never exposes bot_token)."""
+    installs = await mdb.get_installations_by_workspace(workspace["workspace_id"])
+    return {
+        "installations": [
+            SlackInstallationResponse(
+                id=str(i.id),
+                team_id=i.team_id,
+                team_name=i.team_name,
+                bot_user_id=i.bot_user_id,
+                scopes=i.scopes,
+                created_at=i.created_at,
+            )
+            for i in installs
+        ]
+    }
+
+
+@router.delete("/installations/{team_id}")
+async def slack_uninstall(
+    team_id: str, workspace=Depends(require_permission("connections.manage"))
+):
+    """Remove a Slack installation, scoped to the current workspace."""
+    deleted = await mdb.delete_installation_for_workspace(
+        team_id, workspace["workspace_id"]
+    )
+    return {"ok": deleted}
