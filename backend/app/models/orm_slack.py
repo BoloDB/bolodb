@@ -11,7 +11,7 @@ class SlackInstallation(Base):
     id: Mapped[uuid.UUID] = mapped_column(
         PgUUID(as_uuid=True), primary_key=True, default=_uuid7
     )
-    team_id: Mapped[str] = mapped_column(String, nullable=False)
+    team_id: Mapped[str] = mapped_column(String, nullable=False, unique=True)
     team_name: Mapped[str] = mapped_column(String, nullable=False)
     bot_token: Mapped[str] = mapped_column(String, nullable=False)
     bot_user_id: Mapped[str] = mapped_column(String, nullable=False)
