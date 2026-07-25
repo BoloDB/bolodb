@@ -45,7 +45,7 @@ def _user_to_dict(user) -> dict:
             "avatar_url": user.avatar_url,
             "metadata": user.metadata_,
         }
-    )
+    )  # pyright: ignore[reportReturnType]
 
 
 async def get_user_by_email(email: str) -> Optional[dict]:
