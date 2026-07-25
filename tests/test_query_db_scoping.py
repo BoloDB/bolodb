@@ -146,12 +146,16 @@ def test_verify_scopes_knowledge_to_selected_database():
 
     result = asyncio.run(query_ctrl.verify(WORKSPACE, db, kb, req, db_id=SELECTED_DB))
 
-    assert db.calls[0] == ("connected", WORKSPACE, SELECTED_DB), (
-        "connectivity must be checked against the selected database"
-    )
-    assert kb.calls[0] == ("add_verified", WORKSPACE, SELECTED_DB), (
-        "the verified example belongs to the database it was verified against"
-    )
+    assert db.calls[0] == (
+        "connected",
+        WORKSPACE,
+        SELECTED_DB,
+    ), "connectivity must be checked against the selected database"
+    assert kb.calls[0] == (
+        "add_verified",
+        WORKSPACE,
+        SELECTED_DB,
+    ), "the verified example belongs to the database it was verified against"
     assert kb.calls[1] == ("trust_level", WORKSPACE, SELECTED_DB)
     assert result["trust"]["db_id_seen"] == SELECTED_DB
     assert DEFAULT_DB not in kb.db_ids_seen()
