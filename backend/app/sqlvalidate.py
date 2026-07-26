@@ -16,16 +16,13 @@ source are left alone rather than flagged.
 import logging
 from sqlglot import exp, parse_one
 
+from backend.app.dialects import glot_dialect
+
 log = logging.getLogger(__name__)
 
-# sqlalchemy dialect name -> sqlglot dialect name (only where they differ).
-# Mirrors backend/app/database.py so validation parses with the same dialect
-# the query will run against.
-_GLOT_DIALECT = {"postgresql": "postgres", "mssql": "tsql"}
-
 # Dialects that let a SELECT alias be referenced in a HAVING clause. Standard
-# SQL (and Postgres / SQL Server) disallow it; MySQL and SQLite permit it.
-# ORDER BY and GROUP BY accept aliases everywhere we support.
+# SQL (and Postgres / SQL Server / Oracle) disallow it; MySQL and SQLite permit
+# it. ORDER BY and GROUP BY accept aliases everywhere we support.
 _HAVING_ALIAS_DIALECTS = {"mysql", "sqlite"}
 
 
@@ -133,9 +130,8 @@ def validate_sql(sql, schema, dialect=""):
     if not sql:
         return {"ok": False, "errors": ["Empty SQL statement."]}
 
-    glot_dialect = _GLOT_DIALECT.get(dialect, dialect) or None
     try:
-        tree = parse_one(sql, dialect=glot_dialect)
+        tree = parse_one(sql, dialect=glot_dialect(dialect))
     except Exception:  # sqlglot raises ParseError and friends
         log.warning("SQL parse failed during validation", exc_info=True)
         return {"ok": False, "errors": ["Could not parse SQL statement."]}

@@ -171,7 +171,7 @@
             "name": "What databases does BoloDB support?",
             "acceptedAnswer": {
               "@type": "Answer",
-              "text": "BoloDB works with PostgreSQL, MySQL, SQL Server, SQLite, and any SQL database via a connection string."
+              "text": "BoloDB works with PostgreSQL, MySQL, Oracle, SQL Server, SQLite, and any SQL database via a connection string."
             }
           },
           {
@@ -190,11 +190,11 @@
 
 <svelte:head>
   <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1" />
-  <meta name="keywords" content="text to sql, natural language to SQL, AI SQL assistant, ask your database, database chatbot, PostgreSQL AI, MySQL AI, SQL Server AI, no-code data analytics, self-hosted text-to-SQL, open source SQL AI, Gemini SQL, business intelligence AI, data analyst AI, plain English to SQL" />
+  <meta name="keywords" content="text to sql, natural language to SQL, AI SQL assistant, ask your database, database chatbot, PostgreSQL AI, MySQL AI, Oracle AI, SQL Server AI, no-code data analytics, self-hosted text-to-SQL, open source SQL AI, Gemini SQL, business intelligence AI, data analyst AI, plain English to SQL" />
   <meta name="author" content="BoloDB" />
   <meta name="theme-color" content="#1b9e6b" />
   <meta property="og:title" content="BoloDB — Talk to Your Database Like a Human | AI Data Analyst" />
-  <meta property="og:description" content="BoloDB is the AI data analyst you can trust. Ask questions in plain English and get verified, SQL-backed answers from PostgreSQL, MySQL, SQL Server, or SQLite — read-only, no code required." />
+  <meta property="og:description" content="BoloDB is the AI data analyst you can trust. Ask questions in plain English and get verified, SQL-backed answers from PostgreSQL, MySQL, Oracle, SQL Server, or SQLite — read-only, no code required." />
   <meta property="og:url" content="https://bolodb.dev/" />
   <meta property="og:type" content="website" />
   <meta property="og:site_name" content="BoloDB" />
@@ -205,7 +205,7 @@
   <meta property="og:image:alt" content="BoloDB — Talk to your database like a human. Trust the answer." />
   <meta name="twitter:card" content="summary_large_image" />
   <meta name="twitter:title" content="BoloDB — Talk to Your Database Like a Human | AI Data Analyst" />
-  <meta name="twitter:description" content="BoloDB is the AI data analyst you can trust. Ask questions in plain English and get verified, SQL-backed answers from PostgreSQL, MySQL, SQL Server, or SQLite — read-only, no code required." />
+  <meta name="twitter:description" content="BoloDB is the AI data analyst you can trust. Ask questions in plain English and get verified, SQL-backed answers from PostgreSQL, MySQL, Oracle, SQL Server, or SQLite — read-only, no code required." />
   <meta name="twitter:image" content="https://bolodb.dev/og-image.svg" />
   <meta name="twitter:image:alt" content="BoloDB — Talk to your database like a human. Trust the answer." />
   <link rel="canonical" href="https://bolodb.dev/" />

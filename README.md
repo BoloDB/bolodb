@@ -50,6 +50,7 @@ The easiest and recommended way to run BoloDB is using Docker Compose (FastAPI b
 |---|---|
 | PostgreSQL | `postgresql://user:pass@host:5432/dbname` |
 | MySQL | `mysql+pymysql://user:pass@host:3306/dbname` |
+| Oracle | `oracle+oracledb://user:pass@host:1521/?service_name=ORCLPDB1` |
 | SQLite | `sqlite:///C:/path/to/file.db` |
 | SQL Server | `mssql+pyodbc://user:pass@server/db?driver=ODBC+Driver+17+for+SQL+Server` |
 | DuckDB | `duckdb:///path/to/file.duckdb` |

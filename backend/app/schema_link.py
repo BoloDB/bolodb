@@ -21,6 +21,7 @@ import re
 import sqlglot
 from sqlglot import exp
 
+from backend.app.dialects import glot_dialect
 from backend.app.utils import _tokens
 
 log = logging.getLogger(__name__)
@@ -55,10 +56,8 @@ def extract_table_names_from_prev_query(sql: str, dialect):
     """Table names used by the previous answer's SQL (for follow-up questions)."""
     if not sql:
         return set()
-    _GLOT_DIALECT = {"postgresql": "postgres", "mssql": "tsql"}
-    glot_dialect = _GLOT_DIALECT.get(dialect, dialect)
     try:
-        stmts = sqlglot.parse_one(sql, read=glot_dialect)
+        stmts = sqlglot.parse_one(sql, read=glot_dialect(dialect))
         return {table.name for table in stmts.find_all(exp.Table)}
     except Exception:
         return set()

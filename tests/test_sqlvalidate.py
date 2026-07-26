@@ -291,3 +291,59 @@ def test_dialect_is_respected():
         "SELECT created_at::date FROM orders", SCHEMA, dialect="postgresql"
     )
     assert res["ok"] is True, res["errors"]
+
+
+# --- Oracle -----------------------------------------------------------------
+
+# Oracle folds unquoted identifiers to upper case, so a schema reflected from it
+# can arrive upper-cased. The validator lower-cases both sides, so it must match.
+ORACLE_SCHEMA = {
+    "ORDERS": {
+        "columns": [
+            _col("ID", pk=True),
+            _col("CUSTOMER_ID"),
+            _col("STATUS"),
+            _col("TOTAL_AMOUNT"),
+        ],
+        "foreign_keys": [],
+    },
+}
+
+
+def test_oracle_fetch_first_parses():
+    res = validate_sql(
+        "SELECT id, status FROM orders FETCH FIRST 100 ROWS ONLY",
+        ORACLE_SCHEMA,
+        dialect="oracle",
+    )
+    assert res["ok"] is True, res["errors"]
+
+
+def test_oracle_builtins_parse():
+    res = validate_sql(
+        "SELECT NVL(total_amount, 0) FROM orders WHERE status = 'paid'",
+        ORACLE_SCHEMA,
+        dialect="oracle",
+    )
+    assert res["ok"] is True, res["errors"]
+
+
+def test_oracle_uppercase_schema_matches_lowercase_sql():
+    res = validate_sql("SELECT id FROM orders", ORACLE_SCHEMA, dialect="oracle")
+    assert res["ok"] is True, res["errors"]
+
+
+def test_oracle_still_catches_hallucinated_columns():
+    res = validate_sql("SELECT bogus_col FROM orders", ORACLE_SCHEMA, dialect="oracle")
+    assert res["ok"] is False
+    assert any("bogus_col" in e for e in res["errors"])
+
+
+def test_oracle_having_alias_is_flagged():
+    """Oracle, like Postgres, does not allow a SELECT alias in HAVING."""
+    res = validate_sql(
+        "SELECT status, COUNT(*) AS c FROM orders GROUP BY status HAVING c > 1",
+        ORACLE_SCHEMA,
+        dialect="oracle",
+    )
+    assert res["ok"] is False

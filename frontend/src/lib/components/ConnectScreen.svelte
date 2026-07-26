@@ -14,7 +14,9 @@
 
   const DIALECT_LABELS: Record<string, string> = {
     postgresql: "PostgreSQL",
+    postgres: "PostgreSQL",
     mysql: "MySQL",
+    oracle: "Oracle",
     sqlite: "SQLite",
     mssql: "SQL Server",
     duckdb: "DuckDB",
@@ -283,7 +285,7 @@
             data-testid="connect-own-card"
           >
             <span class="c-title">Connect my database</span>
-            <span class="c-desc">PostgreSQL, MySQL or SQL Server. One connection string, read-only.</span>
+            <span class="c-desc">PostgreSQL, MySQL or Oracle. One connection string, read-only.</span>
             <span class="c-tag accent">RECOMMENDED · ~1 MINUTE</span>
           </button>
           <button

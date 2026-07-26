@@ -192,9 +192,17 @@ export function humanError(msg: string): string {
   if (
     m.includes("password authentication failed") ||
     m.includes("access denied") ||
-    m.includes("login failed")
+    m.includes("login failed") ||
+    // Oracle reports everything as an ORA- code, so none of the phrases above match.
+    m.includes("ora-01017")
   )
     return "Wrong username or password — double-check your credentials.";
+  // ORA-12541 no listener, DPY-6005 cannot connect.
+  if (m.includes("ora-12541") || m.includes("dpy-6005"))
+    return "The database server isn't running or can't be reached — check the host and port.";
+  // ORA-12514 unknown service, ORA-12154 could not resolve the connect identifier.
+  if (m.includes("ora-12514") || m.includes("ora-12154"))
+    return "That Oracle service name wasn't found — check the service_name (or SID) in your connection string.";
   if (m.includes("no such file") || m.includes("unable to open database file"))
     return "File not found — check the path and make sure the file exists.";
   if (

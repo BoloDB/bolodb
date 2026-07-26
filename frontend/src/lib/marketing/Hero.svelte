@@ -144,6 +144,7 @@
         <div class="db-logos">
           <span class="db-logo">PostgreSQL</span>
           <span class="db-logo">MySQL</span>
+          <span class="db-logo">Oracle</span>
           <span class="db-logo">SQL Server</span>
           <span class="db-logo">SQLite</span>
         </div>
