@@ -38,18 +38,20 @@ def upgrade() -> None:
             nullable=False,
         ),
         sa.Column("scopes", sa.String(), nullable=True),
-        sa.Column("created_at", sa.DateTime(timezone=True), nullable=True),
+        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
         sa.UniqueConstraint("team_id", name="uq_slack_installations_team_id"),
     )
-    op.create_index(
-        "ix_slack_installations_workspace_id",
+    op.create_unique_constraint(
+        "uq_slack_installations_workspace",
         "slack_installations",
         ["workspace_id"],
     )
 
 
 def downgrade() -> None:
-    op.drop_index(
-        "ix_slack_installations_workspace_id", table_name="slack_installations"
+    op.drop_constraint(
+        "uq_slack_installations_workspace",
+        "slack_installations",
+        type_="unique",
     )
     op.drop_table("slack_installations")
