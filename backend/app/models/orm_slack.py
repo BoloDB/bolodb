@@ -1,7 +1,7 @@
 from backend.app.models.base import Base, _utcnow, _uuid7
 import uuid
 from datetime import datetime
-from sqlalchemy import ForeignKey, String, DateTime
+from sqlalchemy import ForeignKey, String, DateTime, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.dialects.postgresql import UUID as PgUUID
 
@@ -26,4 +26,7 @@ class SlackInstallation(Base):
     scopes: Mapped[str] = mapped_column(String, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=_utcnow
+    )
+    __table_args__ = (
+        UniqueConstraint("workspace_id", name="uq_slack_installations_workspace"),
     )
