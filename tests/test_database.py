@@ -351,3 +351,22 @@ def test_oracle_errors_are_sanitized():
     )
     assert "tiger" not in msg
     assert "PROD" not in msg
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "postgresql+psycopg2://scott:tiger@h:5432/db",
+        "postgres+psycopg2://scott:tiger@h:5432/db",
+        "mysql+pymysql://scott:tiger@h:3306/db",
+        "mssql+pyodbc://scott:tiger@h:1433/db",
+        "oracle+oracledb://scott:tiger@h:1521/XE",
+    ],
+)
+def test_credentials_are_redacted_whatever_driver_the_url_names(url):
+    """A URL reaches the driver in its canonical, driver-suffixed form, so that
+    is the form an exception quotes back — a pattern anchored on the bare
+    scheme walks straight past the password in it."""
+    msg = _sanitize_db_error(f"could not connect: {url}")
+    assert "tiger" not in msg
+    assert "scott" not in msg

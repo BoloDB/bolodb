@@ -7,6 +7,8 @@ introspection query against it fails.
 
 import pytest
 import sqlglot
+from sqlalchemy import create_engine
+from sqlalchemy.exc import NoSuchModuleError
 
 from backend.app.dialects import (
     TRAITS,
@@ -188,6 +190,25 @@ def test_a_usable_or_explicit_scheme_is_left_exactly_as_typed(url):
 def test_a_string_that_is_not_a_url_is_left_alone():
     """Validation rejects it; normalisation should not raise on the way there."""
     assert normalize_driver("nonsense") == "nonsense"
+
+
+@pytest.mark.parametrize("dialect", sorted(TRAITS))
+def test_only_unusable_schemes_are_ever_rewritten(dialect):
+    """The safety property behind normalize_driver, pinned.
+
+    Rewriting changes the URL, and db_id_for hashes the URL, so a database's
+    persisted glossary, verified queries and catalog all hang off the result.
+    That is only safe because none of the rewritten schemes can connect in the
+    first place — they raise on import, so no connection was ever established
+    under one, and no id exists to orphan. If a driver that makes one of them
+    work ever lands in requirements.txt, this fails, and the entry has to go
+    before the rewrite starts moving live databases' identities.
+    """
+    if TRAITS[dialect].drivername is None:
+        return
+    with pytest.raises(Exception) as excinfo:
+        create_engine(f"{dialect}://user:pass@host/db").dialect
+    assert isinstance(excinfo.value, (NoSuchModuleError, ImportError))
 
 
 @pytest.mark.parametrize("dialect", sorted(TRAITS))

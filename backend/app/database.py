@@ -66,11 +66,15 @@ def _sanitize_db_error(err_msg: str) -> str:
     msg = re.sub(r"password[=:]\s*\S+", "password=***", msg, flags=re.IGNORECASE)
     msg = re.sub(r"dbname[=:]\s*\S+", "dbname=***", msg, flags=re.IGNORECASE)
     msg = re.sub(r"database[=:]\s*\S+", "database=***", msg, flags=re.IGNORECASE)
-    msg = re.sub(r"postgresql://\S+", "postgresql://***", msg)
-    msg = re.sub(r"postgres://\S+", "postgres://***", msg)
-    msg = re.sub(r"mysql://\S+", "mysql://***", msg)
-    msg = re.sub(r"mssql://\S+", "mssql://***", msg)
-    msg = re.sub(r"oracle(?:\+\w+)?://\S+", "oracle://***", msg)
+    # The "+driver" suffix has to be optional on every scheme, not just Oracle:
+    # a URL reaches the driver in its canonical form, so the string in an
+    # exception is "mysql+pymysql://user:pass@..." and a pattern anchored on a
+    # bare "mysql://" walks straight past the credentials in it.
+    msg = re.sub(
+        r"\b(postgresql|postgres|mysql|mssql|oracle)(?:\+\w+)?://\S+",
+        r"\1://***",
+        msg,
+    )
     msg = re.sub(r"sqlite:///?\S+", "sqlite://***", msg)
     # Oracle DSNs also appear bare (host:port/service_name) in driver errors.
     msg = re.sub(
