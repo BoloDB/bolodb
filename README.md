@@ -54,11 +54,34 @@ The easiest and recommended way to run BoloDB is using Docker Compose (FastAPI b
 | SQLite | `sqlite:///C:/path/to/file.db` |
 | SQL Server | `mssql+pyodbc://user:pass@server/db?driver=ODBC+Driver+17+for+SQL+Server` |
 | DuckDB | `duckdb:///path/to/file.duckdb` |
+| Snowflake | `snowflake://user:pass@myorg-myaccount/DB/SCHEMA?warehouse=COMPUTE_WH` |
+| Databricks | `databricks://token:dapi***@host?http_path=/sql/1.0/warehouses/abc123` |
+| BigQuery | `bigquery://my-gcp-project/my_dataset?credentials_base64=<base64 key>` |
 
 Oracle connects by host, port and `service_name` (or a SID path, e.g.
 `.../XEPDB1`). TNS aliases, `DESCRIPTION` connect descriptors and `dsn`
 parameters are not supported — the host they name cannot be checked against
 the SSRF guard. Percent-encode any `@ : / #` in a password.
+
+BigQuery authenticates with a service account key rather than a password.
+Paste the key JSON into the connect form and it travels as
+`credentials_base64` inside the connection URL, which is encrypted at rest
+alongside every other credential; it is redacted wherever the URL is
+displayed, logged, or hashed, so rotating the key does not change the
+database's identity. Leave it blank to use the server's ambient Google
+credentials instead. Parameters that make a driver read a key off this
+server's disk — `credentials_path`, `private_key_file` — are rejected.
+
+Databricks needs the `http_path` from its SQL warehouse's connection details.
+Snowflake takes the account identifier (the part before
+`.snowflakecomputing.com`) in place of a host, and needs a `warehouse` unless
+the user has a default one.
+
+The Snowflake, Databricks and BigQuery drivers are large — they add roughly
+half a gigabyte to the image, mostly pyarrow, pandas and numpy. A deployment
+that does not need them can drop those pins from `backend/requirements.txt`;
+connecting to one afterwards reports the missing driver rather than failing
+with an import traceback.
 
 ---
 

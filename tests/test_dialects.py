@@ -11,6 +11,8 @@ from sqlalchemy import create_engine
 from sqlalchemy.exc import NoSuchModuleError
 
 from backend.app.dialects import (
+    FORBIDDEN_PARAMS,
+    SECRET_PARAMS,
     TRAITS,
     allowed_schemes,
     denormalize_ident,
@@ -45,7 +47,7 @@ def test_limit_clause_coerces_to_int():
 
 
 def test_unknown_dialect_falls_back_to_limit():
-    assert limit_clause("snowflake", 10) == "LIMIT 10"
+    assert limit_clause("teradata", 10) == "LIMIT 10"
 
 
 # --- identifier quoting -----------------------------------------------------
@@ -100,7 +102,7 @@ def test_glot_dialect_mapping(dialect, expected):
 def test_unknown_dialect_parses_as_generic_sql():
     """None is sqlglot's own 'generic SQL' signal — better than handing it a
     dialect name it will reject outright."""
-    assert glot_dialect("snowflake") is None
+    assert glot_dialect("teradata") is None
     assert glot_dialect("") is None
 
 
@@ -136,10 +138,45 @@ def test_allowed_schemes_matches_the_traits_table():
 
 def test_unknown_dialect_gets_conservative_defaults():
     """No server features assumed, no hint invented."""
-    t = traits_for("snowflake")
+    t = traits_for("teradata")
     assert t.row_count_sql is None
     assert t.timeout_style is None
     assert t.prompt_hint == ""
+
+
+@pytest.mark.parametrize("dialect", ["snowflake", "databricks", "bigquery"])
+def test_the_warehouses_are_connectable(dialect):
+    assert dialect in allowed_schemes()
+
+
+def test_snowflake_folds_identifiers_like_oracle():
+    """snowflake-sqlalchemy's denormalize_name is the same rule as Oracle's:
+    unquoted names are stored upper-cased and reflected back lower-cased, so a
+    reflected name used verbatim resolves to nothing."""
+    assert quote_ident("snowflake", "employees") == '"EMPLOYEES"'
+    assert quote_ident("snowflake", "MixedCase") == '"MixedCase"'
+    assert denormalize_ident("snowflake", "analytics") == "ANALYTICS"
+    assert normalize_ident("snowflake", "EMPLOYEES") == "employees"
+
+
+@pytest.mark.parametrize("dialect", ["databricks", "bigquery"])
+def test_the_lakehouse_dialects_do_not_fold_identifiers(dialect):
+    """Neither dialect implements normalize_name, so reflected names are
+    already the server's own — folding them would break every query."""
+    assert normalize_ident(dialect, "Employees") == "Employees"
+    assert denormalize_ident(dialect, "employees") == "employees"
+    assert quote_ident(dialect, "employees") == "`employees`"
+
+
+def test_snowflake_bulk_row_counts_are_schema_scoped():
+    """information_schema.tables spans the whole database; unscoped it would
+    pull counts for schemas the connection cannot read."""
+    assert ":owner" in traits_for("snowflake").row_count_sql
+
+
+def test_databricks_requires_its_http_path():
+    """Without it the driver has no endpoint to talk to at all."""
+    assert "http_path" in traits_for("databricks").required_params
 
 
 def test_oracle_bulk_row_counts_are_owner_scoped():
@@ -287,3 +324,30 @@ def test_a_missing_name_passes_through():
     """default_schema_name is None when reflection could not determine it."""
     assert denormalize_ident("oracle", None) is None
     assert normalize_ident("oracle", None) is None
+
+
+# --- credential-bearing and target-smuggling parameters ----------------------
+
+
+def test_no_parameter_is_both_forbidden_and_merely_secret():
+    """A forbidden parameter is rejected outright; a secret one is accepted and
+    masked. Listing one in both would make the masking unreachable and hide
+    which rule actually applies."""
+    assert not (set(FORBIDDEN_PARAMS) & SECRET_PARAMS)
+
+
+@pytest.mark.parametrize(
+    "param",
+    ["credentials_path", "private_key_file", "private_key_path", "token_file_path"],
+)
+def test_file_reading_parameters_are_refused(param):
+    """Each one makes a driver open a path on this server's filesystem, which
+    the URL validator cannot inspect the way it inspects a host."""
+    assert param in FORBIDDEN_PARAMS
+
+
+def test_every_forbidden_parameter_explains_the_alternative():
+    """The message is what the user sees, so it has to say what to do instead."""
+    for name, remedy in FORBIDDEN_PARAMS.items():
+        assert remedy.strip(), name
+        assert not remedy.endswith("."), name

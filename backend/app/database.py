@@ -8,10 +8,12 @@ import sqlglot
 import sqlglot.expressions as exp
 from sqlalchemy import create_engine, event, inspect, select, text
 from sqlalchemy.engine import make_url
-from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.exc import NoSuchModuleError, SQLAlchemyError
 from fastapi.exceptions import HTTPException
 
 from backend.app.dialects import (
+    FORBIDDEN_PARAMS,
+    SECRET_PARAMS,
     allowed_schemes,
     denormalize_ident,
     glot_dialect,
@@ -45,7 +47,34 @@ _MODIFYING_NODES = (
 )
 
 
+def _redact_secret_params(url):
+    """Mask query parameters whose value is itself a credential.
+
+    Not every database puts its secret in the password field. BigQuery carries
+    an entire base64 service account key as ``?credentials_base64=``, and a
+    BigQuery URL has no ``@`` in it at all, so the password masking below never
+    looks at it. Left alone, that key would be written to ``display_url`` in
+    clear and shown back in the UI.
+
+    Masking here rather than only at display time also means ``db_id_for``
+    hashes the URL without its secret, so rotating a key keeps the database's
+    identity — and its glossary and verified queries — intact.
+    """
+    if "?" not in url:
+        return url
+    base, _, query = url.partition("?")
+    parts = []
+    for part in query.split("&"):
+        name, sep, _value = part.partition("=")
+        if sep and name.lower() in SECRET_PARAMS:
+            parts.append(f"{name}=***")
+        else:
+            parts.append(part)
+    return f"{base}?{'&'.join(parts)}"
+
+
 def sanitize_url(url):
+    url = _redact_secret_params(url)
     if "@" not in url:
         return url
     head, tail = url.split("@", 1)
@@ -73,12 +102,22 @@ def _sanitize_db_error(err_msg: str) -> str:
     # for the same reason — redaction is the last line and should never be the
     # component that is picky about how something was spelled.
     msg = re.sub(
-        r"\b(postgresql|postgres|mysql|mssql|oracle)(?:\+\w+)?://\S+",
+        r"\b(postgresql|postgres|mysql|mssql|oracle|snowflake|databricks|bigquery)"
+        r"(?:\+\w+)?://\S+",
         r"\1://***",
         msg,
         flags=re.IGNORECASE,
     )
     msg = re.sub(r"sqlite:///?\S+", "sqlite://***", msg, flags=re.IGNORECASE)
+    # A credential passed as a parameter can surface on its own, outside any
+    # URL — a BigQuery service account key is a long base64 blob that some
+    # driver errors quote back in full.
+    msg = re.sub(
+        rf"\b({'|'.join(sorted(SECRET_PARAMS))})\s*[=:]\s*\S+",
+        r"\1=***",
+        msg,
+        flags=re.IGNORECASE,
+    )
     # Oracle DSNs also appear bare (host:port/service_name) in driver errors.
     msg = re.sub(
         r"service_name\s*=\s*\S+", "service_name=***", msg, flags=re.IGNORECASE
@@ -136,27 +175,36 @@ def _validate_db_url(url: str) -> str:
             f"Allowed: {', '.join(sorted(allowed))}"
         )
 
-    if scheme != "sqlite":
-        # Oracle accepts the connect target in places that are not the host
-        # field: a "dsn" query parameter, and a bare TNS name or DESCRIPTION
-        # descriptor in place of a hostname. Both are handed straight to the
-        # driver, so neither can be host-checked — refuse them and require
-        # host/port/service_name, which is the only form we document.
-        if scheme == "oracle":
-            if "dsn" in {k.lower() for k in parsed.query}:
-                raise ValueError(
-                    "The 'dsn' parameter is not allowed; connect with "
-                    "host, port and service_name instead"
-                )
-            # With neither, SQLAlchemy stops building a host:port/service DSN
-            # and passes the host field through as a connect string of its own.
-            if not parsed.database and not parsed.query.get("service_name"):
-                raise ValueError(
-                    "An Oracle URL needs a service_name parameter or a SID "
-                    "path, e.g. oracle+oracledb://user:pass@host:1521/"
-                    "?service_name=ORCLPDB1"
-                )
+    traits = traits_for(scheme)
+    given = {k.lower(): v for k, v in parsed.query.items()}
 
+    # Parameters that point the driver somewhere the host checks below cannot
+    # see — another host entirely, or a file on this server's disk.
+    for name, remedy in FORBIDDEN_PARAMS.items():
+        if name in given:
+            raise ValueError(f"The '{name}' parameter is not allowed; {remedy}")
+
+    missing = sorted(p for p in traits.required_params if not given.get(p))
+    if missing:
+        raise ValueError(
+            f"This connection needs {' and '.join(repr(m) for m in missing)} "
+            f"in the URL, e.g. ?{missing[0]}=..."
+        )
+
+    # A target named neither by the path nor by any of the parameters that can
+    # stand in for it. Oracle is the case that matters: with neither,
+    # SQLAlchemy stops building a host:port DSN and hands the host field to the
+    # driver as a connect string of its own, which no host check can inspect.
+    if traits.target_params and not parsed.database:
+        if not any(given.get(p) for p in traits.target_params):
+            names = " or ".join(sorted(traits.target_params))
+            raise ValueError(
+                f"This connection needs a {names} parameter or a database "
+                f"path, e.g. oracle+oracledb://user:pass@host:1521/"
+                f"?service_name=ORCLPDB1"
+            )
+
+    if scheme != "sqlite":
         hostname = (parsed.host or "").lower()
         if not hostname:
             raise ValueError("A hostname is required for this database")
@@ -273,7 +321,20 @@ class DatabaseManager:
         engine_url = normalize_scheme(url)
         dialect = engine_url.split(":")[0].split("+")[0]
         try:
-            engine = create_engine(engine_url)
+            try:
+                engine = create_engine(engine_url)
+            except (NoSuchModuleError, ImportError) as e:
+                # The warehouse drivers are large — a deployment may have
+                # trimmed them out of the image. Say which one is missing
+                # rather than surfacing a bare import traceback.
+                return {
+                    "ok": False,
+                    "error": (
+                        f"This deployment has no driver installed for "
+                        f"'{dialect}'. Install it (see backend/requirements.txt) "
+                        f"and restart. [{type(e).__name__}]"
+                    ),
+                }
             self._install_call_timeout(engine, dialect)
             with engine.connect() as c:
                 # select(1) rather than text("SELECT 1"): SQLAlchemy compiles it
@@ -654,6 +715,13 @@ class DatabaseManager:
             elif style == "max_execution_time":
                 # Applies to read-only SELECTs, which is all we run.
                 conn.execute(text(f"SET SESSION MAX_EXECUTION_TIME = {ms}"))
+            elif style == "snowflake_session":
+                # Snowflake takes whole seconds, and rounds a sub-second value
+                # down to 0, which it reads as "no limit" — floor it at 1.
+                seconds = max(1, int(self.statement_timeout))
+                conn.execute(
+                    text(f"ALTER SESSION SET STATEMENT_TIMEOUT_IN_SECONDS = {seconds}")
+                )
         except SQLAlchemyError as e:
             logger.warning("Could not set statement timeout for %s: %s", dialect, e)
 
@@ -692,6 +760,9 @@ class DatabaseManager:
                 # python-oracledb raises DPY-4011 when call_timeout fires.
                 or "dpy-4011" in low
                 or "call timeout" in low
+                # Snowflake cancels the statement and says so in words.
+                or "statement reached its statement or query timeout" in low
+                or "query reached its timeout" in low
             ):
                 return {
                     "error": (
