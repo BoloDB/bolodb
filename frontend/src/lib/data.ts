@@ -230,8 +230,10 @@ export function humanError(msg: string): string {
     return "Wrong credentials — double-check your account details or access token.";
   if (m.includes("no active warehouse") || m.includes("warehouse not found"))
     return "No Snowflake warehouse selected — add a warehouse to the connection.";
+  // Covers both readings: the validator rejecting a URL with no http_path at
+  // all, and the driver rejecting one it does not recognise.
   if (m.includes("http_path"))
-    return "That Databricks HTTP path wasn't accepted — copy it from the SQL warehouse's connection details.";
+    return "Databricks needs a valid HTTP path — copy it from the SQL warehouse's connection details.";
   if (
     m.includes("was not found in location") ||
     (m.includes("dataset") && m.includes("not found"))

@@ -145,7 +145,7 @@
         { id: "token", label: "Access token", type: "password", placeholder: "dapi••••••••", help: "A personal access token" },
       ],
       // The token goes in the password position, under the literal user "token".
-      build: (v) => `databricks://token:${enc(v.token ?? "")}@${s(v.host)}${params([
+      build: (v) => `databricks://token:${enc(s(v.token))}@${s(v.host)}${params([
         ["http_path", s(v.httpPath)],
         ["catalog", s(v.catalog)],
         ["schema", s(v.schema)],
@@ -170,7 +170,11 @@
       // rest, and is redacted everywhere the URL is displayed or hashed.
       build: (v) => {
         const key = s(v.keyJson);
-        return `bigquery://${s(v.project)}/${enc(s(v.dataset))}${params([
+        // The dataset is optional, and appending it unconditionally leaves a
+        // dangling slash — "bigquery://project/?..." — rather than the
+        // project-only form the driver documents.
+        const dataset = s(v.dataset);
+        return `bigquery://${s(v.project)}${dataset ? `/${enc(dataset)}` : ""}${params([
           ["credentials_base64", key ? b64(key) : ""],
         ])}`;
       },
@@ -179,6 +183,22 @@
 
   let formDialect = $state<string>("postgresql");
   let formValues = $state<Record<string, string>>({});
+
+  /**
+   * Switch database type, discarding whatever was typed for the previous one.
+   *
+   * Field ids are shared across dialects — "host", "user", "password",
+   * "database" — so without this, picking PostgreSQL, typing its credentials
+   * and then switching to Snowflake leaves them sitting in the new form's
+   * fields, already filled in and easy not to notice. Submitting then sends
+   * one database's password to another's endpoint.
+   */
+  function selectDialect(id: string) {
+    if (id === formDialect) return;
+    formDialect = id;
+    formValues = {};
+    error = "";
+  }
 
   const activeDialect = $derived(
     FORM_DIALECTS.find((d) => d.id === formDialect) ?? FORM_DIALECTS[0]
@@ -538,7 +558,8 @@
                   <span class="field-label">Database type</span>
                   <select
                     class="conn-input"
-                    bind:value={formDialect}
+                    value={formDialect}
+                    onchange={(e) => selectDialect(e.currentTarget.value)}
                     data-testid="db-form-dialect"
                   >
                     {#each FORM_DIALECTS as d}

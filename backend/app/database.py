@@ -4,6 +4,7 @@ import hashlib
 import ipaddress
 import re
 import logging
+from urllib.parse import unquote
 import sqlglot
 import sqlglot.expressions as exp
 from sqlalchemy import create_engine, event, inspect, select, text
@@ -59,6 +60,12 @@ def _redact_secret_params(url):
     Masking here rather than only at display time also means ``db_id_for``
     hashes the URL without its secret, so rotating a key keeps the database's
     identity — and its glossary and verified queries — intact.
+
+    Names are percent-decoded before being compared. SQLAlchemy decodes them
+    too, so ``?credentials%5Fbase64=`` reaches the driver as the credential it
+    is; matching on the raw text would let that spelling carry a key straight
+    through into ``display_url``. Only the value is replaced — the name is left
+    as written, so the URL still reads back the way the user typed it.
     """
     if "?" not in url:
         return url
@@ -66,7 +73,7 @@ def _redact_secret_params(url):
     parts = []
     for part in query.split("&"):
         name, sep, _value = part.partition("=")
-        if sep and name.lower() in SECRET_PARAMS:
+        if sep and unquote(name).strip().lower() in SECRET_PARAMS:
             parts.append(f"{name}=***")
         else:
             parts.append(part)
@@ -112,8 +119,15 @@ def _sanitize_db_error(err_msg: str) -> str:
     # A credential passed as a parameter can surface on its own, outside any
     # URL — a BigQuery service account key is a long base64 blob that some
     # driver errors quote back in full.
+    #
+    # Masks to the end of the line rather than to the next space:
+    # credentials_info is decoded JSON, so its value contains spaces and the
+    # private key sits well past the first one. That over-masks the tail of a
+    # sentence that happens to follow a credential, which is the right way to
+    # be wrong — a truncated error message costs a user nothing, a leaked
+    # private key costs them the database.
     msg = re.sub(
-        rf"\b({'|'.join(sorted(SECRET_PARAMS))})\s*[=:]\s*\S+",
+        rf"\b({'|'.join(sorted(SECRET_PARAMS))})\s*[=:]\s*[^\r\n]+",
         r"\1=***",
         msg,
         flags=re.IGNORECASE,
@@ -323,10 +337,18 @@ class DatabaseManager:
         try:
             try:
                 engine = create_engine(engine_url)
-            except (NoSuchModuleError, ImportError) as e:
+            except (NoSuchModuleError, ModuleNotFoundError) as e:
                 # The warehouse drivers are large — a deployment may have
                 # trimmed them out of the image. Say which one is missing
                 # rather than surfacing a bare import traceback.
+                #
+                # Only these two: NoSuchModuleError means SQLAlchemy has no
+                # such dialect registered, ModuleNotFoundError that the driver
+                # package is absent. A plain ImportError is a *different*
+                # failure — an installed driver whose own dependency is broken
+                # or version-mismatched — and telling that user to install
+                # something they already have would send them the wrong way.
+                # It falls through to the sanitized error below.
                 return {
                     "ok": False,
                     "error": (
@@ -760,9 +782,16 @@ class DatabaseManager:
                 # python-oracledb raises DPY-4011 when call_timeout fires.
                 or "dpy-4011" in low
                 or "call timeout" in low
-                # Snowflake cancels the statement and says so in words.
-                or "statement reached its statement or query timeout" in low
-                or "query reached its timeout" in low
+                # Snowflake's server message is "Statement reached its
+                # statement or warehouse timeout of n second(s) and was
+                # canceled" (000630 / SQLSTATE 57014), and the connector's own
+                # client-side timebomb reports a cancellation instead. Matched
+                # on the stable fragment rather than the full sentence, whose
+                # wording names whichever timeout actually fired.
+                or "reached its statement" in low
+                or "57014" in low
+                or "sql execution canceled" in low
+                or "sql execution was cancelled" in low
             ):
                 return {
                     "error": (

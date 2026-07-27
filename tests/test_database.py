@@ -552,3 +552,97 @@ def test_warehouse_selects_allowed(db, dialect, sql):
         assert db._readonly_violation(TEST_USER, sql) is None
     finally:
         db._connections[TEST_USER]["dialect"] = "sqlite"
+
+
+@pytest.mark.parametrize(
+    "name",
+    ["credentials_base64", "%63redentials_base64", "credentials%5Fbase64"],
+)
+def test_an_encoded_parameter_name_still_gets_redacted(name):
+    """SQLAlchemy percent-decodes parameter names, so each of these reaches the
+    driver as the same credential. Matching the raw text let the encoded
+    spellings carry a key straight into display_url."""
+    from sqlalchemy.engine import make_url
+
+    url = f"bigquery://my-project/my_dataset?{name}={_KEY_B64}"
+    # The premise, asserted rather than assumed: the driver does see it.
+    assert "credentials_base64" in make_url(url).query
+    assert _KEY_B64 not in sanitize_url(url)
+
+
+def test_a_differently_cased_parameter_name_is_redacted_too():
+    """SQLAlchemy does not case-fold names, so this one is not a credential the
+    driver would read — but redacting it costs nothing and the comparison
+    should not be the thing that decides a key is safe to display."""
+    url = f"bigquery://p/d?CREDENTIALS_BASE64={_KEY_B64}"
+    assert _KEY_B64 not in sanitize_url(url)
+
+
+def test_an_encoded_key_does_not_change_the_database_identity():
+    """The redaction is what keeps the secret out of db_id, so a spelling that
+    slipped past it would also make rotation orphan the workspace's data."""
+    plain = f"bigquery://p/d?credentials_base64={_KEY_B64}"
+    encoded = f"bigquery://p/d?credentials%5Fbase64={_KEY_B64}"
+    assert db_id_for(encoded) == db_id_for(
+        "bigquery://p/d?credentials%5Fbase64=A_DIFFERENT_KEY"
+    )
+    assert db_id_for(plain) == db_id_for("bigquery://p/d?credentials_base64=OTHER")
+
+
+def test_a_multiline_credential_is_redacted_past_the_first_space():
+    """credentials_info is decoded JSON — its value has spaces in it, and the
+    private key sits well past the first one."""
+    blob = '{"type": "service_account", "private_key": "-----BEGIN AAA-----"}'
+    msg = _sanitize_db_error(f"failed: credentials_info={blob} rejected")
+    assert "BEGIN AAA" not in msg
+    assert "service_account" not in msg
+
+
+def test_a_driver_whose_own_dependency_is_broken_is_not_called_missing(monkeypatch):
+    """An installed driver that fails to import something of its own is a
+    different problem from an absent one, and telling that user to install what
+    they already have sends them the wrong way."""
+
+    def boom(*_a, **_kw):
+        raise ImportError("cannot import name 'X' from 'pyarrow.lib'")
+
+    monkeypatch.setattr("backend.app.database.create_engine", boom)
+    res = DatabaseManager().connect(TEST_USER, "snowflake://u:p@acct/DB")
+    assert res["ok"] is False
+    assert "no driver installed" not in res["error"].lower()
+    assert "pyarrow" in res["error"]
+
+
+@pytest.mark.parametrize(
+    "err",
+    [
+        "000630 (57014): Statement reached its statement or warehouse timeout "
+        "of 30 second(s) and was canceled.",
+        "SQL execution canceled",
+    ],
+)
+def test_a_snowflake_timeout_reads_as_a_timeout(db, err):
+    """The server names whichever timeout fired — statement or warehouse — so
+    matching the full sentence missed the real message."""
+    from sqlalchemy.exc import SQLAlchemyError
+
+    db._connections[TEST_USER]["dialect"] = "snowflake"
+    try:
+        with pytest.MonkeyPatch.context() as mp:
+            mp.setattr(
+                db, "_apply_statement_timeout", lambda *_a, **_kw: None, raising=False
+            )
+            engine = db._connections[TEST_USER]["engine"]
+
+            class _Boom:
+                def __enter__(self):
+                    raise SQLAlchemyError(err)
+
+                def __exit__(self, *_a):
+                    return False
+
+            mp.setattr(engine, "connect", lambda *_a, **_kw: _Boom())
+            res = db.execute(TEST_USER, "SELECT 1")
+        assert "took longer than" in res["error"]
+    finally:
+        db._connections[TEST_USER]["dialect"] = "sqlite"
