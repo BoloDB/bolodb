@@ -168,19 +168,52 @@ def limit_clause(dialect, n) -> str:
     return f"LIMIT {int(n)}"
 
 
-def quote_ident(dialect, name) -> str:
-    """Quote ``name`` for ``dialect``, escaping any embedded quote character.
+def denormalize_ident(dialect, name):
+    """Reflected identifier -> the spelling the server's own catalog stores.
 
     On Oracle, SQLAlchemy reflection lower-cases identifiers the server stores in
-    upper case, so quoting the reflected name verbatim would reference a table
-    that does not exist. Upper-case it first — but only when it is entirely
-    lower-case, which is exactly SQLAlchemy's own denormalisation rule: a name
-    with any upper-case character was genuinely created quoted and mixed-case.
+    upper case, so using the reflected name verbatim — quoting it, or comparing
+    it against ``ALL_TABLES.OWNER`` — references something that does not exist.
+    Upper-case it first, but only when it is entirely lower-case, which is
+    exactly SQLAlchemy's own ``denormalize_name`` rule: a name with any
+    upper-case character was genuinely created quoted and mixed-case.
+
+    A no-op for every other dialect, and for a missing name.
     """
+    if name is None:
+        return name
     traits = traits_for(dialect)
     name = str(name)
     if traits.uppercase_identifiers and name.islower():
-        name = name.upper()
+        return name.upper()
+    return name
+
+
+def normalize_ident(dialect, name):
+    """Catalog identifier -> the spelling SQLAlchemy reflection hands back.
+
+    The inverse of :func:`denormalize_ident`, and SQLAlchemy's own
+    ``normalize_name``: rows read straight out of a catalog table come back in
+    Oracle's stored upper case, and have to be folded back to lower case before
+    they will match anything ``get_table_names()`` returned.
+    """
+    if name is None:
+        return name
+    traits = traits_for(dialect)
+    name = str(name)
+    if traits.uppercase_identifiers and name.isupper():
+        return name.lower()
+    return name
+
+
+def quote_ident(dialect, name) -> str:
+    """Quote ``name`` for ``dialect``, escaping any embedded quote character.
+
+    The name is denormalised first — see :func:`denormalize_ident` for why a
+    reflected Oracle name cannot be quoted verbatim.
+    """
+    traits = traits_for(dialect)
+    name = denormalize_ident(dialect, str(name))
     q = traits.quote
     return f"{q}{name.replace(q, q * 2)}{q}"
 

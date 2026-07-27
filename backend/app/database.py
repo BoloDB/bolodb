@@ -7,13 +7,16 @@ import logging
 import sqlglot
 import sqlglot.expressions as exp
 from sqlalchemy import create_engine, event, inspect, select, text
+from sqlalchemy.engine import make_url
 from sqlalchemy.exc import SQLAlchemyError
 from fastapi.exceptions import HTTPException
 
 from backend.app.dialects import (
     allowed_schemes,
+    denormalize_ident,
     glot_dialect,
     limit_clause,
+    normalize_ident,
     quote_ident,
     traits_for,
 )
@@ -87,21 +90,36 @@ _BLOCKED_HOSTS = {
 }
 
 
+# A host we are willing to check. Anything a hostname, an IPv4 literal or a
+# bracket-less IPv6 literal can contain — and nothing that could smuggle a
+# target past the checks below, such as the "(" "=" ")" of an Oracle
+# DESCRIPTION connect descriptor.
+_PLAIN_HOST = re.compile(r"^[A-Za-z0-9._:%\-]+$")
+
+
 def _validate_db_url(url: str) -> str:
     """Validate a database URL to prevent SSRF attacks.
 
     Checks:
     1. Scheme must be a dialect we support (see backend/app/dialects.py)
-    2. Hostname must not be a blocked internal/metadata address
-    3. No file:// or other non-SQL schemes
+    2. The URL must name its target as a plain host, not smuggle it past the
+       host field the way Oracle's DSN forms can
+    3. Hostname must not be a blocked internal/metadata address
+    4. No file:// or other non-SQL schemes
+
+    The URL is parsed with SQLAlchemy's own ``make_url``, so what gets checked
+    is what ``create_engine`` will actually dial — ``urlparse`` reports no
+    hostname at all for the Oracle DSN forms, which let a target through.
 
     Returns the URL if valid, raises ValueError otherwise.
     """
-    from urllib.parse import urlparse
+    try:
+        parsed = make_url(url)
+    except Exception:
+        raise ValueError("Could not parse the database URL")
 
-    parsed = urlparse(url)
     # Strip any driver suffix: "oracle+oracledb" -> "oracle".
-    scheme = (parsed.scheme or "").split("+")[0].lower()
+    scheme = (parsed.drivername or "").split("+")[0].lower()
 
     allowed = allowed_schemes()
     if scheme not in allowed:
@@ -111,19 +129,52 @@ def _validate_db_url(url: str) -> str:
         )
 
     if scheme != "sqlite":
-        hostname = (parsed.hostname or "").lower()
+        # Oracle accepts the connect target in places that are not the host
+        # field: a "dsn" query parameter, and a bare TNS name or DESCRIPTION
+        # descriptor in place of a hostname. Both are handed straight to the
+        # driver, so neither can be host-checked — refuse them and require
+        # host/port/service_name, which is the only form we document.
+        if scheme == "oracle":
+            if "dsn" in {k.lower() for k in parsed.query}:
+                raise ValueError(
+                    "The 'dsn' parameter is not allowed; connect with "
+                    "host, port and service_name instead"
+                )
+            # With neither, SQLAlchemy stops building a host:port/service DSN
+            # and passes the host field through as a connect string of its own.
+            if not parsed.database and not parsed.query.get("service_name"):
+                raise ValueError(
+                    "An Oracle URL needs a service_name parameter or a SID "
+                    "path, e.g. oracle+oracledb://user:pass@host:1521/"
+                    "?service_name=ORCLPDB1"
+                )
+
+        hostname = (parsed.host or "").lower()
+        if not hostname:
+            raise ValueError("A hostname is required for this database")
+        if not _PLAIN_HOST.match(hostname):
+            # Also where an unescaped credential lands: SQLAlchemy splits on the
+            # first "@", so a raw "@" in a password pushes the rest of it into
+            # the host. Say so — the alternative is a baffling DNS failure.
+            raise ValueError(
+                "The host must be a plain hostname or IP address. If the "
+                "password contains @ : / or #, percent-encode it. Connect "
+                "descriptors and TNS aliases are not supported."
+            )
         if hostname in _BLOCKED_HOSTS:
             raise ValueError(f"Connection to '{hostname}' is not allowed")
         if hostname.startswith("169.254.") or hostname.startswith("100.100."):
             raise ValueError("Connection to metadata endpoints is not allowed")
         try:
+            # Not an IP literal at all — a name, which we cannot resolve here.
             ip = ipaddress.ip_address(hostname)
-            if ip.is_loopback:
-                raise ValueError(
-                    f"Connection to loopback address '{hostname}' is not allowed"
-                )
         except ValueError:
-            pass
+            ip = None
+        # Raised outside the try: inside it, the except would swallow it.
+        if ip is not None and ip.is_loopback:
+            raise ValueError(
+                f"Connection to loopback address '{hostname}' is not allowed"
+            )
 
     return url
 
@@ -253,8 +304,11 @@ class DatabaseManager:
             except Exception as e:
                 logger.warning("Could not set call_timeout for %s: %s", dialect, e)
 
-    def _q(self, workspace_id, n):
-        c = self._get(workspace_id)
+    def _q(self, workspace_id, n, db_id=None):
+        # db_id matters: a workspace can hold connections to different engines,
+        # and quoting a name with the first connection's rules would emit
+        # backticks at Oracle.
+        c = self._get(workspace_id, db_id=db_id)
         return quote_ident(c["dialect"], n)
 
     def get_schema(self, workspace_id, db_id=None, refresh=False):
@@ -313,10 +367,20 @@ class DatabaseManager:
             if row_count_sql:
                 try:
                     stmt = text(row_count_sql)
-                    params = {"owner": schema_name} if ":owner" in row_count_sql else {}
+                    # The catalog stores identifiers in the server's own casing,
+                    # which is not what reflection handed us: bind the owner in
+                    # that casing going in, and fold the table names it returns
+                    # back on the way out, or nothing matches ``table_names``.
+                    params = (
+                        {"owner": denormalize_ident(c["dialect"], schema_name)}
+                        if ":owner" in row_count_sql
+                        else {}
+                    )
                     r = conn.execute(stmt, params)
                     bulk_counts = {
-                        row[0]: max(0, int(row[1])) if row[1] is not None else 0
+                        normalize_ident(c["dialect"], row[0]): (
+                            max(0, int(row[1])) if row[1] is not None else 0
+                        )
                         for row in r
                     }
                 except Exception as e:
@@ -402,7 +466,7 @@ class DatabaseManager:
                 try:
                     res = conn.execute(
                         text(
-                            f"SELECT * FROM {self._q(workspace_id, tbl)} "
+                            f"SELECT * FROM {self._q(workspace_id, tbl, db_id)} "
                             f"{limit_clause(c['dialect'], self.sample_rows)}"
                         )
                     )
@@ -420,7 +484,10 @@ class DatabaseManager:
                 if rc is None:
                     try:
                         rc = conn.execute(
-                            text(f"SELECT COUNT(*) FROM {self._q(workspace_id, tbl)}")
+                            text(
+                                "SELECT COUNT(*) FROM "
+                                f"{self._q(workspace_id, tbl, db_id)}"
+                            )
                         ).scalar()
                     except Exception as e:
                         logger.warning("Error fetching row count for %s: %s", tbl, e)
@@ -438,8 +505,9 @@ class DatabaseManager:
                             try:
                                 dv = conn.execute(
                                     text(
-                                        f"SELECT DISTINCT {self._q(workspace_id, col['name'])} "
-                                        f"FROM {self._q(workspace_id, tbl)} "
+                                        "SELECT DISTINCT "
+                                        f"{self._q(workspace_id, col['name'], db_id)} "
+                                        f"FROM {self._q(workspace_id, tbl, db_id)} "
                                         f"{limit_clause(c['dialect'], 12)}"
                                     )
                                 ).fetchall()

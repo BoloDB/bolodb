@@ -11,8 +11,10 @@ import sqlglot
 from backend.app.dialects import (
     TRAITS,
     allowed_schemes,
+    denormalize_ident,
     glot_dialect,
     limit_clause,
+    normalize_ident,
     prompt_hint,
     quote_ident,
     traits_for,
@@ -142,3 +144,38 @@ def test_oracle_bulk_row_counts_are_owner_scoped():
     counts for tables the connection cannot even read."""
     sql = traits_for("oracle").row_count_sql
     assert ":owner" in sql
+
+
+# --- catalog identifier casing ----------------------------------------------
+
+
+def test_oracle_owner_is_denormalised_before_the_catalog_sees_it():
+    """ALL_TABLES.OWNER holds APPUSER, but reflection reports appuser. Bound
+    unchanged, the owner filter matches nothing and every row count vanishes."""
+    assert denormalize_ident("oracle", "appuser") == "APPUSER"
+
+
+def test_oracle_catalog_names_are_normalised_on_the_way_back():
+    """Row counts are keyed by the names get_table_names() returned, which are
+    lower case — the upper-case catalog spelling would never match."""
+    assert normalize_ident("oracle", "EMPLOYEES") == "employees"
+
+
+def test_quoted_mixed_case_names_survive_both_directions():
+    """A name with any upper-case character was created quoted, so it is
+    already exact and must not be folded either way."""
+    assert denormalize_ident("oracle", "MixedCase") == "MixedCase"
+    assert normalize_ident("oracle", "MixedCase") == "MixedCase"
+
+
+@pytest.mark.parametrize("dialect", ["postgresql", "mysql", "sqlite", "mssql"])
+def test_identifier_casing_is_a_no_op_off_oracle(dialect):
+    for name in ("employees", "EMPLOYEES", "MixedCase"):
+        assert denormalize_ident(dialect, name) == name
+        assert normalize_ident(dialect, name) == name
+
+
+def test_a_missing_name_passes_through():
+    """default_schema_name is None when reflection could not determine it."""
+    assert denormalize_ident("oracle", None) is None
+    assert normalize_ident("oracle", None) is None

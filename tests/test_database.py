@@ -202,6 +202,20 @@ def test_q_uppercases_oracle_identifiers(db):
     db._connections[TEST_USER]["dialect"] = "sqlite"  # restore
 
 
+def test_q_uses_the_named_connections_dialect(db, tmp_path):
+    """A workspace can hold several databases of different types. Without a
+    db_id, quoting falls back to whichever connected first, so an Oracle table
+    would come back wrapped in the first connection's quote character."""
+    second = db.connect(TEST_USER, f"sqlite:///{tmp_path / 'other.db'}")
+    assert second["ok"]
+    other_id = second["db_id"]
+    db._connections[(TEST_USER, other_id)]["dialect"] = "oracle"
+
+    assert db._q(TEST_USER, "employees", other_id) == '"EMPLOYEES"'
+    # The first connection is untouched and still quotes for itself.
+    assert db._q(TEST_USER, "employees") == '"employees"'
+
+
 # --- URL validation ---------------------------------------------------------
 
 
@@ -236,6 +250,55 @@ def test_validate_db_url_rejects_unsupported_scheme():
         _validate_db_url("snowflake://user:pass@account/db")
 
 
+@pytest.mark.parametrize(
+    "url",
+    [
+        # The target rides in a query parameter, so urlparse reports no
+        # hostname at all and every host check above passes vacuously — but
+        # SQLAlchemy hands the parameter straight to the driver.
+        "oracle+oracledb://user:pass@/?dsn=127.0.0.1:1521/xe",
+        "oracle+oracledb://user:pass@/?dsn=169.254.169.254:1521/xe",
+        # Same trick with a full connect descriptor in place of the host.
+        "oracle+oracledb://user:pass@"
+        "(DESCRIPTION=(ADDRESS=(PROTOCOL=TCP)(HOST=127.0.0.1)(PORT=1521)))/",
+        # A bare TNS alias: with no service_name or SID, SQLAlchemy stops
+        # building a host:port DSN and passes the host through as one.
+        "oracle+oracledb://user:pass@SOMEALIAS",
+    ],
+)
+def test_validate_db_url_rejects_oracle_dsn_style_targets(url):
+    """The host field is not the only place an Oracle URL can name a target."""
+    with pytest.raises(ValueError):
+        _validate_db_url(url)
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "postgresql://user:pass@/db",
+        "mysql://user:pass@/db",
+    ],
+)
+def test_validate_db_url_requires_a_host(url):
+    """Without a host the driver falls back to a local socket."""
+    with pytest.raises(ValueError, match="hostname is required"):
+        _validate_db_url(url)
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "postgresql://user:pass@127.0.0.2:5432/db",
+        "postgresql://user:pass@[::1]:5432/db",
+    ],
+)
+def test_validate_db_url_rejects_every_loopback_address(url):
+    """The blocklist only names 127.0.0.1; the rest of the range is caught by
+    the IP check, which used to raise inside its own except ValueError."""
+    with pytest.raises(ValueError, match="loopback"):
+        _validate_db_url(url)
+
+
 # --- Oracle read-only guard -------------------------------------------------
 
 
@@ -259,8 +322,10 @@ def test_oracle_selects_allowed(db, sql):
 @pytest.mark.parametrize(
     "sql",
     [
-        "MERGE INTO employees e USING staging s ON (e.id = s.id) "
-        "WHEN MATCHED THEN UPDATE SET e.salary = s.salary",
+        (
+            "MERGE INTO employees e USING staging s ON (e.id = s.id) "
+            "WHEN MATCHED THEN UPDATE SET e.salary = s.salary"
+        ),
         "INSERT INTO employees (id) VALUES (1)",
         "DELETE FROM employees",
         "TRUNCATE TABLE employees",
