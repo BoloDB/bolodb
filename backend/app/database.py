@@ -260,11 +260,14 @@ class DatabaseManager:
         except ValueError as e:
             return {"ok": False, "error": str(e)}
 
-        # A database's identity stays tied to the URL as it was given to us,
-        # never to the normalised form. db_id is persisted — a workspace's
-        # glossary, verified queries and catalog all hang off it — so deriving
-        # it from a rewritten URL would mean a change to normalisation could
-        # move a live database's identity out from under its own saved data.
+        # Identity is hashed here, before normalisation and after the Docker
+        # host rewrite above — exactly where it has always been hashed.
+        # db_id is persisted, and a workspace's glossary, verified queries and
+        # catalog all hang off it, so where this line sits is not a detail:
+        # moving it below normalisation would let a later change to what we
+        # rewrite move a live database's identity out from under its own saved
+        # data, and moving it above the Docker branch would do the same to
+        # every containerised deployment that ever connected to localhost.
         # Normalisation exists only to give SQLAlchemy a scheme it can load.
         db_id = db_id_for(url)
         engine_url = normalize_scheme(url)

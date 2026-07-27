@@ -178,7 +178,7 @@ def test_db_id_is_stable_and_ignores_password():
     assert a == db_id_for("postgresql://user:secret@host/db")
 
 
-def test_db_id_comes_from_the_url_as_given_not_the_normalised_one():
+def test_db_id_is_hashed_before_normalisation():
     """db_id is persisted — a workspace's glossary, verified queries and
     catalog all hang off it — so it must not move when normalisation changes.
     Here the scheme is normalised (SQLITE -> sqlite) on the way to
@@ -190,6 +190,22 @@ def test_db_id_comes_from_the_url_as_given_not_the_normalised_one():
     assert result["db_id"] == db_id_for(typed)
     # The engine still got a scheme SQLAlchemy can actually load.
     assert mgr._connections[(TEST_USER, result["db_id"])]["url"].startswith("sqlite:")
+
+
+def test_db_id_is_hashed_after_the_docker_host_rewrite(monkeypatch, tmp_path):
+    """The other half of where that line sits, and the half that predates this
+    change: containerised deployments have always had their identity hashed
+    from the rewritten host, so hashing the caller's URL instead would move
+    db_id for every one of them that ever connected to localhost."""
+    monkeypatch.setenv("RUNNING_IN_DOCKER", "true")
+    mgr = DatabaseManager(readonly=True)
+    typed = f"sqlite:///{tmp_path}/localhost.db"
+    rewritten = typed.replace("localhost", "host.docker.internal")
+
+    result = mgr.connect(TEST_USER, typed)
+    assert result["ok"]
+    assert result["db_id"] == db_id_for(rewritten)
+    assert result["db_id"] != db_id_for(typed)
 
 
 def test_db_id_differs_for_different_targets():
