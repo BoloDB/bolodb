@@ -54,9 +54,10 @@ class DialectTraits:
         How to bound a single statement — see ``DatabaseManager._apply_statement_timeout``.
         None means the dialect offers no server-side mechanism we can use.
     ``drivername``
-        What to rewrite a driver-less URL scheme to, when SQLAlchemy's default
-        DBAPI for it is not the one we ship — see :func:`normalize_driver`.
-        None leaves the scheme as typed.
+        Scheme to rewrite this one to, when SQLAlchemy's default DBAPI for it
+        is not the one we ship — see :func:`normalize_scheme`. Where the user
+        named a driver, only the dialect in front of it is taken from here.
+        None leaves the scheme alone.
     ``prompt_hint``
         Syntax guidance handed to the LLM. Keep it about *dialect differences*,
         not general SQL advice.
@@ -93,9 +94,9 @@ TRAITS: dict[str, DialectTraits] = {
     ),
     # Bare "postgres" is accepted in connection URLs and normalises to the same
     # SQLAlchemy dialect, so it needs the same traits. The entry stays even
-    # though normalize_driver rewrites the scheme before anything derives a
+    # though normalize_scheme rewrites the scheme before anything derives a
     # dialect from it: allowed_schemes() reads this table to decide what a user
-    # may type, and normalize_driver itself looks the rewrite up here.
+    # may type, and normalize_scheme itself looks the rewrite up here.
     "postgres": DialectTraits(
         sqlglot="postgres",
         row_count_sql=_PG_ROW_COUNTS,
@@ -184,33 +185,41 @@ def limit_clause(dialect, n) -> str:
     return f"LIMIT {int(n)}"
 
 
-def normalize_driver(url: str) -> str:
-    """Fill in the DBAPI driver where the one SQLAlchemy would pick is missing.
+def normalize_scheme(url: str) -> str:
+    """Put a URL's scheme in the form the rest of the app expects to read.
 
-    ``postgres://`` is not a dialect SQLAlchemy still answers to, and bare
-    ``mysql://`` and ``oracle://`` resolve to MySQLdb and cx_Oracle — drivers
-    this app does not depend on. All three raise before a connection is ever
-    attempted, so a user who types one gets an import error rather than an
-    answer. Rewrite them to the driver we actually ship.
+    Two things are corrected, and nothing beyond the scheme is touched — the
+    rest of the URL, passwords and service names included, is case-sensitive.
 
-    Only ever applied to a scheme with no ``+driver`` of its own: an explicit
-    choice is the user's to make, and a scheme that already works is left
-    exactly as typed — the URL is what ``db_id_for`` hashes, and rewriting a
-    working one would orphan that database's saved glossary and verified
-    queries.
+    **Case.** SQLAlchemy looks its dialects up by exact name, so ``POSTGRESQL://``
+    loads nothing, and ``database.py`` reads the dialect off the front of the
+    scheme — an upper-case one misses the traits table entirely and silently
+    takes the default: no statement timeout, no bulk row counts, and generic
+    SQL for the read-only guard's parser.
+
+    **Dead and unshipped drivers.** ``postgres://`` is not a dialect SQLAlchemy
+    still answers to, and bare ``mysql://`` and ``oracle://`` resolve to
+    MySQLdb and cx_Oracle, drivers this app does not depend on. All three raise
+    on import, so a user who types one gets a plugin error rather than an
+    answer. Where the user named a driver explicitly that choice is kept: only
+    the dead dialect name in front of it is replaced.
+
+    A scheme that already works is left byte-for-byte as typed. The URL is what
+    ``db_id_for`` hashes, so rewriting a working one would orphan that
+    database's saved glossary and verified queries — see
+    ``test_only_unusable_schemes_are_ever_rewritten``, which holds the line.
     """
     scheme, sep, rest = url.partition("://")
     if not sep:
         return url
     base, plus, driver = scheme.lower().partition("+")
     substitute = traits_for(base).drivername
-    if not substitute:
-        return url
-    if plus:
-        # The driver is the user's choice; only the dialect name in front of
-        # it — "postgres", which SQLAlchemy no longer answers to — is ours.
-        return f"{substitute.split('+')[0]}+{driver}://{rest}"
-    return f"{substitute}://{rest}"
+    if substitute:
+        if plus:
+            base = substitute.split("+")[0]
+        else:
+            base, plus, driver = substitute.partition("+")
+    return f"{base}{plus}{driver}://{rest}"
 
 
 def denormalize_ident(dialect, name):

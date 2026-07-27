@@ -16,8 +16,8 @@ from backend.app.dialects import (
     denormalize_ident,
     glot_dialect,
     limit_clause,
-    normalize_driver,
     normalize_ident,
+    normalize_scheme,
     quote_ident,
     traits_for,
 )
@@ -69,13 +69,16 @@ def _sanitize_db_error(err_msg: str) -> str:
     # The "+driver" suffix has to be optional on every scheme, not just Oracle:
     # a URL reaches the driver in its canonical form, so the string in an
     # exception is "mysql+pymysql://user:pass@..." and a pattern anchored on a
-    # bare "mysql://" walks straight past the credentials in it.
+    # bare "mysql://" walks straight past the credentials in it. Case-insensitive
+    # for the same reason — redaction is the last line and should never be the
+    # component that is picky about how something was spelled.
     msg = re.sub(
         r"\b(postgresql|postgres|mysql|mssql|oracle)(?:\+\w+)?://\S+",
         r"\1://***",
         msg,
+        flags=re.IGNORECASE,
     )
-    msg = re.sub(r"sqlite:///?\S+", "sqlite://***", msg)
+    msg = re.sub(r"sqlite:///?\S+", "sqlite://***", msg, flags=re.IGNORECASE)
     # Oracle DSNs also appear bare (host:port/service_name) in driver errors.
     msg = re.sub(
         r"service_name\s*=\s*\S+", "service_name=***", msg, flags=re.IGNORECASE
@@ -259,7 +262,7 @@ class DatabaseManager:
 
         # Before db_id_for below, so one target hashes to one id however the
         # user spelled its scheme.
-        url = normalize_driver(url)
+        url = normalize_scheme(url)
         dialect = url.split(":")[0].split("+")[0]
         try:
             engine = create_engine(url)

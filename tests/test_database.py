@@ -361,6 +361,10 @@ def test_oracle_errors_are_sanitized():
         "mysql+pymysql://scott:tiger@h:3306/db",
         "mssql+pyodbc://scott:tiger@h:1433/db",
         "oracle+oracledb://scott:tiger@h:1521/XE",
+        # Validation lower-cases the scheme before checking it, so an
+        # upper-case one reaches the connection layer too.
+        "POSTGRESQL+PSYCOPG2://scott:tiger@h:5432/db",
+        "MySQL://scott:tiger@h:3306/db",
     ],
 )
 def test_credentials_are_redacted_whatever_driver_the_url_names(url):

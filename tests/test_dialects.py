@@ -16,8 +16,8 @@ from backend.app.dialects import (
     denormalize_ident,
     glot_dialect,
     limit_clause,
-    normalize_driver,
     normalize_ident,
+    normalize_scheme,
     prompt_hint,
     quote_ident,
     traits_for,
@@ -149,6 +149,38 @@ def test_oracle_bulk_row_counts_are_owner_scoped():
     assert ":owner" in sql
 
 
+# --- scheme normalisation ---------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "url,expected",
+    [
+        ("POSTGRESQL://u:p@h:5432/db", "postgresql://u:p@h:5432/db"),
+        ("POSTGRESQL+PSYCOPG2://u:p@h/db", "postgresql+psycopg2://u:p@h/db"),
+        ("Oracle+OracleDB://u:p@h:1521/XE", "oracle+oracledb://u:p@h:1521/XE"),
+        ("SQLite:///data/sample.db", "sqlite:///data/sample.db"),
+    ],
+)
+def test_the_scheme_is_folded_to_lower_case(url, expected):
+    """SQLAlchemy looks dialects up by exact name, and database.py reads the
+    dialect off the front of the scheme — an upper-case one loads no plugin and
+    misses the traits table, taking the default: no statement timeout, no bulk
+    row counts, and generic SQL for the read-only guard's parser."""
+    assert normalize_scheme(url) == expected
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "postgresql://user:P%40ssWORD@Host.Example.COM:5432/MyDb",
+        "oracle+oracledb://u:SeCrEt@h:1521/?service_name=ORCLPDB1",
+    ],
+)
+def test_nothing_past_the_scheme_is_touched(url):
+    """Passwords, hosts and service names are case-sensitive."""
+    assert normalize_scheme(url) == url
+
+
 # --- driver resolution ------------------------------------------------------
 
 
@@ -166,7 +198,7 @@ def test_oracle_bulk_row_counts_are_owner_scoped():
     ],
 )
 def test_unusable_schemes_are_pointed_at_the_driver_we_ship(url, expected):
-    assert normalize_driver(url) == expected
+    assert normalize_scheme(url) == expected
 
 
 @pytest.mark.parametrize(
@@ -184,17 +216,17 @@ def test_unusable_schemes_are_pointed_at_the_driver_we_ship(url, expected):
 def test_a_usable_or_explicit_scheme_is_left_exactly_as_typed(url):
     """db_id_for hashes the URL, so rewriting a working one would orphan that
     database's saved glossary and verified queries."""
-    assert normalize_driver(url) == url
+    assert normalize_scheme(url) == url
 
 
 def test_a_string_that_is_not_a_url_is_left_alone():
     """Validation rejects it; normalisation should not raise on the way there."""
-    assert normalize_driver("nonsense") == "nonsense"
+    assert normalize_scheme("nonsense") == "nonsense"
 
 
 @pytest.mark.parametrize("dialect", sorted(TRAITS))
 def test_only_unusable_schemes_are_ever_rewritten(dialect):
-    """The safety property behind normalize_driver, pinned.
+    """The safety property behind normalize_scheme, pinned.
 
     Rewriting changes the URL, and db_id_for hashes the URL, so a database's
     persisted glossary, verified queries and catalog all hang off the result.
