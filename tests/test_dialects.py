@@ -14,6 +14,7 @@ from backend.app.dialects import (
     denormalize_ident,
     glot_dialect,
     limit_clause,
+    normalize_driver,
     normalize_ident,
     prompt_hint,
     quote_ident,
@@ -144,6 +145,59 @@ def test_oracle_bulk_row_counts_are_owner_scoped():
     counts for tables the connection cannot even read."""
     sql = traits_for("oracle").row_count_sql
     assert ":owner" in sql
+
+
+# --- driver resolution ------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "url,expected",
+    [
+        # SQLAlchemy dropped the "postgres" alias; it raises NoSuchModuleError.
+        ("postgres://u:p@h:5432/db", "postgresql://u:p@h:5432/db"),
+        # Bare mysql:// means MySQLdb, bare oracle:// means cx_Oracle. Neither
+        # is a dependency, so both fail on import before connecting.
+        ("mysql://u:p@h:3306/db", "mysql+pymysql://u:p@h:3306/db"),
+        ("oracle://u:p@h:1521/XEPDB1", "oracle+oracledb://u:p@h:1521/XEPDB1"),
+        # A driver spelled out against the dead alias still needs the rename.
+        ("postgres+psycopg2://u:p@h/db", "postgresql+psycopg2://u:p@h/db"),
+    ],
+)
+def test_unusable_schemes_are_pointed_at_the_driver_we_ship(url, expected):
+    assert normalize_driver(url) == expected
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        # Works as typed: psycopg2 is both the default and installed.
+        "postgresql://u:p@h:5432/db",
+        "sqlite:///data/sample.db",
+        # An explicit driver is the user's choice to make.
+        "mysql+mysqldb://u:p@h:3306/db",
+        "oracle+cx_oracle://u:p@h:1521/XE",
+        "postgresql+psycopg://u:p@h:5432/db",
+    ],
+)
+def test_a_usable_or_explicit_scheme_is_left_exactly_as_typed(url):
+    """db_id_for hashes the URL, so rewriting a working one would orphan that
+    database's saved glossary and verified queries."""
+    assert normalize_driver(url) == url
+
+
+def test_a_string_that_is_not_a_url_is_left_alone():
+    """Validation rejects it; normalisation should not raise on the way there."""
+    assert normalize_driver("nonsense") == "nonsense"
+
+
+@pytest.mark.parametrize("dialect", sorted(TRAITS))
+def test_every_substituted_drivername_keeps_its_dialect(dialect):
+    """The scheme before the "+" is what database.py reads the dialect from, so
+    a substitution that changed it would silently swap the traits too."""
+    drivername = TRAITS[dialect].drivername
+    if drivername is None:
+        return
+    assert drivername.split("+")[0] in TRAITS
 
 
 # --- catalog identifier casing ----------------------------------------------

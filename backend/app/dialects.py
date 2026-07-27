@@ -53,6 +53,10 @@ class DialectTraits:
     ``timeout_style``
         How to bound a single statement — see ``DatabaseManager._apply_statement_timeout``.
         None means the dialect offers no server-side mechanism we can use.
+    ``drivername``
+        What to rewrite a driver-less URL scheme to, when SQLAlchemy's default
+        DBAPI for it is not the one we ship — see :func:`normalize_driver`.
+        None leaves the scheme as typed.
     ``prompt_hint``
         Syntax guidance handed to the LLM. Keep it about *dialect differences*,
         not general SQL advice.
@@ -64,6 +68,7 @@ class DialectTraits:
     uppercase_identifiers: bool = False
     row_count_sql: str | None = None
     timeout_style: str | None = None
+    drivername: str | None = None
     prompt_hint: str = ""
 
 
@@ -87,11 +92,17 @@ TRAITS: dict[str, DialectTraits] = {
         ),
     ),
     # Bare "postgres" is accepted in connection URLs and normalises to the same
-    # SQLAlchemy dialect, so it needs the same traits.
+    # SQLAlchemy dialect, so it needs the same traits. The entry stays even
+    # though normalize_driver rewrites the scheme before anything derives a
+    # dialect from it: allowed_schemes() reads this table to decide what a user
+    # may type, and normalize_driver itself looks the rewrite up here.
     "postgres": DialectTraits(
         sqlglot="postgres",
         row_count_sql=_PG_ROW_COUNTS,
         timeout_style="statement_timeout",
+        # SQLAlchemy dropped the "postgres" alias in 1.4; left as typed it
+        # raises NoSuchModuleError before the connection is ever attempted.
+        drivername="postgresql",
         prompt_hint=(
             "Row limiting: use LIMIT n. "
             "Dates: use date_trunc()/interval arithmetic; ILIKE is available; "
@@ -103,6 +114,8 @@ TRAITS: dict[str, DialectTraits] = {
         quote="`",
         row_count_sql=_MYSQL_ROW_COUNTS,
         timeout_style="max_execution_time",
+        # SQLAlchemy defaults bare "mysql" to MySQLdb, which we do not ship.
+        drivername="mysql+pymysql",
         prompt_hint=(
             "Row limiting: use LIMIT n. "
             "Dates: use DATE_FORMAT()/DATE_SUB(); identifiers quote with backticks."
@@ -122,6 +135,9 @@ TRAITS: dict[str, DialectTraits] = {
         uppercase_identifiers=True,
         row_count_sql=_ORACLE_ROW_COUNTS,
         timeout_style="call_timeout",
+        # Through SQLAlchemy 2.0 bare "oracle" still means cx_Oracle, which is
+        # obsolete and not installed; python-oracledb is what we depend on.
+        drivername="oracle+oracledb",
         prompt_hint=(
             "Row limiting: use FETCH FIRST n ROWS ONLY, never LIMIT. "
             "Dates: TRUNC(SYSDATE), ADD_MONTHS(), date arithmetic in days; "
@@ -166,6 +182,35 @@ def limit_clause(dialect, n) -> str:
     if traits_for(dialect).row_limit == "fetch_first":
         return f"FETCH FIRST {int(n)} ROWS ONLY"
     return f"LIMIT {int(n)}"
+
+
+def normalize_driver(url: str) -> str:
+    """Fill in the DBAPI driver where the one SQLAlchemy would pick is missing.
+
+    ``postgres://`` is not a dialect SQLAlchemy still answers to, and bare
+    ``mysql://`` and ``oracle://`` resolve to MySQLdb and cx_Oracle — drivers
+    this app does not depend on. All three raise before a connection is ever
+    attempted, so a user who types one gets an import error rather than an
+    answer. Rewrite them to the driver we actually ship.
+
+    Only ever applied to a scheme with no ``+driver`` of its own: an explicit
+    choice is the user's to make, and a scheme that already works is left
+    exactly as typed — the URL is what ``db_id_for`` hashes, and rewriting a
+    working one would orphan that database's saved glossary and verified
+    queries.
+    """
+    scheme, sep, rest = url.partition("://")
+    if not sep:
+        return url
+    base, plus, driver = scheme.lower().partition("+")
+    substitute = traits_for(base).drivername
+    if not substitute:
+        return url
+    if plus:
+        # The driver is the user's choice; only the dialect name in front of
+        # it — "postgres", which SQLAlchemy no longer answers to — is ours.
+        return f"{substitute.split('+')[0]}+{driver}://{rest}"
+    return f"{substitute}://{rest}"
 
 
 def denormalize_ident(dialect, name):
