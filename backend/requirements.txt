@@ -36,7 +36,7 @@ httpx==0.28.1
 idna==3.18
 jmespath==1.1.0
 lz4==4.4.5
-numpy==2.5.1
+numpy==2.4.6
 oauthlib==3.3.1
 openai>=2.46.0
 iniconfig==2.3.0
