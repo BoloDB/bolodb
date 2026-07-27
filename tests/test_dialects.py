@@ -7,6 +7,8 @@ introspection query against it fails.
 
 import pytest
 import sqlglot
+from sqlalchemy import create_engine
+from sqlalchemy.exc import NoSuchModuleError
 
 from backend.app.dialects import (
     TRAITS,
@@ -15,6 +17,7 @@ from backend.app.dialects import (
     glot_dialect,
     limit_clause,
     normalize_ident,
+    normalize_scheme,
     prompt_hint,
     quote_ident,
     traits_for,
@@ -144,6 +147,111 @@ def test_oracle_bulk_row_counts_are_owner_scoped():
     counts for tables the connection cannot even read."""
     sql = traits_for("oracle").row_count_sql
     assert ":owner" in sql
+
+
+# --- scheme normalisation ---------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "url,expected",
+    [
+        ("POSTGRESQL://u:p@h:5432/db", "postgresql://u:p@h:5432/db"),
+        ("POSTGRESQL+PSYCOPG2://u:p@h/db", "postgresql+psycopg2://u:p@h/db"),
+        ("Oracle+OracleDB://u:p@h:1521/XE", "oracle+oracledb://u:p@h:1521/XE"),
+        ("SQLite:///data/sample.db", "sqlite:///data/sample.db"),
+    ],
+)
+def test_the_scheme_is_folded_to_lower_case(url, expected):
+    """SQLAlchemy looks dialects up by exact name, and database.py reads the
+    dialect off the front of the scheme — an upper-case one loads no plugin and
+    misses the traits table, taking the default: no statement timeout, no bulk
+    row counts, and generic SQL for the read-only guard's parser."""
+    assert normalize_scheme(url) == expected
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "postgresql://user:P%40ssWORD@Host.Example.COM:5432/MyDb",
+        "oracle+oracledb://u:SeCrEt@h:1521/?service_name=ORCLPDB1",
+    ],
+)
+def test_nothing_past_the_scheme_is_touched(url):
+    """Passwords, hosts and service names are case-sensitive."""
+    assert normalize_scheme(url) == url
+
+
+# --- driver resolution ------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "url,expected",
+    [
+        # SQLAlchemy dropped the "postgres" alias; it raises NoSuchModuleError.
+        ("postgres://u:p@h:5432/db", "postgresql://u:p@h:5432/db"),
+        # Bare mysql:// means MySQLdb, bare oracle:// means cx_Oracle. Neither
+        # is a dependency, so both fail on import before connecting.
+        ("mysql://u:p@h:3306/db", "mysql+pymysql://u:p@h:3306/db"),
+        ("oracle://u:p@h:1521/XEPDB1", "oracle+oracledb://u:p@h:1521/XEPDB1"),
+        # A driver spelled out against the dead alias still needs the rename.
+        ("postgres+psycopg2://u:p@h/db", "postgresql+psycopg2://u:p@h/db"),
+    ],
+)
+def test_unusable_schemes_are_pointed_at_the_driver_we_ship(url, expected):
+    assert normalize_scheme(url) == expected
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        # Works as typed: psycopg2 is both the default and installed.
+        "postgresql://u:p@h:5432/db",
+        "sqlite:///data/sample.db",
+        # An explicit driver is the user's choice to make.
+        "mysql+mysqldb://u:p@h:3306/db",
+        "oracle+cx_oracle://u:p@h:1521/XE",
+        "postgresql+psycopg://u:p@h:5432/db",
+    ],
+)
+def test_a_usable_or_explicit_scheme_is_left_exactly_as_typed(url):
+    """A driver the user named, or one SQLAlchemy picks that we actually ship,
+    is not ours to second-guess."""
+    assert normalize_scheme(url) == url
+
+
+def test_a_string_that_is_not_a_url_is_left_alone():
+    """Validation rejects it; normalisation should not raise on the way there."""
+    assert normalize_scheme("nonsense") == "nonsense"
+
+
+@pytest.mark.parametrize("dialect", sorted(TRAITS))
+def test_only_unusable_schemes_are_ever_rewritten(dialect):
+    """Substitution is for schemes that cannot work, not for second-guessing.
+
+    Overriding the driver SQLAlchemy would have picked is only defensible where
+    that driver is absent and the URL could not have connected at all. If one
+    that makes a substituted scheme work ever lands in requirements.txt, this
+    fails, and the entry has to go rather than quietly route a user's
+    connection through a driver they did not ask for.
+
+    (Identity does not depend on this — see
+    test_db_id_comes_from_the_url_as_given_not_the_normalised_one.)
+    """
+    if TRAITS[dialect].drivername is None:
+        return
+    with pytest.raises(Exception) as excinfo:
+        create_engine(f"{dialect}://user:pass@host/db").dialect
+    assert isinstance(excinfo.value, (NoSuchModuleError, ImportError))
+
+
+@pytest.mark.parametrize("dialect", sorted(TRAITS))
+def test_every_substituted_drivername_keeps_its_dialect(dialect):
+    """The scheme before the "+" is what database.py reads the dialect from, so
+    a substitution that changed it would silently swap the traits too."""
+    drivername = TRAITS[dialect].drivername
+    if drivername is None:
+        return
+    assert drivername.split("+")[0] in TRAITS
 
 
 # --- catalog identifier casing ----------------------------------------------

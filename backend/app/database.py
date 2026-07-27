@@ -17,6 +17,7 @@ from backend.app.dialects import (
     glot_dialect,
     limit_clause,
     normalize_ident,
+    normalize_scheme,
     quote_ident,
     traits_for,
 )
@@ -65,12 +66,19 @@ def _sanitize_db_error(err_msg: str) -> str:
     msg = re.sub(r"password[=:]\s*\S+", "password=***", msg, flags=re.IGNORECASE)
     msg = re.sub(r"dbname[=:]\s*\S+", "dbname=***", msg, flags=re.IGNORECASE)
     msg = re.sub(r"database[=:]\s*\S+", "database=***", msg, flags=re.IGNORECASE)
-    msg = re.sub(r"postgresql://\S+", "postgresql://***", msg)
-    msg = re.sub(r"postgres://\S+", "postgres://***", msg)
-    msg = re.sub(r"mysql://\S+", "mysql://***", msg)
-    msg = re.sub(r"mssql://\S+", "mssql://***", msg)
-    msg = re.sub(r"oracle(?:\+\w+)?://\S+", "oracle://***", msg)
-    msg = re.sub(r"sqlite:///?\S+", "sqlite://***", msg)
+    # The "+driver" suffix has to be optional on every scheme, not just Oracle:
+    # a URL reaches the driver in its canonical form, so the string in an
+    # exception is "mysql+pymysql://user:pass@..." and a pattern anchored on a
+    # bare "mysql://" walks straight past the credentials in it. Case-insensitive
+    # for the same reason — redaction is the last line and should never be the
+    # component that is picky about how something was spelled.
+    msg = re.sub(
+        r"\b(postgresql|postgres|mysql|mssql|oracle)(?:\+\w+)?://\S+",
+        r"\1://***",
+        msg,
+        flags=re.IGNORECASE,
+    )
+    msg = re.sub(r"sqlite:///?\S+", "sqlite://***", msg, flags=re.IGNORECASE)
     # Oracle DSNs also appear bare (host:port/service_name) in driver errors.
     msg = re.sub(
         r"service_name\s*=\s*\S+", "service_name=***", msg, flags=re.IGNORECASE
@@ -252,9 +260,20 @@ class DatabaseManager:
         except ValueError as e:
             return {"ok": False, "error": str(e)}
 
-        dialect = url.split(":")[0].split("+")[0]
+        # Identity is hashed here, before normalisation and after the Docker
+        # host rewrite above — exactly where it has always been hashed.
+        # db_id is persisted, and a workspace's glossary, verified queries and
+        # catalog all hang off it, so where this line sits is not a detail:
+        # moving it below normalisation would let a later change to what we
+        # rewrite move a live database's identity out from under its own saved
+        # data, and moving it above the Docker branch would do the same to
+        # every containerised deployment that ever connected to localhost.
+        # Normalisation exists only to give SQLAlchemy a scheme it can load.
+        db_id = db_id_for(url)
+        engine_url = normalize_scheme(url)
+        dialect = engine_url.split(":")[0].split("+")[0]
         try:
-            engine = create_engine(url)
+            engine = create_engine(engine_url)
             self._install_call_timeout(engine, dialect)
             with engine.connect() as c:
                 # select(1) rather than text("SELECT 1"): SQLAlchemy compiles it
@@ -262,11 +281,10 @@ class DatabaseManager:
                 # requires while every other dialect is unchanged.
                 c.execute(select(1))
             tables = len(inspect(engine).get_table_names())
-            db_id = db_id_for(url)
             old_connection = self._connections.get((workspace_id, db_id))
             self._connections[(workspace_id, db_id)] = {
                 "engine": engine,
-                "url": url,
+                "url": engine_url,
                 "db_id": db_id,
                 "dialect": dialect,
                 "_schema_cache": None,
@@ -290,6 +308,13 @@ class DatabaseManager:
         Oracle has no equivalent of ``SET statement_timeout``; the driver-level
         ``call_timeout`` is the supported way to cancel a round trip that runs
         too long, and it must be set on the DBAPI connection as it is created.
+
+        It is a weaker bound than the name suggests: it caps each round trip,
+        not the statement. A query that fetches across several round trips can
+        outlast ``statement_timeout`` in wall-clock terms while no single trip
+        ever exceeds it, and ``max_rows`` caps rows returned, not duration. It
+        still stops the case that matters — a statement that hangs — but do not
+        read it as a hard ceiling on how long an Oracle query can take.
         """
         if traits_for(dialect).timeout_style != "call_timeout":
             return

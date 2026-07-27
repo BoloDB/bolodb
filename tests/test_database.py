@@ -178,6 +178,36 @@ def test_db_id_is_stable_and_ignores_password():
     assert a == db_id_for("postgresql://user:secret@host/db")
 
 
+def test_db_id_is_hashed_before_normalisation():
+    """db_id is persisted — a workspace's glossary, verified queries and
+    catalog all hang off it — so it must not move when normalisation changes.
+    Here the scheme is normalised (SQLITE -> sqlite) on the way to
+    create_engine while the identity stays with what the caller passed in."""
+    mgr = DatabaseManager(readonly=True)
+    typed = "SQLITE:///:memory:"
+    result = mgr.connect(TEST_USER, typed)
+    assert result["ok"]
+    assert result["db_id"] == db_id_for(typed)
+    # The engine still got a scheme SQLAlchemy can actually load.
+    assert mgr._connections[(TEST_USER, result["db_id"])]["url"].startswith("sqlite:")
+
+
+def test_db_id_is_hashed_after_the_docker_host_rewrite(monkeypatch, tmp_path):
+    """The other half of where that line sits, and the half that predates this
+    change: containerised deployments have always had their identity hashed
+    from the rewritten host, so hashing the caller's URL instead would move
+    db_id for every one of them that ever connected to localhost."""
+    monkeypatch.setenv("RUNNING_IN_DOCKER", "true")
+    mgr = DatabaseManager(readonly=True)
+    typed = f"sqlite:///{tmp_path}/localhost.db"
+    rewritten = typed.replace("localhost", "host.docker.internal")
+
+    result = mgr.connect(TEST_USER, typed)
+    assert result["ok"]
+    assert result["db_id"] == db_id_for(rewritten)
+    assert result["db_id"] != db_id_for(typed)
+
+
 def test_db_id_differs_for_different_targets():
     a = db_id_for("postgresql://user:secret@host/db")
     b = db_id_for("postgresql://user:secret@otherhost/db")
@@ -259,8 +289,10 @@ def test_validate_db_url_rejects_unsupported_scheme():
         "oracle+oracledb://user:pass@/?dsn=127.0.0.1:1521/xe",
         "oracle+oracledb://user:pass@/?dsn=169.254.169.254:1521/xe",
         # Same trick with a full connect descriptor in place of the host.
-        "oracle+oracledb://user:pass@"
-        "(DESCRIPTION=(ADDRESS=(PROTOCOL=TCP)(HOST=127.0.0.1)(PORT=1521)))/",
+        (
+            "oracle+oracledb://user:pass@"
+            "(DESCRIPTION=(ADDRESS=(PROTOCOL=TCP)(HOST=127.0.0.1)(PORT=1521)))/"
+        ),
         # A bare TNS alias: with no service_name or SID, SQLAlchemy stops
         # building a host:port DSN and passes the host through as one.
         "oracle+oracledb://user:pass@SOMEALIAS",
@@ -349,3 +381,26 @@ def test_oracle_errors_are_sanitized():
     )
     assert "tiger" not in msg
     assert "PROD" not in msg
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "postgresql+psycopg2://scott:tiger@h:5432/db",
+        "postgres+psycopg2://scott:tiger@h:5432/db",
+        "mysql+pymysql://scott:tiger@h:3306/db",
+        "mssql+pyodbc://scott:tiger@h:1433/db",
+        "oracle+oracledb://scott:tiger@h:1521/XE",
+        # Validation lower-cases the scheme before checking it, so an
+        # upper-case one reaches the connection layer too.
+        "POSTGRESQL+PSYCOPG2://scott:tiger@h:5432/db",
+        "MySQL://scott:tiger@h:3306/db",
+    ],
+)
+def test_credentials_are_redacted_whatever_driver_the_url_names(url):
+    """A URL reaches the driver in its canonical, driver-suffixed form, so that
+    is the form an exception quotes back — a pattern anchored on the bare
+    scheme walks straight past the password in it."""
+    msg = _sanitize_db_error(f"could not connect: {url}")
+    assert "tiger" not in msg
+    assert "scott" not in msg
