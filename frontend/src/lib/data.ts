@@ -216,6 +216,29 @@ export function humanError(msg: string): string {
     return "SSL error — if connecting via URL mode, try adding ?sslmode=disable at the end.";
   if (m.includes("no module named"))
     return "The driver for that database type isn't installed on this server.";
+  // Warehouses report their own way — none of the phrases above match them.
+  if (
+    m.includes("default credentials were not found") ||
+    m.includes("could not automatically determine credentials")
+  )
+    return "No Google credentials — paste a service account key, or run this server with application default credentials.";
+  if (
+    m.includes("incorrect username or password") ||
+    m.includes("invalid access token") ||
+    m.includes("403 client error")
+  )
+    return "Wrong credentials — double-check your account details or access token.";
+  if (m.includes("no active warehouse") || m.includes("warehouse not found"))
+    return "No Snowflake warehouse selected — add a warehouse to the connection.";
+  // Covers both readings: the validator rejecting a URL with no http_path at
+  // all, and the driver rejecting one it does not recognise.
+  if (m.includes("http_path"))
+    return "Databricks needs a valid HTTP path — copy it from the SQL warehouse's connection details.";
+  if (
+    m.includes("was not found in location") ||
+    (m.includes("dataset") && m.includes("not found"))
+  )
+    return "That dataset wasn't found — check the project ID and dataset name.";
   return msg;
 }
 

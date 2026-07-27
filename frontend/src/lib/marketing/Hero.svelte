@@ -147,6 +147,9 @@
           <span class="db-logo">Oracle</span>
           <span class="db-logo">SQL Server</span>
           <span class="db-logo">SQLite</span>
+          <span class="db-logo">Snowflake</span>
+          <span class="db-logo">Databricks</span>
+          <span class="db-logo">BigQuery</span>
         </div>
         <span class="trust-line">read-only · your data stays yours</span>
       </div>

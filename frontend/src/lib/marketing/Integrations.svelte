@@ -6,6 +6,9 @@
     { name: "Oracle", color: "#C74634" },
     { name: "SQL Server", color: "#CC2927" },
     { name: "SQLite", color: "#003B57" },
+    { name: "Snowflake", color: "#29B5E8" },
+    { name: "Databricks", color: "#FF3621" },
+    { name: "BigQuery", color: "#4285F4" },
   ];
 
   const connStrings: Record<string, { label: string; code: string }[]> = {
@@ -28,6 +31,18 @@
     SQLite: [
       { label: "File path", code: "/path/to/your/database.db" },
       { label: "In-memory", code: ":memory:" },
+    ],
+    Snowflake: [
+      { label: "URL", code: "snowflake://user:pass@myorg-myaccount/ANALYTICS/PUBLIC?warehouse=COMPUTE_WH" },
+      { label: "With role", code: "snowflake://user:pass@myorg-myaccount/ANALYTICS/PUBLIC?warehouse=COMPUTE_WH&role=ANALYST" },
+    ],
+    Databricks: [
+      { label: "URL", code: "databricks://token:dapi***@dbc-a1b2c3d4.cloud.databricks.com?http_path=/sql/1.0/warehouses/abc123" },
+      { label: "Unity Catalog", code: "databricks://token:dapi***@host?http_path=/sql/1.0/warehouses/abc123&catalog=main&schema=default" },
+    ],
+    BigQuery: [
+      { label: "Service account", code: "bigquery://my-gcp-project/my_dataset?credentials_base64=<base64 of the key JSON>" },
+      { label: "Ambient credentials", code: "bigquery://my-gcp-project/my_dataset" },
     ],
   };
 

@@ -64,7 +64,7 @@ For fast user feedback during query generation:
 ## 5. System Prompt Assembly
 
 The system prompt is assembled dynamically in `build_sql_system_prompt()` (`backend/app/llm.py`). It includes:
-1. **Database Dialect**: e.g., PostgreSQL, MySQL, Oracle, SQLite syntax rules
+1. **Database Dialect**: e.g., PostgreSQL, MySQL, Oracle, SQLite, Snowflake, Databricks, BigQuery syntax rules
    (defined per dialect in `backend/app/dialects.py`).
 2. **Linked Schema**: Compact table definitions produced by `compact_schema()` in `schema_link.py`.
 3. **Glossary Terms**: Verified business definitions.

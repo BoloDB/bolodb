@@ -110,5 +110,5 @@ def test_prompt_names_the_dialect():
 
 def test_unknown_dialect_still_builds_a_prompt():
     """An unsupported dialect must degrade to an empty rule 7, not blow up."""
-    p = _prompt("snowflake")
+    p = _prompt("teradata")
     assert "Reply ONLY with this JSON" in p

@@ -20,6 +20,9 @@
     sqlite: "SQLite",
     mssql: "SQL Server",
     duckdb: "DuckDB",
+    snowflake: "Snowflake",
+    databricks: "Databricks",
+    bigquery: "BigQuery",
   };
 
   let choice = $state<"own" | "sample">("own");
@@ -31,58 +34,200 @@
   // paste box takes, so both routes hit /api/connect identically.
   let entryMode = $state<"url" | "form">("url");
 
-  type FormDialect = "postgresql" | "mysql" | "oracle";
-  const FORM_DIALECTS: {
-    id: FormDialect;
+  // Every database asks for something different, so the form is described
+  // rather than hardcoded: a warehouse has no host and port, BigQuery has no
+  // username or password at all, and Databricks needs an http_path that has no
+  // equivalent anywhere else. Each dialect lists its own fields and assembles
+  // its own URL; the markup below just renders whatever it is given.
+  type FormField = {
+    id: string;
     label: string;
-    scheme: string;
-    port: string;
-    dbLabel: string;
-    dbPlaceholder: string;
-  }[] = [
-    { id: "postgresql", label: "PostgreSQL", scheme: "postgresql", port: "5432", dbLabel: "Database", dbPlaceholder: "dbname" },
-    { id: "mysql", label: "MySQL", scheme: "mysql+pymysql", port: "3306", dbLabel: "Database", dbPlaceholder: "dbname" },
-    { id: "oracle", label: "Oracle", scheme: "oracle+oracledb", port: "1521", dbLabel: "Service name", dbPlaceholder: "ORCLPDB1" },
+    placeholder?: string;
+    type?: "text" | "password" | "textarea";
+    optional?: boolean;
+    help?: string;
+    /** Used when the field is left blank — ports, mostly. */
+    fallback?: string;
+    /** Rejected with this message when the value doesn't match. */
+    pattern?: RegExp;
+    patternError?: string;
+  };
+  type FormDialectSpec = {
+    id: string;
+    label: string;
+    fields: FormField[];
+    build: (v: Record<string, string>) => string;
+  };
+
+  const enc = encodeURIComponent;
+  /** Trimmed value of a field that may never have been touched. */
+  const s = (x: string | undefined) => (x ?? "").trim();
+  /** Value of a field, falling back to its default when left blank. */
+  const val = (v: Record<string, string>, f: FormField) =>
+    (v[f.id] ?? "").trim() || (f.fallback ?? "");
+  /** user:pass@ for the URL authority, empty when there is no user. */
+  function credentials(v: Record<string, string>): string {
+    // Passwords routinely contain @ : / and #, every one of which changes how
+    // the URL parses if it goes in raw.
+    const user = enc(s(v.user));
+    const pass = v.password ? `:${enc(v.password)}` : "";
+    return user ? `${user}${pass}@` : "";
+  }
+  /** Base64 that survives non-ASCII, which btoa alone does not. */
+  function b64(text: string): string {
+    const bytes = new TextEncoder().encode(text);
+    let binary = "";
+    for (const b of bytes) binary += String.fromCharCode(b);
+    return btoa(binary);
+  }
+  /** Append only the parameters the user actually filled in. */
+  function params(pairs: [string, string][]): string {
+    const set = pairs.filter(([, value]) => value).map(([k, value]) => `${k}=${enc(value)}`);
+    return set.length ? `?${set.join("&")}` : "";
+  }
+
+  const HOST: FormField = { id: "host", label: "Host", placeholder: "db.example.com" };
+  const USER: FormField = { id: "user", label: "Username", placeholder: "readonly_user" };
+  const PASSWORD: FormField = { id: "password", label: "Password", type: "password", placeholder: "••••••••", optional: true };
+  const PORT = (fallback: string): FormField => ({
+    id: "port", label: "Port", placeholder: fallback, fallback, optional: true,
+    pattern: /^\d+$/, patternError: "Port must be a number.",
+  });
+
+  const FORM_DIALECTS: FormDialectSpec[] = [
+    {
+      id: "postgresql",
+      label: "PostgreSQL",
+      fields: [HOST, PORT("5432"), { id: "database", label: "Database", placeholder: "dbname" }, USER, PASSWORD],
+      build: (v) => `postgresql://${credentials(v)}${s(v.host)}:${val(v, PORT("5432"))}/${enc(s(v.database))}`,
+    },
+    {
+      id: "mysql",
+      label: "MySQL",
+      fields: [HOST, PORT("3306"), { id: "database", label: "Database", placeholder: "dbname" }, USER, PASSWORD],
+      build: (v) => `mysql+pymysql://${credentials(v)}${s(v.host)}:${val(v, PORT("3306"))}/${enc(s(v.database))}`,
+    },
+    {
+      id: "oracle",
+      label: "Oracle",
+      // Oracle names the target with a service_name parameter rather than a path.
+      fields: [HOST, PORT("1521"), { id: "database", label: "Service name", placeholder: "ORCLPDB1" }, USER, PASSWORD],
+      build: (v) => `oracle+oracledb://${credentials(v)}${s(v.host)}:${val(v, PORT("1521"))}/?service_name=${enc(s(v.database))}`,
+    },
+    {
+      id: "snowflake",
+      label: "Snowflake",
+      fields: [
+        { id: "account", label: "Account identifier", placeholder: "myorg-myaccount", help: "The part before .snowflakecomputing.com" },
+        { id: "database", label: "Database", placeholder: "ANALYTICS" },
+        { id: "schema", label: "Schema", placeholder: "PUBLIC", optional: true },
+        { id: "warehouse", label: "Warehouse", placeholder: "COMPUTE_WH", optional: true, help: "Needed unless the user has a default" },
+        { id: "role", label: "Role", placeholder: "ANALYST", optional: true },
+        USER,
+        PASSWORD,
+      ],
+      build: (v) => {
+        const path = [s(v.database), s(v.schema)].filter(Boolean).map(enc).join("/");
+        return `snowflake://${credentials(v)}${s(v.account)}/${path}${params([
+          ["warehouse", s(v.warehouse)],
+          ["role", s(v.role)],
+        ])}`;
+      },
+    },
+    {
+      id: "databricks",
+      label: "Databricks",
+      fields: [
+        { id: "host", label: "Workspace host", placeholder: "dbc-a1b2c3d4.cloud.databricks.com" },
+        { id: "httpPath", label: "HTTP path", placeholder: "/sql/1.0/warehouses/abc123", help: "From the SQL warehouse's connection details" },
+        { id: "catalog", label: "Catalog", placeholder: "main", optional: true },
+        { id: "schema", label: "Schema", placeholder: "default", optional: true },
+        { id: "token", label: "Access token", type: "password", placeholder: "dapi••••••••", help: "A personal access token" },
+      ],
+      // The token goes in the password position, under the literal user "token".
+      build: (v) => `databricks://token:${enc(s(v.token))}@${s(v.host)}${params([
+        ["http_path", s(v.httpPath)],
+        ["catalog", s(v.catalog)],
+        ["schema", s(v.schema)],
+      ])}`,
+    },
+    {
+      id: "bigquery",
+      label: "BigQuery",
+      fields: [
+        { id: "project", label: "Project ID", placeholder: "my-gcp-project" },
+        { id: "dataset", label: "Dataset", placeholder: "my_dataset", optional: true },
+        {
+          id: "keyJson",
+          label: "Service account key (JSON)",
+          type: "textarea",
+          placeholder: '{\n  "type": "service_account",\n  ...\n}',
+          optional: true,
+          help: "Leave blank to use the server's ambient Google credentials",
+        },
+      ],
+      // The key travels base64-encoded inside the URL, which is encrypted at
+      // rest, and is redacted everywhere the URL is displayed or hashed.
+      build: (v) => {
+        const key = s(v.keyJson);
+        // The dataset is optional, and appending it unconditionally leaves a
+        // dangling slash — "bigquery://project/?..." — rather than the
+        // project-only form the driver documents.
+        const dataset = s(v.dataset);
+        return `bigquery://${s(v.project)}${dataset ? `/${enc(dataset)}` : ""}${params([
+          ["credentials_base64", key ? b64(key) : ""],
+        ])}`;
+      },
+    },
   ];
 
-  let formDialect = $state<FormDialect>("postgresql");
-  let formHost = $state("");
-  let formPort = $state("");
-  let formDatabase = $state("");
-  let formUser = $state("");
-  let formPassword = $state("");
+  let formDialect = $state<string>("postgresql");
+  let formValues = $state<Record<string, string>>({});
+
+  /**
+   * Switch database type, discarding whatever was typed for the previous one.
+   *
+   * Field ids are shared across dialects — "host", "user", "password",
+   * "database" — so without this, picking PostgreSQL, typing its credentials
+   * and then switching to Snowflake leaves them sitting in the new form's
+   * fields, already filled in and easy not to notice. Submitting then sends
+   * one database's password to another's endpoint.
+   */
+  function selectDialect(id: string) {
+    if (id === formDialect) return;
+    formDialect = id;
+    formValues = {};
+    error = "";
+  }
 
   const activeDialect = $derived(
     FORM_DIALECTS.find((d) => d.id === formDialect) ?? FORM_DIALECTS[0]
   );
-  // Blank means "use the default for this dialect" rather than forcing a retype
-  // when the user switches between Postgres and Oracle.
-  const effectivePort = $derived(formPort.trim() || activeDialect.port);
 
   /** Assemble a SQLAlchemy URL from the form fields. */
   function buildUrlFromForm(): string {
-    const d = activeDialect;
-    const user = encodeURIComponent(formUser.trim());
-    // Passwords routinely contain @ : / and #, every one of which changes how
-    // the URL parses if it goes in raw.
-    const pass = formPassword ? `:${encodeURIComponent(formPassword)}` : "";
-    const credentials = user ? `${user}${pass}@` : "";
-    const authority = `${credentials}${formHost.trim()}:${effectivePort}`;
-    const name = formDatabase.trim();
-
-    // Oracle identifies the target with a service_name parameter; the others
-    // take the database as the URL path.
-    return d.id === "oracle"
-      ? `${d.scheme}://${authority}/?service_name=${encodeURIComponent(name)}`
-      : `${d.scheme}://${authority}/${encodeURIComponent(name)}`;
+    return activeDialect.build(formValues);
   }
 
   function formError(): string {
-    if (!formHost.trim()) return "Enter the database host to continue.";
-    if (!formUser.trim()) return "Enter the username to continue.";
-    if (!formDatabase.trim())
-      return `Enter the ${activeDialect.dbLabel.toLowerCase()} to continue.`;
-    if (!/^\d+$/.test(effectivePort)) return "Port must be a number.";
+    for (const f of activeDialect.fields) {
+      const raw = (formValues[f.id] ?? "").trim();
+      if (!raw && !f.optional && !f.fallback)
+        return `Enter the ${f.label.toLowerCase()} to continue.`;
+      const value = raw || (f.fallback ?? "");
+      if (value && f.pattern && !f.pattern.test(value))
+        return f.patternError ?? `${f.label} is not valid.`;
+    }
+    if (activeDialect.id === "bigquery") {
+      const key = (formValues.keyJson ?? "").trim();
+      if (key) {
+        try {
+          JSON.parse(key);
+        } catch {
+          return "That service account key isn't valid JSON — paste the whole file.";
+        }
+      }
+    }
     return "";
   }
   let connecting: string | null = $state(null);
@@ -413,7 +558,8 @@
                   <span class="field-label">Database type</span>
                   <select
                     class="conn-input"
-                    bind:value={formDialect}
+                    value={formDialect}
+                    onchange={(e) => selectDialect(e.currentTarget.value)}
                     data-testid="db-form-dialect"
                   >
                     {#each FORM_DIALECTS as d}
@@ -422,61 +568,42 @@
                   </select>
                 </label>
 
-                <label class="field host-field">
-                  <span class="field-label">Host</span>
-                  <input
-                    class="conn-input"
-                    bind:value={formHost}
-                    onkeydown={(e) => { if (e.key === "Enter") start(); }}
-                    placeholder="db.example.com"
-                    data-testid="db-form-host"
-                  />
-                </label>
-                <label class="field port-field">
-                  <span class="field-label">Port</span>
-                  <input
-                    class="conn-input"
-                    bind:value={formPort}
-                    onkeydown={(e) => { if (e.key === "Enter") start(); }}
-                    placeholder={activeDialect.port}
-                    data-testid="db-form-port"
-                  />
-                </label>
-
-                <label class="field span-2">
-                  <span class="field-label">{activeDialect.dbLabel}</span>
-                  <input
-                    class="conn-input"
-                    bind:value={formDatabase}
-                    onkeydown={(e) => { if (e.key === "Enter") start(); }}
-                    placeholder={activeDialect.dbPlaceholder}
-                    data-testid="db-form-database"
-                  />
-                </label>
-
-                <label class="field">
-                  <span class="field-label">Username</span>
-                  <input
-                    class="conn-input"
-                    bind:value={formUser}
-                    onkeydown={(e) => { if (e.key === "Enter") start(); }}
-                    placeholder="readonly_user"
-                    autocomplete="off"
-                    data-testid="db-form-user"
-                  />
-                </label>
-                <label class="field">
-                  <span class="field-label">Password</span>
-                  <input
-                    class="conn-input"
-                    type="password"
-                    bind:value={formPassword}
-                    onkeydown={(e) => { if (e.key === "Enter") start(); }}
-                    placeholder="••••••••"
-                    autocomplete="off"
-                    data-testid="db-form-password"
-                  />
-                </label>
+                {#each activeDialect.fields as f (activeDialect.id + f.id)}
+                  <label
+                    class="field"
+                    class:host-field={f.id === "host"}
+                    class:port-field={f.id === "port"}
+                    class:span-2={f.id !== "host" && f.id !== "port"}
+                  >
+                    <span class="field-label">
+                      {f.label}{#if f.optional}<span class="field-opt"> (optional)</span>{/if}
+                    </span>
+                    {#if f.type === "textarea"}
+                      <textarea
+                        class="conn-input mono key-input"
+                        bind:value={formValues[f.id]}
+                        placeholder={f.placeholder}
+                        autocomplete="off"
+                        spellcheck="false"
+                        rows="5"
+                        data-testid={`db-form-${f.id}`}
+                      ></textarea>
+                    {:else}
+                      <input
+                        class="conn-input"
+                        type={f.type === "password" ? "password" : "text"}
+                        bind:value={formValues[f.id]}
+                        onkeydown={(e) => { if (e.key === "Enter") start(); }}
+                        placeholder={f.placeholder}
+                        autocomplete="off"
+                        data-testid={`db-form-${f.id}`}
+                      />
+                    {/if}
+                    {#if f.help}
+                      <span class="field-help">{f.help}</span>
+                    {/if}
+                  </label>
+                {/each}
               </div>
             {/if}
 
@@ -838,6 +965,10 @@
   }
   .field { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
   .field-label { font-size: 12px; color: var(--muted); font-weight: 500; }
+  .field-opt { font-weight: 400; opacity: 0.65; }
+  .field-help { font-size: 11.5px; color: var(--muted); opacity: 0.8; line-height: 1.35; }
+  /* A service account key is a multi-line JSON document, not a one-liner. */
+  .key-input { resize: vertical; min-height: 96px; line-height: 1.4; }
   .field { grid-column: span 3; }
   .span-2 { grid-column: 1 / -1; }
   /* Port needs far less room than the host it sits beside. */

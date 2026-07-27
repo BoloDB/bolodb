@@ -2,7 +2,7 @@
 
 **BoloDB lets you talk to your database in plain English.**
 
-It is a multi-tenant web application. You sign up for an account, create or join a workspace, connect a database (PostgreSQL, MySQL, Oracle, SQLite, SQL Server, DuckDB), and then instead of writing SQL you just ask questions the way you'd ask a colleague:
+It is a multi-tenant web application. You sign up for an account, create or join a workspace, connect a database (PostgreSQL, MySQL, Oracle, SQLite, SQL Server, DuckDB, Snowflake, Databricks, BigQuery), and then instead of writing SQL you just ask questions the way you'd ask a colleague:
 
 > "How many orders were completed last month?"
 >

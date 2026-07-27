@@ -1,5 +1,7 @@
 """Tests for the read-only execution guard and helpers in app.database."""
 
+import base64
+
 import pytest
 from backend.app.database import (
     DatabaseManager,
@@ -277,7 +279,7 @@ def test_validate_db_url_applies_ssrf_guard_to_oracle(url):
 
 def test_validate_db_url_rejects_unsupported_scheme():
     with pytest.raises(ValueError, match="Unsupported database scheme"):
-        _validate_db_url("snowflake://user:pass@account/db")
+        _validate_db_url("teradata://user:pass@host/db")
 
 
 @pytest.mark.parametrize(
@@ -404,3 +406,243 @@ def test_credentials_are_redacted_whatever_driver_the_url_names(url):
     msg = _sanitize_db_error(f"could not connect: {url}")
     assert "tiger" not in msg
     assert "scott" not in msg
+
+
+# --- warehouse credentials --------------------------------------------------
+
+_KEY_JSON = '{"type":"service_account","private_key":"-----BEGIN PRIVATE KEY-----AAA"}'
+_KEY_B64 = base64.b64encode(_KEY_JSON.encode()).decode()
+_BQ_URL = f"bigquery://my-project/my_dataset?credentials_base64={_KEY_B64}"
+
+
+def test_a_service_account_key_never_reaches_the_display_url():
+    """A BigQuery URL has no '@' in it, so the password masking never looks at
+    it. Left alone the whole key would be written to display_url in clear and
+    shown back in the UI."""
+    masked = sanitize_url(_BQ_URL)
+    assert _KEY_B64 not in masked
+    assert "credentials_base64=***" in masked
+    # Everything that is not the secret survives — this is still the URL the
+    # user has to recognise in a list of connections.
+    assert masked.startswith("bigquery://my-project/my_dataset?")
+
+
+def test_rotating_a_service_account_key_keeps_the_database_identity():
+    """db_id is hashed from the sanitized URL, so the key is not part of it.
+    Were it otherwise, rotating a key would orphan that database's glossary and
+    verified queries."""
+    rotated = "bigquery://my-project/my_dataset?credentials_base64=QSBORVcgS0VZ"
+    assert db_id_for(_BQ_URL) == db_id_for(rotated)
+    # A different dataset is still a different database.
+    assert db_id_for(_BQ_URL) != db_id_for(
+        f"bigquery://my-project/other?credentials_base64={_KEY_B64}"
+    )
+
+
+def test_a_service_account_key_is_stripped_from_error_messages():
+    msg = _sanitize_db_error(f"403 while connecting with {_BQ_URL}")
+    assert _KEY_B64 not in msg
+    assert "PRIVATE KEY" not in msg
+
+
+def test_a_bare_credential_parameter_is_stripped_from_error_messages():
+    """Some driver errors quote the parameter back on its own, outside a URL."""
+    msg = _sanitize_db_error(f"invalid credentials_base64={_KEY_B64} supplied")
+    assert _KEY_B64 not in msg
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "bigquery://proj/ds?credentials_path=/etc/passwd",
+        "snowflake://u:p@acct/DB?private_key_file=/root/.ssh/id_rsa",
+        "snowflake://u:p@acct/DB?private_key_path=/root/.ssh/id_rsa",
+    ],
+)
+def test_parameters_that_read_server_files_are_refused(url):
+    """The validator can check a host; it cannot check what is behind a path on
+    this server's own disk."""
+    with pytest.raises(ValueError, match="not allowed"):
+        _validate_db_url(url)
+
+
+def test_databricks_without_an_http_path_is_refused_up_front():
+    """Better than whatever the driver says when it has no endpoint to dial."""
+    with pytest.raises(ValueError, match="http_path"):
+        _validate_db_url(
+            "databricks://token:t@dbc-a1.cloud.databricks.com?catalog=main"
+        )
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        _BQ_URL,
+        "bigquery://my-project/my_dataset",
+        "snowflake://user:pass@myorg-acct/ANALYTICS/PUBLIC?warehouse=WH&role=R",
+        "databricks://token:dapi1@dbc-a1.cloud.databricks.com?http_path=/sql/1.0/w/a",
+    ],
+)
+def test_the_documented_warehouse_urls_are_accepted(url):
+    assert _validate_db_url(url) == url
+
+
+def test_a_missing_warehouse_driver_is_reported_by_name(monkeypatch):
+    """These drivers are large enough that a deployment may trim them out; the
+    user should learn which one is absent, not read an import traceback."""
+    from sqlalchemy.exc import NoSuchModuleError
+
+    def boom(*_a, **_kw):
+        raise NoSuchModuleError("Can't load plugin: sqlalchemy.dialects:snowflake")
+
+    monkeypatch.setattr("backend.app.database.create_engine", boom)
+    res = DatabaseManager().connect(TEST_USER, "snowflake://u:p@acct/DB")
+    assert res["ok"] is False
+    assert "snowflake" in res["error"]
+    assert "no driver installed" in res["error"].lower()
+
+
+# --- read-only guard on the warehouse dialects ------------------------------
+
+
+@pytest.mark.parametrize(
+    "dialect,sql",
+    [
+        # Snowflake's own ways of writing, none of which look like INSERT.
+        ("snowflake", "COPY INTO t FROM @my_stage"),
+        ("snowflake", "PUT file:///tmp/x @my_stage"),
+        (
+            "snowflake",
+            "MERGE INTO t USING s ON t.id = s.id WHEN MATCHED THEN UPDATE SET t.a = s.a",
+        ),
+        ("snowflake", "TRUNCATE TABLE t"),
+        ("snowflake", "INSERT INTO t VALUES (1)"),
+        ("databricks", "MERGE INTO t USING s ON t.id = s.id WHEN MATCHED THEN DELETE"),
+        ("databricks", "CREATE TABLE x AS SELECT 1"),
+        ("databricks", "DELETE FROM t"),
+        # BigQuery spells its clobber CREATE OR REPLACE.
+        ("bigquery", "CREATE OR REPLACE TABLE x AS SELECT 1"),
+        ("bigquery", "UPDATE t SET a = 1 WHERE TRUE"),
+        ("bigquery", "DELETE FROM t WHERE TRUE"),
+    ],
+)
+def test_warehouse_writes_are_rejected(db, dialect, sql):
+    db._connections[TEST_USER]["dialect"] = dialect
+    try:
+        assert db._readonly_violation(TEST_USER, sql) is not None
+    finally:
+        db._connections[TEST_USER]["dialect"] = "sqlite"
+
+
+@pytest.mark.parametrize(
+    "dialect,sql",
+    [
+        ("snowflake", "SELECT * FROM t LIMIT 10"),
+        # VARIANT colon paths are Snowflake-only syntax; parsing them as generic
+        # SQL would reject a perfectly ordinary read.
+        ("snowflake", "SELECT col:field FROM t"),
+        ("databricks", "SELECT * FROM main.default.t LIMIT 10"),
+        ("bigquery", "SELECT * FROM `p.d.t` LIMIT 10"),
+        ("bigquery", "SELECT FORMAT_DATE('%Y', d) FROM t"),
+    ],
+)
+def test_warehouse_selects_allowed(db, dialect, sql):
+    db._connections[TEST_USER]["dialect"] = dialect
+    try:
+        assert db._readonly_violation(TEST_USER, sql) is None
+    finally:
+        db._connections[TEST_USER]["dialect"] = "sqlite"
+
+
+@pytest.mark.parametrize(
+    "name",
+    ["credentials_base64", "%63redentials_base64", "credentials%5Fbase64"],
+)
+def test_an_encoded_parameter_name_still_gets_redacted(name):
+    """SQLAlchemy percent-decodes parameter names, so each of these reaches the
+    driver as the same credential. Matching the raw text let the encoded
+    spellings carry a key straight into display_url."""
+    from sqlalchemy.engine import make_url
+
+    url = f"bigquery://my-project/my_dataset?{name}={_KEY_B64}"
+    # The premise, asserted rather than assumed: the driver does see it.
+    assert "credentials_base64" in make_url(url).query
+    assert _KEY_B64 not in sanitize_url(url)
+
+
+def test_a_differently_cased_parameter_name_is_redacted_too():
+    """SQLAlchemy does not case-fold names, so this one is not a credential the
+    driver would read — but redacting it costs nothing and the comparison
+    should not be the thing that decides a key is safe to display."""
+    url = f"bigquery://p/d?CREDENTIALS_BASE64={_KEY_B64}"
+    assert _KEY_B64 not in sanitize_url(url)
+
+
+def test_an_encoded_key_does_not_change_the_database_identity():
+    """The redaction is what keeps the secret out of db_id, so a spelling that
+    slipped past it would also make rotation orphan the workspace's data."""
+    plain = f"bigquery://p/d?credentials_base64={_KEY_B64}"
+    encoded = f"bigquery://p/d?credentials%5Fbase64={_KEY_B64}"
+    assert db_id_for(encoded) == db_id_for(
+        "bigquery://p/d?credentials%5Fbase64=A_DIFFERENT_KEY"
+    )
+    assert db_id_for(plain) == db_id_for("bigquery://p/d?credentials_base64=OTHER")
+
+
+def test_a_multiline_credential_is_redacted_past_the_first_space():
+    """credentials_info is decoded JSON — its value has spaces in it, and the
+    private key sits well past the first one."""
+    blob = '{"type": "service_account", "private_key": "-----BEGIN AAA-----"}'
+    msg = _sanitize_db_error(f"failed: credentials_info={blob} rejected")
+    assert "BEGIN AAA" not in msg
+    assert "service_account" not in msg
+
+
+def test_a_driver_whose_own_dependency_is_broken_is_not_called_missing(monkeypatch):
+    """An installed driver that fails to import something of its own is a
+    different problem from an absent one, and telling that user to install what
+    they already have sends them the wrong way."""
+
+    def boom(*_a, **_kw):
+        raise ImportError("cannot import name 'X' from 'pyarrow.lib'")
+
+    monkeypatch.setattr("backend.app.database.create_engine", boom)
+    res = DatabaseManager().connect(TEST_USER, "snowflake://u:p@acct/DB")
+    assert res["ok"] is False
+    assert "no driver installed" not in res["error"].lower()
+    assert "pyarrow" in res["error"]
+
+
+@pytest.mark.parametrize(
+    "err",
+    [
+        "000630 (57014): Statement reached its statement or warehouse timeout "
+        "of 30 second(s) and was canceled.",
+        "SQL execution canceled",
+    ],
+)
+def test_a_snowflake_timeout_reads_as_a_timeout(db, err):
+    """The server names whichever timeout fired — statement or warehouse — so
+    matching the full sentence missed the real message."""
+    from sqlalchemy.exc import SQLAlchemyError
+
+    db._connections[TEST_USER]["dialect"] = "snowflake"
+    try:
+        with pytest.MonkeyPatch.context() as mp:
+            mp.setattr(
+                db, "_apply_statement_timeout", lambda *_a, **_kw: None, raising=False
+            )
+            engine = db._connections[TEST_USER]["engine"]
+
+            class _Boom:
+                def __enter__(self):
+                    raise SQLAlchemyError(err)
+
+                def __exit__(self, *_a):
+                    return False
+
+            mp.setattr(engine, "connect", lambda *_a, **_kw: _Boom())
+            res = db.execute(TEST_USER, "SELECT 1")
+        assert "took longer than" in res["error"]
+    finally:
+        db._connections[TEST_USER]["dialect"] = "sqlite"

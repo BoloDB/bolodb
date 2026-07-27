@@ -30,6 +30,43 @@ _MSSQL_ROW_COUNTS = (
     "WHERE p.index_id IN (0,1) GROUP BY t.name"
 )
 _ORACLE_ROW_COUNTS = "SELECT table_name, num_rows FROM all_tables WHERE owner = :owner"
+_SNOWFLAKE_ROW_COUNTS = (
+    "SELECT table_name, row_count FROM information_schema.tables "
+    "WHERE table_schema = :owner"
+)
+
+# Query parameters that must never reach a driver, whatever the dialect.
+#
+# Each one either points the driver at something other than the URL's own host,
+# or makes it read a file off the server's disk — neither of which the SSRF
+# guard in ``_validate_db_url`` can inspect, because the value is opaque to it.
+# Global rather than per-dialect on purpose: a parameter that is dangerous on
+# the database that defines it is not made safe by appearing on another.
+FORBIDDEN_PARAMS: dict[str, str] = {
+    # Oracle: a DSN or connect descriptor in place of the URL's host.
+    "dsn": "connect with host, port and service_name instead",
+    # BigQuery and Snowflake: read a key file from the server's filesystem.
+    "credentials_path": "paste the service account key instead of a file path",
+    "private_key_file": "paste the key instead of a file path",
+    "private_key_path": "paste the key instead of a file path",
+    "token_file_path": "paste the token instead of a file path",
+}
+
+# Query parameters whose *value* is a credential. Redacted wherever a URL is
+# shown, stored for display, or hashed — see ``sanitize_url``. Global for the
+# same reason as above: failing to redact is the expensive direction.
+SECRET_PARAMS: frozenset[str] = frozenset(
+    {
+        # BigQuery: the whole service account key, base64-encoded.
+        "credentials_base64",
+        "credentials_info",
+        # Databricks / Snowflake: token and key auth passed as parameters.
+        "access_token",
+        "token",
+        "private_key",
+        "password",
+    }
+)
 
 
 @dataclass(frozen=True)
@@ -58,6 +95,15 @@ class DialectTraits:
         is not the one we ship — see :func:`normalize_scheme`. Where the user
         named a driver, only the dialect in front of it is taken from here.
         None leaves the scheme alone.
+    ``required_params``
+        Query parameters without which the URL cannot identify its target at
+        all, e.g. Databricks' ``http_path``. Missing ones are reported up front
+        rather than as whatever the driver says when it fails to connect.
+    ``target_params``
+        Parameters that can name the target *instead of* the URL's path. At
+        least one, or a path, must be present. Oracle's ``service_name`` is the
+        case: with neither, SQLAlchemy stops building a host:port DSN and hands
+        the host field to the driver as a connect string of its own.
     ``prompt_hint``
         Syntax guidance handed to the LLM. Keep it about *dialect differences*,
         not general SQL advice.
@@ -70,6 +116,8 @@ class DialectTraits:
     row_count_sql: str | None = None
     timeout_style: str | None = None
     drivername: str | None = None
+    required_params: frozenset[str] = frozenset()
+    target_params: frozenset[str] = frozenset()
     prompt_hint: str = ""
 
 
@@ -139,6 +187,7 @@ TRAITS: dict[str, DialectTraits] = {
         # Through SQLAlchemy 2.0 bare "oracle" still means cx_Oracle, which is
         # obsolete and not installed; python-oracledb is what we depend on.
         drivername="oracle+oracledb",
+        target_params=frozenset({"service_name"}),
         prompt_hint=(
             "Row limiting: use FETCH FIRST n ROWS ONLY, never LIMIT. "
             "Dates: TRUNC(SYSDATE), ADD_MONTHS(), date arithmetic in days; "
@@ -146,6 +195,51 @@ TRAITS: dict[str, DialectTraits] = {
             "There is no BOOLEAN column type — expect 0/1 or 'Y'/'N'. "
             "An empty string is NULL. SELECT aliases cannot be referenced in "
             "WHERE or HAVING."
+        ),
+    ),
+    "snowflake": DialectTraits(
+        sqlglot="snowflake",
+        # snowflake-sqlalchemy's denormalize_name is the same rule as Oracle's:
+        # the server stores unquoted names upper-cased and reflection hands
+        # them back lower-cased, so a reflected name used verbatim resolves to
+        # nothing. Verified against snowflake/sqlalchemy/name_utils.py.
+        uppercase_identifiers=True,
+        row_count_sql=_SNOWFLAKE_ROW_COUNTS,
+        timeout_style="snowflake_session",
+        prompt_hint=(
+            "Row limiting: use LIMIT n. "
+            "Dates: DATEADD()/DATEDIFF()/DATE_TRUNC(), CURRENT_DATE(); "
+            "format with TO_CHAR(). String concat is ||; ILIKE is available. "
+            "Unquoted identifiers fold to upper case. Semi-structured columns "
+            "are VARIANT — reach into them with colon paths like col:field."
+        ),
+    ),
+    "databricks": DialectTraits(
+        sqlglot="databricks",
+        quote="`",
+        # No bulk source: Unity Catalog's information_schema.tables carries no
+        # row count, so enrichment falls back to COUNT(*) per table.
+        required_params=frozenset({"http_path"}),
+        prompt_hint=(
+            "Row limiting: use LIMIT n. "
+            "Dates: date_add()/datediff()/date_trunc(), current_date(); "
+            "format with date_format(). String concat is || or concat(). "
+            "Identifiers quote with backticks. Tables are usually addressed "
+            "three-part as catalog.schema.table."
+        ),
+    ),
+    "bigquery": DialectTraits(
+        sqlglot="bigquery",
+        quote="`",
+        # __TABLES__ carries row counts but has to be addressed per dataset,
+        # which this table's single static statement cannot express. COUNT(*)
+        # is metadata-only on BigQuery, so the fallback is cheap anyway.
+        prompt_hint=(
+            "Row limiting: use LIMIT n. "
+            "Dates: DATE_ADD()/DATE_DIFF()/DATE_TRUNC() with named INTERVAL "
+            "parts, CURRENT_DATE(); format with FORMAT_DATE(). String concat "
+            "is CONCAT(). Identifiers quote with backticks and are addressed "
+            "as `project.dataset.table`. Standard SQL only — no ILIKE."
         ),
     ),
 }
