@@ -204,10 +204,13 @@ def normalize_scheme(url: str) -> str:
     answer. Where the user named a driver explicitly that choice is kept: only
     the dead dialect name in front of it is replaced.
 
-    A scheme that already works is left byte-for-byte as typed. The URL is what
-    ``db_id_for`` hashes, so rewriting a working one would orphan that
-    database's saved glossary and verified queries — see
-    ``test_only_unusable_schemes_are_ever_rewritten``, which holds the line.
+    A scheme that already works is left byte-for-byte as typed — a driver the
+    user named, or one SQLAlchemy picks that we actually ship, is not ours to
+    second-guess.
+
+    The result is only ever handed to ``create_engine``. A database's identity
+    stays tied to the URL as it was given, so nothing here can move a live
+    database's ``db_id`` away from its own saved data.
     """
     scheme, sep, rest = url.partition("://")
     if not sep:

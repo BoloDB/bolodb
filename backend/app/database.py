@@ -260,12 +260,17 @@ class DatabaseManager:
         except ValueError as e:
             return {"ok": False, "error": str(e)}
 
-        # Before db_id_for below, so one target hashes to one id however the
-        # user spelled its scheme.
-        url = normalize_scheme(url)
-        dialect = url.split(":")[0].split("+")[0]
+        # A database's identity stays tied to the URL as it was given to us,
+        # never to the normalised form. db_id is persisted — a workspace's
+        # glossary, verified queries and catalog all hang off it — so deriving
+        # it from a rewritten URL would mean a change to normalisation could
+        # move a live database's identity out from under its own saved data.
+        # Normalisation exists only to give SQLAlchemy a scheme it can load.
+        db_id = db_id_for(url)
+        engine_url = normalize_scheme(url)
+        dialect = engine_url.split(":")[0].split("+")[0]
         try:
-            engine = create_engine(url)
+            engine = create_engine(engine_url)
             self._install_call_timeout(engine, dialect)
             with engine.connect() as c:
                 # select(1) rather than text("SELECT 1"): SQLAlchemy compiles it
@@ -273,11 +278,10 @@ class DatabaseManager:
                 # requires while every other dialect is unchanged.
                 c.execute(select(1))
             tables = len(inspect(engine).get_table_names())
-            db_id = db_id_for(url)
             old_connection = self._connections.get((workspace_id, db_id))
             self._connections[(workspace_id, db_id)] = {
                 "engine": engine,
-                "url": url,
+                "url": engine_url,
                 "db_id": db_id,
                 "dialect": dialect,
                 "_schema_cache": None,

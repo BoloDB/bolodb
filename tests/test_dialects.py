@@ -214,8 +214,8 @@ def test_unusable_schemes_are_pointed_at_the_driver_we_ship(url, expected):
     ],
 )
 def test_a_usable_or_explicit_scheme_is_left_exactly_as_typed(url):
-    """db_id_for hashes the URL, so rewriting a working one would orphan that
-    database's saved glossary and verified queries."""
+    """A driver the user named, or one SQLAlchemy picks that we actually ship,
+    is not ours to second-guess."""
     assert normalize_scheme(url) == url
 
 
@@ -226,15 +226,16 @@ def test_a_string_that_is_not_a_url_is_left_alone():
 
 @pytest.mark.parametrize("dialect", sorted(TRAITS))
 def test_only_unusable_schemes_are_ever_rewritten(dialect):
-    """The safety property behind normalize_scheme, pinned.
+    """Substitution is for schemes that cannot work, not for second-guessing.
 
-    Rewriting changes the URL, and db_id_for hashes the URL, so a database's
-    persisted glossary, verified queries and catalog all hang off the result.
-    That is only safe because none of the rewritten schemes can connect in the
-    first place — they raise on import, so no connection was ever established
-    under one, and no id exists to orphan. If a driver that makes one of them
-    work ever lands in requirements.txt, this fails, and the entry has to go
-    before the rewrite starts moving live databases' identities.
+    Overriding the driver SQLAlchemy would have picked is only defensible where
+    that driver is absent and the URL could not have connected at all. If one
+    that makes a substituted scheme work ever lands in requirements.txt, this
+    fails, and the entry has to go rather than quietly route a user's
+    connection through a driver they did not ask for.
+
+    (Identity does not depend on this — see
+    test_db_id_comes_from_the_url_as_given_not_the_normalised_one.)
     """
     if TRAITS[dialect].drivername is None:
         return
