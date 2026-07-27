@@ -14,6 +14,7 @@ import logging
 import os
 import sqlite3
 import tempfile
+from datetime import datetime, timedelta
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
@@ -209,7 +210,7 @@ def _build(path: Path) -> None:
         conn = sqlite3.connect(str(tmp))
         try:
             conn.executescript(SCHEMA)
-            for table, columns, rows in _read_dump():
+            for table, columns, rows in _shift_to_present(_read_dump()):
                 placeholders = ", ".join("?" * len(columns))
                 quoted = ", ".join(f'"{c}"' for c in columns)
                 conn.executemany(
@@ -223,6 +224,67 @@ def _build(path: Path) -> None:
     except Exception:
         tmp.unlink(missing_ok=True)
         raise
+
+
+def _parse_timestamp(value):
+    """Parse a `YYYY-MM-DD HH:MM:SS` literal, or return None.
+
+    Date-only values like `dateofbirth` are shorter than 19 characters and fall
+    out here, which is what keeps them from being shifted.
+    """
+    if not isinstance(value, str) or len(value) < 19:
+        return None
+    if value[4] != "-" or value[7] != "-" or value[10] != " ":
+        return None
+    try:
+        return datetime.strptime(value[:19], "%Y-%m-%d %H:%M:%S")
+    except ValueError:
+        return None
+
+
+def _shift_to_present(blocks):
+    """Slide the whole history forward so the newest row lands on today.
+
+    `build_sample_dump.py` already does this once, against the day the dump was
+    generated — but the dump is vendored and then used for months, so those dates
+    go stale the moment it is committed. Redoing the shift at load time keeps
+    every "last month" question answerable no matter how old the dump is, and
+    preserves the intervals between rows.
+    """
+    blocks = list(blocks)
+
+    latest = None
+    for _table, _columns, rows in blocks:
+        for row in rows:
+            for value in row:
+                stamp = _parse_timestamp(value)
+                if stamp and (latest is None or stamp > latest):
+                    latest = stamp
+
+    if latest is None:
+        return blocks
+
+    shift = datetime.now().replace(microsecond=0) - latest
+    if shift == timedelta(0):
+        return blocks
+
+    shifted = []
+    for table, columns, rows in blocks:
+        shifted.append(
+            (
+                table,
+                columns,
+                [tuple(_shift_value(v, shift) for v in row) for row in rows],
+            )
+        )
+    return shifted
+
+
+def _shift_value(value, shift: timedelta):
+    stamp = _parse_timestamp(value)
+    if stamp is None:
+        return value
+    return (stamp + shift).strftime("%Y-%m-%d %H:%M:%S")
 
 
 def _remove_stale_samples(current: Path) -> None:
