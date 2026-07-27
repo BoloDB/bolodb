@@ -3,6 +3,7 @@
   const dbs = [
     { name: "PostgreSQL", color: "#336791" },
     { name: "MySQL", color: "#4479A1" },
+    { name: "Oracle", color: "#C74634" },
     { name: "SQL Server", color: "#CC2927" },
     { name: "SQLite", color: "#003B57" },
   ];
@@ -15,6 +16,10 @@
     MySQL: [
       { label: "URL", code: "mysql://user:pass@host:3306/dbname" },
       { label: "Params", code: "host=localhost port=3306 dbname=mydb user=myuser password=mypass" },
+    ],
+    Oracle: [
+      { label: "Service name", code: "oracle+oracledb://user:pass@host:1521/?service_name=ORCLPDB1" },
+      { label: "SID", code: "oracle+oracledb://user:pass@host:1521/XE" },
     ],
     "SQL Server": [
       { label: "URL", code: "sqlserver://host:1433;database=dbname;user=myuser;password=mypass;" },

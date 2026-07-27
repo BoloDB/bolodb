@@ -14,7 +14,9 @@
 
   const DIALECT_LABELS: Record<string, string> = {
     postgresql: "PostgreSQL",
+    postgres: "PostgreSQL",
     mysql: "MySQL",
+    oracle: "Oracle",
     sqlite: "SQLite",
     mssql: "SQL Server",
     duckdb: "DuckDB",
@@ -23,6 +25,66 @@
   let choice = $state<"own" | "sample">("own");
   let dbUrl = $state("");
   let dbAlias = $state("");
+
+  // Not everyone has a connection string to hand — DBAs hand out host, port and
+  // credentials separately far more often. The form assembles the same URL the
+  // paste box takes, so both routes hit /api/connect identically.
+  let entryMode = $state<"url" | "form">("url");
+
+  type FormDialect = "postgresql" | "mysql" | "oracle";
+  const FORM_DIALECTS: {
+    id: FormDialect;
+    label: string;
+    scheme: string;
+    port: string;
+    dbLabel: string;
+    dbPlaceholder: string;
+  }[] = [
+    { id: "postgresql", label: "PostgreSQL", scheme: "postgresql", port: "5432", dbLabel: "Database", dbPlaceholder: "dbname" },
+    { id: "mysql", label: "MySQL", scheme: "mysql", port: "3306", dbLabel: "Database", dbPlaceholder: "dbname" },
+    { id: "oracle", label: "Oracle", scheme: "oracle+oracledb", port: "1521", dbLabel: "Service name", dbPlaceholder: "ORCLPDB1" },
+  ];
+
+  let formDialect = $state<FormDialect>("postgresql");
+  let formHost = $state("");
+  let formPort = $state("");
+  let formDatabase = $state("");
+  let formUser = $state("");
+  let formPassword = $state("");
+
+  const activeDialect = $derived(
+    FORM_DIALECTS.find((d) => d.id === formDialect) ?? FORM_DIALECTS[0]
+  );
+  // Blank means "use the default for this dialect" rather than forcing a retype
+  // when the user switches between Postgres and Oracle.
+  const effectivePort = $derived(formPort.trim() || activeDialect.port);
+
+  /** Assemble a SQLAlchemy URL from the form fields. */
+  function buildUrlFromForm(): string {
+    const d = activeDialect;
+    const user = encodeURIComponent(formUser.trim());
+    // Passwords routinely contain @ : / and #, every one of which changes how
+    // the URL parses if it goes in raw.
+    const pass = formPassword ? `:${encodeURIComponent(formPassword)}` : "";
+    const credentials = user ? `${user}${pass}@` : "";
+    const authority = `${credentials}${formHost.trim()}:${effectivePort}`;
+    const name = formDatabase.trim();
+
+    // Oracle identifies the target with a service_name parameter; the others
+    // take the database as the URL path.
+    return d.id === "oracle"
+      ? `${d.scheme}://${authority}/?service_name=${encodeURIComponent(name)}`
+      : `${d.scheme}://${authority}/${encodeURIComponent(name)}`;
+  }
+
+  function formError(): string {
+    if (!formHost.trim()) return "Enter the database host to continue.";
+    if (!formUser.trim()) return "Enter the username to continue.";
+    if (!formDatabase.trim())
+      return `Enter the ${activeDialect.dbLabel.toLowerCase()} to continue.`;
+    if (!/^\d+$/.test(effectivePort)) return "Port must be a number.";
+    return "";
+  }
   let connecting: string | null = $state(null);
   let error = $state("");
   // The workspace's saved databases come from appState, which reloads them
@@ -78,9 +140,22 @@
   }
 
   async function go(kind: string) {
-    if (kind === "url" && !dbUrl.trim()) {
-      error = "Paste a read-only connection string to continue.";
-      return;
+    let url = "";
+    if (kind === "url") {
+      if (entryMode === "form") {
+        const problem = formError();
+        if (problem) {
+          error = problem;
+          return;
+        }
+        url = buildUrlFromForm();
+      } else {
+        url = dbUrl.trim();
+        if (!url) {
+          error = "Paste a read-only connection string to continue.";
+          return;
+        }
+      }
     }
     connecting = kind;
     error = "";
@@ -94,11 +169,12 @@
           table_count: res.tables,
         });
       } else {
-        res = await apiCall("/api/connect", { db_url: dbUrl.trim(), alias_name: dbAlias.trim() || undefined });
+        res = await apiCall("/api/connect", { db_url: url, alias_name: dbAlias.trim() || undefined });
         posthog.capture("database_connected", {
           is_sample: false,
           dialect: res.dialect,
           table_count: res.tables,
+          entry_mode: entryMode,
         });
       }
       onConnect(kind === "sample", res);
@@ -283,7 +359,7 @@
             data-testid="connect-own-card"
           >
             <span class="c-title">Connect my database</span>
-            <span class="c-desc">PostgreSQL, MySQL or SQL Server. One connection string, read-only.</span>
+            <span class="c-desc">PostgreSQL, MySQL or Oracle. One connection string, read-only.</span>
             <span class="c-tag accent">RECOMMENDED · ~1 MINUTE</span>
           </button>
           <button
@@ -300,13 +376,110 @@
 
         {#if choice === "own"}
           <div style="width: 100%; display: flex; flex-direction: column; gap: 8px;">
-            <input
-              class="conn-input mono"
-              bind:value={dbUrl}
-              onkeydown={(e) => { if (e.key === "Enter") start(); }}
-              placeholder="postgresql://readonly_user:pass@host:5432/dbname"
-              data-testid="db-url-input"
-            />
+            <div class="mode-tabs">
+              <button
+                class="mode-tab"
+                class:on={entryMode === "url"}
+                type="button"
+                aria-pressed={entryMode === "url"}
+                onclick={() => { entryMode = "url"; error = ""; }}
+                data-testid="entry-mode-url"
+              >
+                Connection string
+              </button>
+              <button
+                class="mode-tab"
+                class:on={entryMode === "form"}
+                type="button"
+                aria-pressed={entryMode === "form"}
+                onclick={() => { entryMode = "form"; error = ""; }}
+                data-testid="entry-mode-form"
+              >
+                Enter details
+              </button>
+            </div>
+
+            {#if entryMode === "url"}
+              <input
+                class="conn-input mono"
+                bind:value={dbUrl}
+                onkeydown={(e) => { if (e.key === "Enter") start(); }}
+                placeholder="postgresql://readonly_user:pass@host:5432/dbname"
+                data-testid="db-url-input"
+              />
+            {:else}
+              <div class="form-grid">
+                <label class="field span-2">
+                  <span class="field-label">Database type</span>
+                  <select
+                    class="conn-input"
+                    bind:value={formDialect}
+                    data-testid="db-form-dialect"
+                  >
+                    {#each FORM_DIALECTS as d}
+                      <option value={d.id}>{d.label}</option>
+                    {/each}
+                  </select>
+                </label>
+
+                <label class="field host-field">
+                  <span class="field-label">Host</span>
+                  <input
+                    class="conn-input"
+                    bind:value={formHost}
+                    onkeydown={(e) => { if (e.key === "Enter") start(); }}
+                    placeholder="db.example.com"
+                    data-testid="db-form-host"
+                  />
+                </label>
+                <label class="field port-field">
+                  <span class="field-label">Port</span>
+                  <input
+                    class="conn-input"
+                    bind:value={formPort}
+                    onkeydown={(e) => { if (e.key === "Enter") start(); }}
+                    placeholder={activeDialect.port}
+                    data-testid="db-form-port"
+                  />
+                </label>
+
+                <label class="field span-2">
+                  <span class="field-label">{activeDialect.dbLabel}</span>
+                  <input
+                    class="conn-input"
+                    bind:value={formDatabase}
+                    onkeydown={(e) => { if (e.key === "Enter") start(); }}
+                    placeholder={activeDialect.dbPlaceholder}
+                    data-testid="db-form-database"
+                  />
+                </label>
+
+                <label class="field">
+                  <span class="field-label">Username</span>
+                  <input
+                    class="conn-input"
+                    bind:value={formUser}
+                    onkeydown={(e) => { if (e.key === "Enter") start(); }}
+                    placeholder="readonly_user"
+                    autocomplete="off"
+                    data-testid="db-form-user"
+                  />
+                </label>
+                <label class="field">
+                  <span class="field-label">Password</span>
+                  <input
+                    class="conn-input"
+                    type="password"
+                    bind:value={formPassword}
+                    onkeydown={(e) => { if (e.key === "Enter") start(); }}
+                    placeholder="••••••••"
+                    autocomplete="off"
+                    data-testid="db-form-password"
+                  />
+                </label>
+              </div>
+            {/if}
+
             <input
               class="conn-input"
               bind:value={dbAlias}
@@ -623,6 +796,56 @@
   }
   .conn-input.mono { font-family: var(--font-mono); font-size: 13.5px; }
   .conn-input:focus { border-color: var(--brand); }
+  select.conn-input {
+    appearance: none;
+    cursor: pointer;
+    /* appearance:none drops the native arrow, so draw one back in. */
+    background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23888' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 14px center;
+    padding-right: 38px;
+  }
+
+  .mode-tabs {
+    display: flex;
+    gap: 4px;
+    background: var(--card);
+    border: 1px solid var(--border-2);
+    border-radius: 10px;
+    padding: 4px;
+    box-sizing: border-box;
+  }
+  .mode-tab {
+    flex: 1;
+    padding: 8px 12px;
+    border: none;
+    border-radius: 7px;
+    background: transparent;
+    color: var(--muted);
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s;
+  }
+  .mode-tab:hover { color: var(--ink); }
+  .mode-tab.on { background: var(--card-hover); color: var(--ink); }
+
+  /* Six columns so host/port can split 4:2 while username/password split 3:3. */
+  .form-grid {
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
+    gap: 8px;
+  }
+  .field { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+  .field-label { font-size: 12px; color: var(--muted); font-weight: 500; }
+  .field { grid-column: span 3; }
+  .span-2 { grid-column: 1 / -1; }
+  /* Port needs far less room than the host it sits beside. */
+  .host-field { grid-column: span 4; }
+  .port-field { grid-column: span 2; }
+  @media (max-width: 479px) {
+    .field, .span-2, .host-field, .port-field { grid-column: 1 / -1; }
+  }
   .sample-info {
     display: flex;
     align-items: center;

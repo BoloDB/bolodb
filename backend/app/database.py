@@ -6,9 +6,20 @@ import re
 import logging
 import sqlglot
 import sqlglot.expressions as exp
-from sqlalchemy import create_engine, inspect, text
+from sqlalchemy import create_engine, event, inspect, select, text
+from sqlalchemy.engine import make_url
 from sqlalchemy.exc import SQLAlchemyError
 from fastapi.exceptions import HTTPException
+
+from backend.app.dialects import (
+    allowed_schemes,
+    denormalize_ident,
+    glot_dialect,
+    limit_clause,
+    normalize_ident,
+    quote_ident,
+    traits_for,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -20,9 +31,6 @@ WRITE_KEYWORDS = re.compile(
     r"ATTACH|DETACH|EXEC|EXECUTE|MERGE|PRAGMA|VACUUM|CALL|INTO)\b",
     re.IGNORECASE,
 )
-
-# sqlalchemy dialect name -> sqlglot dialect name (only where they differ)
-_GLOT_DIALECT = {"postgresql": "postgres", "mssql": "tsql"}
 
 # AST node types that mutate data/schema and must never run in read-only mode
 _MODIFYING_NODES = (
@@ -61,11 +69,16 @@ def _sanitize_db_error(err_msg: str) -> str:
     msg = re.sub(r"postgres://\S+", "postgres://***", msg)
     msg = re.sub(r"mysql://\S+", "mysql://***", msg)
     msg = re.sub(r"mssql://\S+", "mssql://***", msg)
+    msg = re.sub(r"oracle(?:\+\w+)?://\S+", "oracle://***", msg)
     msg = re.sub(r"sqlite:///?\S+", "sqlite://***", msg)
+    # Oracle DSNs also appear bare (host:port/service_name) in driver errors.
+    msg = re.sub(
+        r"service_name\s*=\s*\S+", "service_name=***", msg, flags=re.IGNORECASE
+    )
+    msg = re.sub(r"\bsid\s*=\s*\S+", "sid=***", msg, flags=re.IGNORECASE)
     return msg
 
 
-_ALLOWED_SCHEMES = {"postgresql", "postgres", "mysql", "mssql", "sqlite"}
 _BLOCKED_HOSTS = {
     "localhost",
     "127.0.0.1",
@@ -77,41 +90,91 @@ _BLOCKED_HOSTS = {
 }
 
 
+# A host we are willing to check. Anything a hostname, an IPv4 literal or a
+# bracket-less IPv6 literal can contain — and nothing that could smuggle a
+# target past the checks below, such as the "(" "=" ")" of an Oracle
+# DESCRIPTION connect descriptor.
+_PLAIN_HOST = re.compile(r"^[A-Za-z0-9._:%\-]+$")
+
+
 def _validate_db_url(url: str) -> str:
     """Validate a database URL to prevent SSRF attacks.
 
     Checks:
-    1. Scheme must be an allowed SQL dialect (postgresql, mysql, mssql, sqlite)
-    2. Hostname must not be a blocked internal/metadata address
-    3. No file:// or other non-SQL schemes
+    1. Scheme must be a dialect we support (see backend/app/dialects.py)
+    2. The URL must name its target as a plain host, not smuggle it past the
+       host field the way Oracle's DSN forms can
+    3. Hostname must not be a blocked internal/metadata address
+    4. No file:// or other non-SQL schemes
+
+    The URL is parsed with SQLAlchemy's own ``make_url``, so what gets checked
+    is what ``create_engine`` will actually dial — ``urlparse`` reports no
+    hostname at all for the Oracle DSN forms, which let a target through.
 
     Returns the URL if valid, raises ValueError otherwise.
     """
-    from urllib.parse import urlparse
+    try:
+        parsed = make_url(url)
+    except Exception:
+        raise ValueError("Could not parse the database URL")
 
-    parsed = urlparse(url)
-    scheme = (parsed.scheme or "").split("+")[0].lower()
+    # Strip any driver suffix: "oracle+oracledb" -> "oracle".
+    scheme = (parsed.drivername or "").split("+")[0].lower()
 
-    if scheme not in _ALLOWED_SCHEMES:
+    allowed = allowed_schemes()
+    if scheme not in allowed:
         raise ValueError(
             f"Unsupported database scheme '{scheme}'. "
-            f"Allowed: {', '.join(sorted(_ALLOWED_SCHEMES))}"
+            f"Allowed: {', '.join(sorted(allowed))}"
         )
 
     if scheme != "sqlite":
-        hostname = (parsed.hostname or "").lower()
+        # Oracle accepts the connect target in places that are not the host
+        # field: a "dsn" query parameter, and a bare TNS name or DESCRIPTION
+        # descriptor in place of a hostname. Both are handed straight to the
+        # driver, so neither can be host-checked — refuse them and require
+        # host/port/service_name, which is the only form we document.
+        if scheme == "oracle":
+            if "dsn" in {k.lower() for k in parsed.query}:
+                raise ValueError(
+                    "The 'dsn' parameter is not allowed; connect with "
+                    "host, port and service_name instead"
+                )
+            # With neither, SQLAlchemy stops building a host:port/service DSN
+            # and passes the host field through as a connect string of its own.
+            if not parsed.database and not parsed.query.get("service_name"):
+                raise ValueError(
+                    "An Oracle URL needs a service_name parameter or a SID "
+                    "path, e.g. oracle+oracledb://user:pass@host:1521/"
+                    "?service_name=ORCLPDB1"
+                )
+
+        hostname = (parsed.host or "").lower()
+        if not hostname:
+            raise ValueError("A hostname is required for this database")
+        if not _PLAIN_HOST.match(hostname):
+            # Also where an unescaped credential lands: SQLAlchemy splits on the
+            # first "@", so a raw "@" in a password pushes the rest of it into
+            # the host. Say so — the alternative is a baffling DNS failure.
+            raise ValueError(
+                "The host must be a plain hostname or IP address. If the "
+                "password contains @ : / or #, percent-encode it. Connect "
+                "descriptors and TNS aliases are not supported."
+            )
         if hostname in _BLOCKED_HOSTS:
             raise ValueError(f"Connection to '{hostname}' is not allowed")
         if hostname.startswith("169.254.") or hostname.startswith("100.100."):
             raise ValueError("Connection to metadata endpoints is not allowed")
         try:
+            # Not an IP literal at all — a name, which we cannot resolve here.
             ip = ipaddress.ip_address(hostname)
-            if ip.is_loopback:
-                raise ValueError(
-                    f"Connection to loopback address '{hostname}' is not allowed"
-                )
         except ValueError:
-            pass
+            ip = None
+        # Raised outside the try: inside it, the except would swallow it.
+        if ip is not None and ip.is_loopback:
+            raise ValueError(
+                f"Connection to loopback address '{hostname}' is not allowed"
+            )
 
     return url
 
@@ -189,10 +252,15 @@ class DatabaseManager:
         except ValueError as e:
             return {"ok": False, "error": str(e)}
 
+        dialect = url.split(":")[0].split("+")[0]
         try:
             engine = create_engine(url)
+            self._install_call_timeout(engine, dialect)
             with engine.connect() as c:
-                c.execute(text("SELECT 1"))
+                # select(1) rather than text("SELECT 1"): SQLAlchemy compiles it
+                # per dialect, so Oracle gets the "SELECT 1 FROM DUAL" it
+                # requires while every other dialect is unchanged.
+                c.execute(select(1))
             tables = len(inspect(engine).get_table_names())
             db_id = db_id_for(url)
             old_connection = self._connections.get((workspace_id, db_id))
@@ -200,7 +268,7 @@ class DatabaseManager:
                 "engine": engine,
                 "url": url,
                 "db_id": db_id,
-                "dialect": url.split(":")[0].split("+")[0],
+                "dialect": dialect,
                 "_schema_cache": None,
                 "_table_count": tables,
             }
@@ -216,12 +284,32 @@ class DatabaseManager:
         except Exception as e:
             return {"ok": False, "error": _sanitize_db_error(e)}
 
-    def _q(self, workspace_id, n):
-        c = self._get(workspace_id)
-        n = str(n)
-        if c["dialect"] == "mysql":
-            return f"`{n.replace('`', '``')}`"
-        return f'"{n.replace(chr(34), chr(34) * 2)}"'
+    def _install_call_timeout(self, engine, dialect):
+        """Bound statements on dialects with no session-level timeout setting.
+
+        Oracle has no equivalent of ``SET statement_timeout``; the driver-level
+        ``call_timeout`` is the supported way to cancel a round trip that runs
+        too long, and it must be set on the DBAPI connection as it is created.
+        """
+        if traits_for(dialect).timeout_style != "call_timeout":
+            return
+        if not self.statement_timeout:
+            return
+        ms = int(self.statement_timeout * 1000)
+
+        @event.listens_for(engine, "connect")
+        def _set_call_timeout(dbapi_conn, _record):  # pragma: no cover - driver hook
+            try:
+                dbapi_conn.call_timeout = ms
+            except Exception as e:
+                logger.warning("Could not set call_timeout for %s: %s", dialect, e)
+
+    def _q(self, workspace_id, n, db_id=None):
+        # db_id matters: a workspace can hold connections to different engines,
+        # and quoting a name with the first connection's rules would emit
+        # backticks at Oracle.
+        c = self._get(workspace_id, db_id=db_id)
+        return quote_ident(c["dialect"], n)
 
     def get_schema(self, workspace_id, db_id=None, refresh=False):
         """Introspect the connected database into the schema dict.
@@ -271,36 +359,34 @@ class DatabaseManager:
         with c["engine"].connect() as conn:
             # Enrichment (COUNT(*), DISTINCT) can be slow on large tables; bound it.
             self._apply_statement_timeout(conn, c["dialect"])
-            # Fetch approximate row counts from DB stats tables in one shot (postgres/mysql/mssql)
+            # Fetch approximate row counts from the server's stats tables in one
+            # shot, where the dialect has such a table (see dialects.py).
+            # Anything else falls back to per-table COUNT(*) below.
             bulk_counts = {}
-            try:
-                if c["dialect"] == "postgresql":
-                    r = conn.execute(
-                        text(
-                            "SELECT relname, reltuples FROM pg_class WHERE relkind IN ('r','p')"
-                        )
+            row_count_sql = traits_for(c["dialect"]).row_count_sql
+            if row_count_sql:
+                try:
+                    stmt = text(row_count_sql)
+                    # The catalog stores identifiers in the server's own casing,
+                    # which is not what reflection handed us: bind the owner in
+                    # that casing going in, and fold the table names it returns
+                    # back on the way out, or nothing matches ``table_names``.
+                    params = (
+                        {"owner": denormalize_ident(c["dialect"], schema_name)}
+                        if ":owner" in row_count_sql
+                        else {}
                     )
-                    bulk_counts = {row[0]: max(0, int(row[1])) for row in r}
-                elif c["dialect"] == "mysql":
-                    r = conn.execute(
-                        text(
-                            "SELECT table_name, table_rows FROM information_schema.tables WHERE table_schema = DATABASE()"
-                        )
-                    )
+                    r = conn.execute(stmt, params)
                     bulk_counts = {
-                        row[0]: int(row[1]) if row[1] is not None else 0 for row in r
-                    }
-                elif c["dialect"] == "mssql":
-                    r = conn.execute(
-                        text(
-                            "SELECT t.name, SUM(p.rows) FROM sys.tables t JOIN sys.partitions p ON t.object_id=p.object_id WHERE p.index_id IN (0,1) GROUP BY t.name"
+                        normalize_ident(c["dialect"], row[0]): (
+                            max(0, int(row[1])) if row[1] is not None else 0
                         )
-                    )
-                    bulk_counts = {
-                        row[0]: int(row[1]) if row[1] is not None else 0 for row in r
+                        for row in r
                     }
-            except Exception:
-                pass
+                except Exception as e:
+                    logger.warning(
+                        "Bulk row counts unavailable for %s: %s", c["dialect"], e
+                    )
 
             # Determine which tables get the expensive enrichment queries: all of
             # them when the database is small; the biggest ones by row count
@@ -380,7 +466,8 @@ class DatabaseManager:
                 try:
                     res = conn.execute(
                         text(
-                            f"SELECT * FROM {self._q(workspace_id, tbl)} LIMIT {self.sample_rows}"
+                            f"SELECT * FROM {self._q(workspace_id, tbl, db_id)} "
+                            f"{limit_clause(c['dialect'], self.sample_rows)}"
                         )
                     )
                     names = list(res.keys())
@@ -397,7 +484,10 @@ class DatabaseManager:
                 if rc is None:
                     try:
                         rc = conn.execute(
-                            text(f"SELECT COUNT(*) FROM {self._q(workspace_id, tbl)}")
+                            text(
+                                "SELECT COUNT(*) FROM "
+                                f"{self._q(workspace_id, tbl, db_id)}"
+                            )
                         ).scalar()
                     except Exception as e:
                         logger.warning("Error fetching row count for %s: %s", tbl, e)
@@ -415,7 +505,10 @@ class DatabaseManager:
                             try:
                                 dv = conn.execute(
                                     text(
-                                        f"SELECT DISTINCT {self._q(workspace_id, col['name'])} FROM {self._q(workspace_id, tbl)} LIMIT 12"
+                                        "SELECT DISTINCT "
+                                        f"{self._q(workspace_id, col['name'], db_id)} "
+                                        f"FROM {self._q(workspace_id, tbl, db_id)} "
+                                        f"{limit_clause(c['dialect'], 12)}"
                                     )
                                 ).fetchall()
                                 vals = [row[0] for row in dv if row[0] is not None]
@@ -479,9 +572,8 @@ class DatabaseManager:
         if not cleaned:
             return "Empty statement."
         c = self._get(workspace_id, db_id)
-        glot_dialect = _GLOT_DIALECT.get(c["dialect"], c["dialect"])
         try:
-            stmts = sqlglot.parse(cleaned, dialect=glot_dialect)
+            stmts = sqlglot.parse(cleaned, dialect=glot_dialect(c["dialect"]))
         except Exception:
             # Fallback: couldn't build an AST — apply the conservative regex guard.
             first = cleaned.split()[0].upper() if cleaned else ""
@@ -521,17 +613,20 @@ class DatabaseManager:
         Postgres and MySQL both support a session-level statement timeout the
         server enforces, which is the only reliable way to stop a runaway query
         (a client-side cap can't cancel work already running on the server).
-        Dialects without one (sqlite, mssql) are left unbounded here — the row
-        fetch cap is the remaining backstop. Failures are swallowed so an
-        unsupported SET never blocks the actual query.
+        Oracle has no session equivalent, so it is bounded instead by the
+        driver's ``call_timeout``, set once per connection in
+        ``_install_call_timeout``. Dialects with neither (sqlite, mssql) are left
+        unbounded here — the row fetch cap is the remaining backstop. Failures
+        are swallowed so an unsupported SET never blocks the actual query.
         """
         if not self.statement_timeout:
             return
         ms = int(self.statement_timeout * 1000)
+        style = traits_for(dialect).timeout_style
         try:
-            if dialect == "postgresql":
+            if style == "statement_timeout":
                 conn.execute(text(f"SET statement_timeout = {ms}"))
-            elif dialect == "mysql":
+            elif style == "max_execution_time":
                 # Applies to read-only SELECTs, which is all we run.
                 conn.execute(text(f"SET SESSION MAX_EXECUTION_TIME = {ms}"))
         except SQLAlchemyError as e:
@@ -566,7 +661,13 @@ class DatabaseManager:
                 }
         except SQLAlchemyError as e:
             low = str(e).lower()
-            if "statement timeout" in low or "maximum statement execution time" in low:
+            if (
+                "statement timeout" in low
+                or "maximum statement execution time" in low
+                # python-oracledb raises DPY-4011 when call_timeout fires.
+                or "dpy-4011" in low
+                or "call timeout" in low
+            ):
                 return {
                     "error": (
                         f"The query took longer than {self.statement_timeout}s and was "

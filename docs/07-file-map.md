@@ -22,6 +22,7 @@ Use this as an index: find the thing you care about, open the file next to it.
 | `backend/app/controllers/query.py` | **`run_query()`** — orchestrates the whole pipeline: knowledge lookup → schema linking → generate/validate/execute/repair → confidence scoring → chart inference → logging. → [chapter 2](02-how-a-question-becomes-an-answer.md) |
 | `backend/app/semantic.py` | Semantic catalog helpers: `suggest_from_schema()` derives joins and value maps from the schema, `merge_catalog_suggestions()` combines them with LLM enrichment, `filter_catalog()` scopes entries to linked tables. → [chapter 12](12-semantic-layer.md) |
 | `backend/app/database.py` | `DatabaseManager` — connects to *your* database (SQLAlchemy), introspects schema (tables, columns, PKs, FKs, sample rows, row counts, distinct values), read-only guard via AST parsing, SSRF validation, statement timeout. Keyed per workspace+db_id. |
+| `backend/app/dialects.py` | Per-dialect traits table — the single source of truth for which databases are connectable, their sqlglot name, row-limiting syntax (`LIMIT` vs Oracle's `FETCH FIRST`), identifier quoting and casing, bulk row-count SQL, statement-timeout mechanism, and LLM syntax hint. Add a database by adding one entry here. |
 | `backend/app/config.py` | In-memory only. API key read from `OPENROUTER_API_KEY` env var. Activity log retention settings also live here. |
 | `backend/app/utils.py` | `_tokens()` — the cached word tokenizer used by schema linking and similarity scoring. |
 
@@ -176,6 +177,7 @@ The repository includes a 37-file backend unit and integration test suite:
 | `tests/test_connection_rehydration.py` | Rehydration of saved connection parameters into live database engines. |
 | `tests/test_database.py` | `DatabaseManager`: connection pooling, schema introspection, SSRF validation. |
 | `tests/test_database_controller.py` | Database controller routes: connect, disconnect, sample database. |
+| `tests/test_dialects.py` | Per-dialect traits: row-limiting syntax, identifier quoting/casing, sqlglot dialect names, prompt-hint completeness. |
 | `tests/test_dependencies.py` | FastAPI dependency injection, auth validation, and header scoping. |
 | `tests/test_email_verification.py` | Email verification token generation, verification endpoints, and password resets. |
 | `tests/test_history.py` | Query history endpoints and CRUD persistence per user/workspace/db. |

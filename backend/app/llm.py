@@ -11,6 +11,8 @@ from abc import ABC, abstractmethod
 
 import openai
 
+from backend.app.dialects import prompt_hint
+
 log = logging.getLogger(__name__)
 
 MODEL = "deepseek/deepseek-v4-flash"
@@ -432,15 +434,6 @@ class ProviderManager:
         self._provider = None
 
 
-_DIALECT_HINTS = {
-    "sqlite": "Dates: use date()/strftime(); string concat is ||; no ILIKE (use LIKE, it is case-insensitive for ASCII).",
-    "postgresql": "Dates: use date_trunc()/interval arithmetic; ILIKE is available; quote mixed-case identifiers.",
-    "mysql": "Dates: use DATE_FORMAT()/DATE_SUB(); identifiers quote with backticks; LIMIT syntax applies.",
-    "mssql": "Use TOP (N) instead of LIMIT; dates via DATEADD()/DATEDIFF(); string concat is +.",
-    "duckdb": "PostgreSQL-like syntax; date_trunc()/interval work; ILIKE is available.",
-}
-
-
 def _context_block(context):
     if not context:
         return ""
@@ -567,7 +560,7 @@ def _examples_block(retrieved, max_examples):
 def build_sql_system_prompt(
     schema_text, dialect, glossary, retrieved, max_examples, context, catalog=None
 ):
-    hint = _DIALECT_HINTS.get(dialect, "")
+    hint = prompt_hint(dialect)
     return (
         "CRITICAL: You MUST answer entirely in English. Do not use Chinese or Japanese.\n"
         f"You are an expert {dialect} analyst. Convert the user's question into "
@@ -577,8 +570,9 @@ def build_sql_system_prompt(
         "2. Use ONLY the tables and columns listed in the schema below. Never "
         "invent names.\n"
         "3. Join tables via the foreign keys shown as col->table.column.\n"
-        "4. Add LIMIT 100 unless the question asks for a single total/count "
-        "or the dialect uses TOP.\n"
+        "4. Cap the result at 100 rows unless the question asks for a single "
+        "total/count. Use the row-limiting syntax named in rule 7 — it differs "
+        "by dialect, and the wrong one is a syntax error.\n"
         "5. When filtering on a column whose example values are shown in "
         "[brackets], match those values exactly.\n"
         "6. Qualify column names with table aliases whenever more than one "
