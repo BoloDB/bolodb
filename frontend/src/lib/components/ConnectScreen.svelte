@@ -41,7 +41,7 @@
     dbPlaceholder: string;
   }[] = [
     { id: "postgresql", label: "PostgreSQL", scheme: "postgresql", port: "5432", dbLabel: "Database", dbPlaceholder: "dbname" },
-    { id: "mysql", label: "MySQL", scheme: "mysql", port: "3306", dbLabel: "Database", dbPlaceholder: "dbname" },
+    { id: "mysql", label: "MySQL", scheme: "mysql+pymysql", port: "3306", dbLabel: "Database", dbPlaceholder: "dbname" },
     { id: "oracle", label: "Oracle", scheme: "oracle+oracledb", port: "1521", dbLabel: "Service name", dbPlaceholder: "ORCLPDB1" },
   ];
 

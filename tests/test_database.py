@@ -259,8 +259,10 @@ def test_validate_db_url_rejects_unsupported_scheme():
         "oracle+oracledb://user:pass@/?dsn=127.0.0.1:1521/xe",
         "oracle+oracledb://user:pass@/?dsn=169.254.169.254:1521/xe",
         # Same trick with a full connect descriptor in place of the host.
-        "oracle+oracledb://user:pass@"
-        "(DESCRIPTION=(ADDRESS=(PROTOCOL=TCP)(HOST=127.0.0.1)(PORT=1521)))/",
+        (
+            "oracle+oracledb://user:pass@"
+            "(DESCRIPTION=(ADDRESS=(PROTOCOL=TCP)(HOST=127.0.0.1)(PORT=1521)))/"
+        ),
         # A bare TNS alias: with no service_name or SID, SQLAlchemy stops
         # building a host:port DSN and passes the host through as one.
         "oracle+oracledb://user:pass@SOMEALIAS",

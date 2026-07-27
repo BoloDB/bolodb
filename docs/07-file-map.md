@@ -166,7 +166,7 @@ Routes (`backend/app/routes/`) are thin — they parse the request, enforce perm
 
 ## Tests (`tests/`)
 
-The repository includes a 37-file backend unit and integration test suite:
+The repository includes a 38-file backend unit and integration test suite:
 
 | File | Covers |
 |---|---|

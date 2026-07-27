@@ -16,6 +16,7 @@ from backend.app.dialects import (
     denormalize_ident,
     glot_dialect,
     limit_clause,
+    normalize_driver,
     normalize_ident,
     quote_ident,
     traits_for,
@@ -252,6 +253,9 @@ class DatabaseManager:
         except ValueError as e:
             return {"ok": False, "error": str(e)}
 
+        # Before db_id_for below, so one target hashes to one id however the
+        # user spelled its scheme.
+        url = normalize_driver(url)
         dialect = url.split(":")[0].split("+")[0]
         try:
             engine = create_engine(url)
@@ -290,6 +294,13 @@ class DatabaseManager:
         Oracle has no equivalent of ``SET statement_timeout``; the driver-level
         ``call_timeout`` is the supported way to cancel a round trip that runs
         too long, and it must be set on the DBAPI connection as it is created.
+
+        It is a weaker bound than the name suggests: it caps each round trip,
+        not the statement. A query that fetches across several round trips can
+        outlast ``statement_timeout`` in wall-clock terms while no single trip
+        ever exceeds it, and ``max_rows`` caps rows returned, not duration. It
+        still stops the case that matters — a statement that hangs — but do not
+        read it as a hard ceiling on how long an Oracle query can take.
         """
         if traits_for(dialect).timeout_style != "call_timeout":
             return
