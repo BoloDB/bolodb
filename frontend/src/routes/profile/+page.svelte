@@ -15,6 +15,9 @@
   let saving = $state(false);
   let savedFlash = $state(false);
 
+  let slackInstallations = $state<any[]>([]);
+  let slackLoading = $state(false);
+
   onMount(async () => {
     if (!appState.isLoaded) {
       await appState.init(false);
@@ -34,9 +37,18 @@
       densityPref = meta.densityPref === 'compact' ? 'compact' : 'comfortable';
       analyticsOptIn = meta.analyticsOptIn !== false;
       applyDensity(densityPref);
-      // Apply the saved theme immediately so the page matches the stored
-      // preference even when localStorage is stale.
       appState.applyTheme(resolveTheme(themePref));
+
+      await loadSlackInstallations();
+
+      const params = new URLSearchParams(window.location.search);
+      if (params.get('slack') === 'connected') {
+        appState.showToast({ title: 'Slack connected', body: 'Your Slack workspace has been linked to BoloDB.' });
+        history.replaceState(null, '', '/profile');
+      } else if (params.get('slack') === 'error') {
+        appState.showToast({ title: 'Slack connection failed', body: 'Could not connect Slack. Please try again.' });
+        history.replaceState(null, '', '/profile');
+      }
     } catch (e: any) {
       error = e.message || 'Could not load your profile';
       if (e.status === 401) goto('/login');
@@ -44,6 +56,42 @@
       loading = false;
     }
   });
+
+  async function loadSlackInstallations() {
+    try {
+      const res = await apiCall('/api/slack/installations');
+      slackInstallations = res?.content?.installations || [];
+    } catch {
+      slackInstallations = [];
+    }
+  }
+
+  async function connectSlack() {
+    slackLoading = true;
+    try {
+      const res = await apiCall('/api/slack/install');
+      if (res?.content?.url) {
+        window.open(res.content.url, '_blank');
+      }
+    } catch (e: any) {
+      appState.showToast({ title: 'Error', body: e.message || 'Could not start Slack install.' });
+    } finally {
+      slackLoading = false;
+    }
+  }
+
+  async function disconnectSlack(teamId: string) {
+    slackLoading = true;
+    try {
+      await apiCall(`/api/slack/installations/${teamId}`, { method: 'DELETE' });
+      slackInstallations = [];
+      appState.showToast({ title: 'Slack disconnected', body: 'Slack has been disconnected from your workspace.' });
+    } catch (e: any) {
+      appState.showToast({ title: 'Error', body: e.message || 'Could not disconnect Slack.' });
+    } finally {
+      slackLoading = false;
+    }
+  }
 
   function applyDensity(density: string) {
     if (typeof document === 'undefined') return;
@@ -229,6 +277,46 @@
           </label>
         </section>
 
+        <section class="panel">
+          <div class="panel-head">
+            <h2>Slack Integration</h2>
+            <p>Ask questions from Slack via the <code>/ask</code> command.</p>
+          </div>
+          <div class="rows">
+            {#if slackInstallations.length > 0}
+              {#each slackInstallations as inst}
+                <div class="row">
+                  <div class="info">
+                    <label>{inst.team_name || inst.team_id}</label>
+                    <span>Connected — use <code>/ask</code> in Slack</span>
+                  </div>
+                  <button
+                    class="btn ghost danger"
+                    onclick={() => disconnectSlack(inst.team_id)}
+                    disabled={slackLoading}
+                  >
+                    {slackLoading ? '…' : 'Disconnect'}
+                  </button>
+                </div>
+              {/each}
+            {:else}
+              <div class="row">
+                <div class="info">
+                  <label>Not connected</label>
+                  <span>Link a Slack workspace to query your databases from Slack.</span>
+                </div>
+                <button
+                  class="btn primary"
+                  onclick={connectSlack}
+                  disabled={slackLoading}
+                >
+                  {slackLoading ? '…' : 'Connect Slack'}
+                </button>
+              </div>
+            {/if}
+          </div>
+        </section>
+
         <section class="panel links">
           <a href="/workspaces">Workspace settings →</a>
           <a href="/dashboards">Dashboards →</a>
@@ -364,6 +452,8 @@
     color: var(--muted);
     border: 1px solid var(--border);
   }
+  .btn.ghost.danger { color: var(--c-low-ink); border-color: var(--c-low-tint); }
+  .btn.ghost.danger:hover { background: var(--c-low-tint); }
   .status-list { padding: 14px 16px 18px; display: flex; flex-direction: column; gap: 8px; }
   .status {
     display: flex;
