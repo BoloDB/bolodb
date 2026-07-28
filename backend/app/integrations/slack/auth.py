@@ -27,10 +27,16 @@ DEFAULT_SCOPES = "commands,chat:write,app_mentions:read"
 
 def get_oauth_url(state: str, scopes: str = DEFAULT_SCOPES) -> str:
     """Build the Slack OAuth authorize URL the user's browser should open."""
+    client_id = get_slack_client_id()
+    redirect_uri = get_slack_redirect_uri()
+    if not client_id:
+        raise RuntimeError("Slack client ID is not configured")
+    if not redirect_uri:
+        raise RuntimeError("Slack redirect URI is not configured")
     params = {
-        "client_id": get_slack_client_id(),
+        "client_id": client_id,
         "scope": scopes,
-        "redirect_uri": get_slack_redirect_uri(),
+        "redirect_uri": redirect_uri,
         "state": state,
     }
     return f"{AUTHORIZE_URL}?{urlencode(params)}"
@@ -43,12 +49,15 @@ async def handle_oauth_callback(code: str) -> dict:
     ``access_token`` (the ``xoxb-`` bot token), ``team`` (``id``/``name``),
     ``bot_user_id`` and ``scope``. Raises ``ValueError`` if Slack reports failure.
     """
+    client_secret = get_slack_client_secret()
+    if not client_secret:
+        raise RuntimeError("Slack client secret is not configured")
     async with httpx.AsyncClient(timeout=TIMEOUT_SECONDS) as client:
         r = await client.post(
             TOKEN_URL,
             data={
                 "client_id": get_slack_client_id(),
-                "client_secret": get_slack_client_secret(),
+                "client_secret": client_secret,
                 "code": code,
                 "redirect_uri": get_slack_redirect_uri(),
             },

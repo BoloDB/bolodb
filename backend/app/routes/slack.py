@@ -96,6 +96,8 @@ async def slack_callback(code: str = "", state: str = "", error: str = ""):
             workspace_id=payload["workspace_id"],
             scopes=data.get("scope", ""),
         )
+    except RuntimeError:
+        return RedirectResponse(f"{fe}/profile?slack=config")
     except Exception:
         log.exception("Slack OAuth token exchange or persistence failed")
         return RedirectResponse(f"{fe}/profile?slack=error")
@@ -192,7 +194,10 @@ async def slack_events(
         form = parse_qs(body.decode())
 
         if "payload" in form:
-            payload = json.loads(form["payload"][0])
+            try:
+                payload = json.loads(form["payload"][0])
+            except (json.JSONDecodeError, IndexError):
+                raise HTTPException(400, "Invalid form payload")
             return await handle_interactive_callback(
                 payload, db, kb, cfg, providers, session_log
             )
@@ -202,8 +207,14 @@ async def slack_events(
                 payload, db, kb, cfg, providers, session_log
             )
 
-    data = json.loads(body)
+    try:
+        data = json.loads(body)
+    except json.JSONDecodeError:
+        raise HTTPException(400, "Invalid JSON in request body")
     if data.get("type") == "url_verification":
-        return {"challenge": data["challenge"]}
+        challenge = data.get("challenge")
+        if not challenge:
+            raise HTTPException(400, "Missing challenge in url_verification")
+        return {"challenge": challenge}
 
     return {"text": "Unsupported event type"}

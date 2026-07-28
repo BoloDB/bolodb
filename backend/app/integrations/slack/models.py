@@ -7,5 +7,5 @@ class SlackInstallationResponse(BaseModel):
     team_id: str
     team_name: str
     bot_user_id: str
-    scopes: str | None
+    scopes: str | None = None
     created_at: datetime

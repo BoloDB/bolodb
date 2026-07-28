@@ -23,7 +23,7 @@ class SlackInstallation(Base):
         ForeignKey("workspaces.id", ondelete="CASCADE"),
         nullable=False,
     )
-    scopes: Mapped[str] = mapped_column(String, nullable=True)
+    scopes: Mapped[str | None] = mapped_column(String, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=_utcnow
     )

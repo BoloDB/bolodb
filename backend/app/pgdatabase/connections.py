@@ -17,6 +17,7 @@ from cryptography.fernet import Fernet, InvalidToken
 from sqlalchemy import select, delete, func
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
+from backend.app.crypto import _derive_fernet_key
 from backend.app.pgdatabase.engine import async_session
 from backend.app.models.recent_connection import RecentConnection
 from backend.app.models.base import _uuid7
@@ -33,14 +34,13 @@ class ConnectionKeyError(RuntimeError):
 
 
 def _build_recent_connection_cipher():
-    secret = os.getenv("RECENT_CONNECTIONS_KEY")
-    if not secret:
+    try:
+        return Fernet(_derive_fernet_key())
+    except RuntimeError:
         raise ConnectionKeyError(
             "RECENT_CONNECTIONS_KEY is not set. It is required to encrypt saved "
             "database connections — set a stable secret in the environment."
         )
-    key = base64.urlsafe_b64encode(hashlib.sha256(secret.encode()).digest())
-    return Fernet(key)
 
 
 _RECENT_CIPHER = None

@@ -12,14 +12,14 @@ in ``llm.py``. Adding a database meant finding all of them. Now it means adding
 one entry here.
 """
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 # Approximate row counts pulled from the server's own catalog/statistics tables.
 # Far cheaper than COUNT(*) per table, and exact enough for the only thing we use
 # it for: deciding which tables are big enough to deserve enrichment. Each query
 # must return (table_name, row_count) rows. ``:owner`` is bound to the
 # inspector's default schema where the query uses it.
-_PG_ROW_COUNTS = "SELECT relname, reltuples FROM pg_class WHERE relkind IN ('r','p')"
+_PG_ROW_COUNTS = "SELECT relname, reltuples FROM pg_class WHERE relkind IN ('r','p') AND relnamespace = (SELECT oid FROM pg_namespace WHERE nspname = :owner)"
 _MYSQL_ROW_COUNTS = (
     "SELECT table_name, table_rows FROM information_schema.tables "
     "WHERE table_schema = DATABASE()"
@@ -27,7 +27,7 @@ _MYSQL_ROW_COUNTS = (
 _MSSQL_ROW_COUNTS = (
     "SELECT t.name, SUM(p.rows) FROM sys.tables t "
     "JOIN sys.partitions p ON t.object_id=p.object_id "
-    "WHERE p.index_id IN (0,1) GROUP BY t.name"
+    "WHERE p.index_id IN (0,1) AND t.schema_id = SCHEMA_ID(:owner) GROUP BY t.name"
 )
 _ORACLE_ROW_COUNTS = "SELECT table_name, num_rows FROM all_tables WHERE owner = :owner"
 _SNOWFLAKE_ROW_COUNTS = (
@@ -140,24 +140,6 @@ TRAITS: dict[str, DialectTraits] = {
             "quote mixed-case identifiers."
         ),
     ),
-    # Bare "postgres" is accepted in connection URLs and normalises to the same
-    # SQLAlchemy dialect, so it needs the same traits. The entry stays even
-    # though normalize_scheme rewrites the scheme before anything derives a
-    # dialect from it: allowed_schemes() reads this table to decide what a user
-    # may type, and normalize_scheme itself looks the rewrite up here.
-    "postgres": DialectTraits(
-        sqlglot="postgres",
-        row_count_sql=_PG_ROW_COUNTS,
-        timeout_style="statement_timeout",
-        # SQLAlchemy dropped the "postgres" alias in 1.4; left as typed it
-        # raises NoSuchModuleError before the connection is ever attempted.
-        drivername="postgresql",
-        prompt_hint=(
-            "Row limiting: use LIMIT n. "
-            "Dates: use date_trunc()/interval arithmetic; ILIKE is available; "
-            "quote mixed-case identifiers."
-        ),
-    ),
     "mysql": DialectTraits(
         sqlglot="mysql",
         quote="`",
@@ -172,6 +154,7 @@ TRAITS: dict[str, DialectTraits] = {
     ),
     "mssql": DialectTraits(
         sqlglot="tsql",
+        row_limit="top",
         row_count_sql=_MSSQL_ROW_COUNTS,
         prompt_hint=(
             "Row limiting: use TOP (n), never LIMIT. "
@@ -244,6 +227,16 @@ TRAITS: dict[str, DialectTraits] = {
     ),
 }
 
+# Bare "postgres" is accepted in connection URLs and normalises to the same
+# SQLAlchemy dialect, so it needs the same traits. The entry stays even
+# though normalize_scheme rewrites the scheme before anything derives a
+# dialect from it: allowed_schemes() reads this table to decide what a user
+# may type, and normalize_scheme itself looks the rewrite up here.
+TRAITS["postgres"] = replace(
+    TRAITS["postgresql"],
+    drivername="postgresql",
+)
+
 # Fallback for a dialect we have no entry for. Standard-ish SQL, no server
 # features assumed, no hint — the prompt simply omits the dialect rule.
 _DEFAULT = DialectTraits(sqlglot="")
@@ -268,14 +261,27 @@ def glot_dialect(dialect):
     return traits_for(dialect).sqlglot or None
 
 
+def select_prefix(dialect, n) -> str:
+    """Prefix to inject between SELECT and its column list, e.g. ``TOP (12)``.
+
+    Only used for the introspection queries we build ourselves.
+    """
+    if traits_for(dialect).row_limit == "top":
+        return f"TOP ({int(n)})"
+    return ""
+
+
 def limit_clause(dialect, n) -> str:
     """Row-limiting clause to append to a SELECT, e.g. ``LIMIT 12``.
 
     Only used for the introspection queries we build ourselves; the LLM is told
     the right syntax via ``prompt_hint``.
     """
-    if traits_for(dialect).row_limit == "fetch_first":
+    style = traits_for(dialect).row_limit
+    if style == "fetch_first":
         return f"FETCH FIRST {int(n)} ROWS ONLY"
+    if style == "top":
+        return ""
     return f"LIMIT {int(n)}"
 
 

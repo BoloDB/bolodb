@@ -22,6 +22,9 @@ async def save_installation(
     uid = _to_uuid(user_id)
     async with async_session() as session:
         try:
+            await session.execute(
+                delete(SlackInstallation).where(SlackInstallation.workspace_id == wid)
+            )
             s = (
                 pg_insert(SlackInstallation)
                 .values(

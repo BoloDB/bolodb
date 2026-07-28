@@ -17,6 +17,7 @@
 
   let slackInstallations = $state<any[]>([]);
   let slackLoading = $state(false);
+  let disconnectingTeam = $state<string | null>(null); (Address code review findings across backend and frontend)
 
   onMount(async () => {
     if (!appState.isLoaded) {
@@ -60,8 +61,9 @@
   async function loadSlackInstallations() {
     try {
       const res = await apiCall('/api/slack/installations');
-      slackInstallations = res?.content?.installations || [];
-    } catch {
+      slackInstallations = res?.installations || [];
+    } catch (e) {
+      console.warn("Failed to load Slack installations:", e);
       slackInstallations = [];
     }
   }
@@ -70,8 +72,14 @@
     slackLoading = true;
     try {
       const res = await apiCall('/api/slack/install');
-      if (res?.content?.url) {
-        window.open(res.content.url, '_blank');
+      const url = res?.content?.url || res?.url;
+      if (url) {
+        // A same-tab navigation rather than window.open: the popup blocker
+        // rejects a new window opened after an await, since the user gesture
+        // that started this is already gone. Slack redirects back to /profile.
+        window.location.href = url;
+      } else {
+        appState.showToast({ title: 'Slack unavailable', body: 'Slack is not configured on this server.' });
       }
     } catch (e: any) {
       appState.showToast({ title: 'Error', body: e.message || 'Could not start Slack install.' });
@@ -81,15 +89,21 @@
   }
 
   async function disconnectSlack(teamId: string) {
-    slackLoading = true;
+    disconnectingTeam = teamId;
     try {
-      await apiCall(`/api/slack/installations/${teamId}`, { method: 'DELETE' });
-      slackInstallations = [];
-      appState.showToast({ title: 'Slack disconnected', body: 'Slack has been disconnected from your workspace.' });
+      const res = await apiCall(`/api/slack/installations/${teamId}`, undefined, 'DELETE');
+      const ok = res?.content?.ok ?? res?.ok;
+      if (ok) {
+        slackInstallations = slackInstallations.filter(i => i.team_id !== teamId);
+        appState.showToast({ title: 'Slack disconnected', body: 'Slack has been disconnected from your workspace.' });
+      } else {
+        appState.showToast({ title: 'Error', body: 'Could not disconnect Slack.' });
+      }
     } catch (e: any) {
       appState.showToast({ title: 'Error', body: e.message || 'Could not disconnect Slack.' });
     } finally {
       slackLoading = false;
+      disconnectingTeam = null;
     }
   }
 
@@ -293,9 +307,9 @@
                   <button
                     class="btn ghost danger"
                     onclick={() => disconnectSlack(inst.team_id)}
-                    disabled={slackLoading}
+                    disabled={disconnectingTeam === inst.team_id}
                   >
-                    {slackLoading ? '…' : 'Disconnect'}
+                    {disconnectingTeam === inst.team_id ? '…' : 'Disconnect'}
                   </button>
                 </div>
               {/each}

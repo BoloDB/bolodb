@@ -106,6 +106,21 @@ def result_blocks(
         if truncated:
             table_text += f"\n_Showing first {max_rows} of {len(rows)} rows_"
 
+        if len(table_text) > 3000:
+            while len(table_text) > 3000 and line_rows:
+                line_rows.pop()
+                table_text = (
+                    f"*Results ({len(rows)} row{'s' if len(rows) != 1 else ''}):*\n"
+                    f"```\n{header_row}\n{'—' * min(len(header_row), 60)}\n"
+                    + "\n".join(line_rows)
+                    + "\n```"
+                )
+                if truncated:
+                    remaining = len(rows) - len(line_rows) + max_rows
+                    table_text += (
+                        f"\n_Showing first {len(line_rows)} of {remaining} rows_"
+                    )
+
         blocks.append(
             {
                 "type": "section",

@@ -3,6 +3,7 @@
 import hashlib
 import ipaddress
 import re
+import socket
 import logging
 from urllib.parse import unquote
 import sqlglot
@@ -22,6 +23,7 @@ from backend.app.dialects import (
     normalize_ident,
     normalize_scheme,
     quote_ident,
+    select_prefix,
     traits_for,
 )
 
@@ -109,8 +111,7 @@ def _sanitize_db_error(err_msg: str) -> str:
     # for the same reason — redaction is the last line and should never be the
     # component that is picky about how something was spelled.
     msg = re.sub(
-        r"\b(postgresql|postgres|mysql|mssql|oracle|snowflake|databricks|bigquery)"
-        r"(?:\+\w+)?://\S+",
+        rf"\b({_SCHEME_ALT})(?:\+\w+)?://\S+",
         r"\1://***",
         msg,
         flags=re.IGNORECASE,
@@ -150,6 +151,16 @@ _BLOCKED_HOSTS = {
     "100.100.100.200",
 }
 
+
+# Build a sorted (longest-first) alternation of URL schemes for the
+# _sanitize_db_error redactor below, so it stays in sync with dialects.py.
+_SCHEME_ALT = "|".join(
+    sorted(
+        (re.escape(s) for s in allowed_schemes() if s != "sqlite"),
+        key=len,
+        reverse=True,
+    )
+)
 
 # A host we are willing to check. Anything a hostname, an IPv4 literal or a
 # bracket-less IPv6 literal can contain — and nothing that could smuggle a
@@ -231,6 +242,14 @@ def _validate_db_url(url: str) -> str:
                 "password contains @ : / or #, percent-encode it. Connect "
                 "descriptors and TNS aliases are not supported."
             )
+        # Normalize shorthand, decimal, and hex IPv4 literals so that
+        # 2130706433, 0x7f000001, and 127.1 are all caught by the
+        # loopback and blocked-hosts checks below.
+        if ":" not in hostname:
+            try:
+                hostname = socket.inet_ntoa(socket.inet_aton(hostname))
+            except OSError:
+                pass
         if hostname in _BLOCKED_HOSTS:
             raise ValueError(f"Connection to '{hostname}' is not allowed")
         if hostname.startswith("169.254.") or hostname.startswith("100.100."):
@@ -334,6 +353,7 @@ class DatabaseManager:
         db_id = db_id_for(url)
         engine_url = normalize_scheme(url)
         dialect = engine_url.split(":")[0].split("+")[0]
+        engine = None
         try:
             try:
                 engine = create_engine(engine_url)
@@ -383,6 +403,8 @@ class DatabaseManager:
                 "url": sanitize_url(url),
             }
         except Exception as e:
+            if engine is not None:
+                engine.dispose()
             return {"ok": False, "error": _sanitize_db_error(e)}
 
     def _install_call_timeout(self, engine, dialect):
@@ -574,7 +596,8 @@ class DatabaseManager:
                 try:
                     res = conn.execute(
                         text(
-                            f"SELECT * FROM {self._q(workspace_id, tbl, db_id)} "
+                            f"SELECT {select_prefix(c['dialect'], self.sample_rows)} * "
+                            f"FROM {self._q(workspace_id, tbl, db_id)} "
                             f"{limit_clause(c['dialect'], self.sample_rows)}"
                         )
                     )
@@ -614,6 +637,7 @@ class DatabaseManager:
                                 dv = conn.execute(
                                     text(
                                         "SELECT DISTINCT "
+                                        f"{select_prefix(c['dialect'], 12)} "
                                         f"{self._q(workspace_id, col['name'], db_id)} "
                                         f"FROM {self._q(workspace_id, tbl, db_id)} "
                                         f"{limit_clause(c['dialect'], 12)}"

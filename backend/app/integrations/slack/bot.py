@@ -15,6 +15,8 @@ from backend.app.integrations.slack.blocks import (
 
 log = logging.getLogger(__name__)
 
+_PENDING_TASKS: set[asyncio.Task] = set()
+
 CONNECTION_PREFIX_RE = re.compile(r"^(\w[\w\s]*?):\s*(.*)", re.DOTALL)
 
 SLACK_TIMEOUT = 10.0
@@ -57,17 +59,10 @@ async def handle_slash_command(
     if conn_name:
         conn = _find_connection_by_alias(connections, conn_name)
         if not conn:
-            available = (
-                ", ".join(
-                    c.get("alias_name") or c.get("db_id", "")[:8] for c in connections
-                )
-                or "None"
-            )
-            return {
-                "response_type": "ephemeral",
-                "text": f"I couldn't find a database connection named '{conn_name}'. Available connections: {available}",
-            }
+            conn_name = None
+            question = text.strip()
 
+    if conn_name:
         _run_query_and_respond(
             question,
             workspace_id,
@@ -183,7 +178,7 @@ def _run_query_and_respond(
     session_log,
     conn_name: str | None = None,
 ):
-    asyncio.ensure_future(
+    task = asyncio.ensure_future(
         _execute_query(
             question,
             workspace_id,
@@ -198,6 +193,9 @@ def _run_query_and_respond(
             conn_name,
         )
     )
+    _PENDING_TASKS.add(task)
+    task.add_done_callback(_PENDING_TASKS.discard)
+    task.add_done_callback(lambda t: t.result() if not t.cancelled() else None)
 
 
 async def _execute_query(
@@ -244,8 +242,13 @@ async def _execute_query(
         body = {
             "response_type": "ephemeral",
             "replace_original": True,
-            "blocks": error_blocks(str(e), question),
+            "blocks": error_blocks(
+                "An unexpected error occurred while running your query.", question
+            ),
         }
 
-    async with httpx.AsyncClient(timeout=SLACK_TIMEOUT) as client:
-        await client.post(response_url, json=body)
+    try:
+        async with httpx.AsyncClient(timeout=SLACK_TIMEOUT) as client:
+            await client.post(response_url, json=body)
+    except Exception:
+        log.exception("Failed to send Slack callback response for query [%s]", question)

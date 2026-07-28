@@ -15,16 +15,18 @@ from cryptography.fernet import Fernet
 _CIPHER = None
 
 
+def _derive_fernet_key(secret_name: str = "RECENT_CONNECTIONS_KEY") -> bytes:
+    """Read an env var, validate it is present, and return a SHA-256 / base64 key."""
+    secret = os.getenv(secret_name)
+    if not secret:
+        raise RuntimeError(f"{secret_name} is required to encrypt secrets at rest.")
+    return base64.urlsafe_b64encode(hashlib.sha256(secret.encode()).digest())
+
+
 def _cipher() -> Fernet:
     global _CIPHER
     if _CIPHER is None:
-        secret = os.getenv("RECENT_CONNECTIONS_KEY")
-        if not secret:
-            raise RuntimeError(
-                "RECENT_CONNECTIONS_KEY is required to encrypt secrets at rest."
-            )
-        key = base64.urlsafe_b64encode(hashlib.sha256(secret.encode()).digest())
-        _CIPHER = Fernet(key)
+        _CIPHER = Fernet(_derive_fernet_key())
     return _CIPHER
 
 

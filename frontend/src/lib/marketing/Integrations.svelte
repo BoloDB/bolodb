@@ -8,6 +8,7 @@
     { name: "SQLite", color: "#003B57" },
     { name: "Snowflake", color: "#29B5E8" },
     { name: "Databricks", color: "#FF3621" },
+    { name: "DuckDB", color: "#FFF100" },
     { name: "BigQuery", color: "#4285F4" },
   ];
 
@@ -39,6 +40,9 @@
     Databricks: [
       { label: "URL", code: "databricks://token:dapi***@dbc-a1b2c3d4.cloud.databricks.com?http_path=/sql/1.0/warehouses/abc123" },
       { label: "Unity Catalog", code: "databricks://token:dapi***@host?http_path=/sql/1.0/warehouses/abc123&catalog=main&schema=default" },
+    ],
+    DuckDB: [
+      { label: "URL", code: "duckdb:///path/to/database.db" },
     ],
     BigQuery: [
       { label: "Service account", code: "bigquery://my-gcp-project/my_dataset?credentials_base64=<base64 of the key JSON>" },

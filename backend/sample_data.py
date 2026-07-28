@@ -232,7 +232,7 @@ def _parse_timestamp(value):
     Date-only values like `dateofbirth` are shorter than 19 characters and fall
     out here, which is what keeps them from being shifted.
     """
-    if not isinstance(value, str) or len(value) < 19:
+    if not isinstance(value, str) or len(value) != 19:
         return None
     if value[4] != "-" or value[7] != "-" or value[10] != " ":
         return None
