@@ -1,4 +1,4 @@
-"""Slack integration routes — OAuth install flow.
+"""Slack integration routes — OAuth install flow + events endpoint.
 
 A workspace owner/admin starts the install via ``GET /api/slack/install`` (returns
 the Slack authorize URL carrying a signed ``state``); Slack redirects the browser
@@ -9,21 +9,43 @@ The callback is a top-level browser redirect from Slack, so it cannot receive th
 ``X-Workspace-Id`` header that ``get_current_workspace`` relies on — the workspace
 and user identity ride through the signed ``state`` (a short-lived JWT), which also
 provides CSRF protection.
+
+Events (slash commands, interactive callbacks) arrive at ``POST /api/slack/events``,
+verified via Slack's HMAC-SHA256 signing secret.
 """
 
+import hashlib
+import hmac
+import json
 import logging
 import time
+from urllib.parse import parse_qs
 
 import jwt
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import RedirectResponse
 
 import backend.app.pgdatabase as mdb
 from backend.app.crypto import encrypt_secret
-from backend.app.dependencies import require_permission
+from backend.app.dependencies import (
+    get_cfg,
+    get_db,
+    get_kb,
+    get_providers,
+    get_session_log,
+    require_permission,
+)
 from backend.app.integrations.slack.auth import get_oauth_url, handle_oauth_callback
+from backend.app.integrations.slack.bot import (
+    handle_interactive_callback,
+    handle_slash_command,
+)
 from backend.app.integrations.slack.models import SlackInstallationResponse
-from backend.app.secrets import get_frontend_url, get_jwt_secret
+from backend.app.secrets import (
+    get_frontend_url,
+    get_jwt_secret,
+    get_slack_signing_secret,
+)
 
 log = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/slack", tags=["slack"])
@@ -111,3 +133,77 @@ async def slack_uninstall(
         team_id, workspace["workspace_id"]
     )
     return {"ok": deleted}
+
+
+# ── Events (slash commands + interactive callbacks) ─────────────────────
+
+
+def _verify_slack_request(body: bytes, timestamp: str, signature: str) -> bool:
+    """HMAC-SHA256 verification of an incoming Slack request.
+
+    Returns ``True`` if the signature is valid and the timestamp is within
+    5 minutes of now (replay protection).
+    """
+    if not timestamp or not signature:
+        return False
+    try:
+        if abs(time.time() - int(timestamp)) > 300:
+            return False
+    except ValueError:
+        return False
+
+    secret = get_slack_signing_secret()
+    if not secret:
+        return False
+
+    sig_basestring = f"v0:{timestamp}:{body.decode()}"
+    my_signature = (
+        "v0="
+        + hmac.new(secret.encode(), sig_basestring.encode(), hashlib.sha256).hexdigest()
+    )
+    return hmac.compare_digest(my_signature, signature)
+
+
+@router.post("/events")
+async def slack_events(
+    request: Request,
+    db=Depends(get_db),
+    kb=Depends(get_kb),
+    cfg=Depends(get_cfg),
+    providers=Depends(get_providers),
+    session_log=Depends(get_session_log),
+):
+    """Receive Slack events: slash commands and interactive callbacks.
+
+    Verifies every request via Slack's signing secret before dispatching
+    to the bot handler.  Also handles Slack's ``url_verification`` challenge
+    used during app configuration.
+    """
+    body = await request.body()
+    timestamp = request.headers.get("X-Slack-Request-Timestamp", "")
+    signature = request.headers.get("X-Slack-Signature", "")
+
+    if not _verify_slack_request(body, timestamp, signature):
+        raise HTTPException(401, "Invalid Slack request signature")
+
+    content_type = request.headers.get("content-type", "")
+
+    if "application/x-www-form-urlencoded" in content_type:
+        form = parse_qs(body.decode())
+
+        if "payload" in form:
+            payload = json.loads(form["payload"][0])
+            return await handle_interactive_callback(
+                payload, db, kb, cfg, providers, session_log
+            )
+        else:
+            payload = {k: v[0] for k, v in form.items()}
+            return await handle_slash_command(
+                payload, db, kb, cfg, providers, session_log
+            )
+
+    data = json.loads(body)
+    if data.get("type") == "url_verification":
+        return {"challenge": data["challenge"]}
+
+    return {"text": "Unsupported event type"}
