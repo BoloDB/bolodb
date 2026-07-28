@@ -68,3 +68,8 @@ def get_slack_client_secret():
 def get_slack_redirect_uri():
     """Return the Slack OAuth redirect URI (backend callback). None if not configured."""
     return os.getenv("SLACK_REDIRECT_URI") or None
+
+
+def get_slack_signing_secret():
+    """Return the Slack signing secret for verifying inbound events. None if not configured."""
+    return os.getenv("SLACK_SIGNING_SECRET") or None
