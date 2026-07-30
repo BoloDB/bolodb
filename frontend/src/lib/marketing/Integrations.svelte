@@ -23,7 +23,7 @@
     ],
     Oracle: [
       { label: "Service name", code: "oracle+oracledb://user:pass@host:1521/?service_name=ORCLPDB1" },
-      { label: "SID", code: "oracle+oracledb://user:pass@host:1521/XE" },
+      { label: "Service name (path)", code: "oracle+oracledb://user:pass@host:1521/ORCLPDB1" },
     ],
     "SQL Server": [
       { label: "URL", code: "sqlserver://host:1433;database=dbname;user=myuser;password=mypass;" },

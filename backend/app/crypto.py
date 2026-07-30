@@ -15,7 +15,7 @@ from cryptography.fernet import Fernet
 _CIPHER = None
 
 
-def _derive_fernet_key(secret_name: str = "RECENT_CONNECTIONS_KEY") -> bytes:
+def derive_fernet_key(secret_name: str = "RECENT_CONNECTIONS_KEY") -> bytes:
     """Read an env var, validate it is present, and return a SHA-256 / base64 key."""
     secret = os.getenv(secret_name)
     if not secret:
@@ -26,7 +26,7 @@ def _derive_fernet_key(secret_name: str = "RECENT_CONNECTIONS_KEY") -> bytes:
 def _cipher() -> Fernet:
     global _CIPHER
     if _CIPHER is None:
-        _CIPHER = Fernet(_derive_fernet_key())
+        _CIPHER = Fernet(derive_fernet_key())
     return _CIPHER
 
 

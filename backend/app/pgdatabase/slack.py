@@ -9,6 +9,10 @@ from backend.app.models.orm_slack import SlackInstallation
 logger = logging.getLogger(__name__)
 
 
+class SlackTeamConflictError(RuntimeError):
+    """Raised when a Slack team is already installed on a different workspace."""
+
+
 async def save_installation(
     team_id: str,
     team_name: str,
@@ -22,6 +26,19 @@ async def save_installation(
     uid = _to_uuid(user_id)
     async with async_session() as session:
         try:
+            # Check if this team is already installed on a different workspace.
+            existing = await session.execute(
+                select(SlackInstallation).where(
+                    SlackInstallation.team_id == team_id,
+                    SlackInstallation.workspace_id != wid,
+                )
+            )
+            existing_other = existing.scalar_one_or_none()
+            if existing_other:
+                raise SlackTeamConflictError(
+                    "This Slack workspace is already connected to a different BoloDB workspace."
+                )
+
             await session.execute(
                 delete(SlackInstallation).where(SlackInstallation.workspace_id == wid)
             )

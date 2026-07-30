@@ -49,6 +49,9 @@
       } else if (params.get('slack') === 'error') {
         appState.showToast({ title: 'Slack connection failed', body: 'Could not connect Slack. Please try again.' });
         history.replaceState(null, '', '/profile');
+      } else if (params.get('slack') === 'conflict') {
+        appState.showToast({ title: 'Slack conflict', body: 'This Slack workspace is already connected to another BoloDB workspace.' });
+        history.replaceState(null, '', '/profile');
       }
     } catch (e: any) {
       error = e.message || 'Could not load your profile';

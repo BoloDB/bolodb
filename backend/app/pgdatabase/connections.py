@@ -17,7 +17,7 @@ from cryptography.fernet import Fernet, InvalidToken
 from sqlalchemy import select, delete, func
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
-from backend.app.crypto import _derive_fernet_key
+from backend.app.crypto import derive_fernet_key
 from backend.app.pgdatabase.engine import async_session
 from backend.app.models.recent_connection import RecentConnection
 from backend.app.models.base import _uuid7
@@ -35,7 +35,7 @@ class ConnectionKeyError(RuntimeError):
 
 def _build_recent_connection_cipher():
     try:
-        return Fernet(_derive_fernet_key())
+        return Fernet(derive_fernet_key())
     except RuntimeError:
         raise ConnectionKeyError(
             "RECENT_CONNECTIONS_KEY is not set. It is required to encrypt saved "

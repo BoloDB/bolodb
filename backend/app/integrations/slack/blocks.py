@@ -74,8 +74,8 @@ def result_blocks(
 
     if result.get("sql"):
         sql = result["sql"]
-        if len(sql) > 3000:
-            sql = sql[:2997] + "..."
+        if len(sql) > 2985:
+            sql = sql[:2982] + "..."
         blocks.append(
             {
                 "type": "section",
@@ -88,7 +88,6 @@ def result_blocks(
     if columns and rows:
         max_rows = 10
         display_rows = rows[:max_rows]
-        truncated = len(rows) > max_rows
 
         header_row = " | ".join(str(c) for c in columns)
         line_rows = []
@@ -103,8 +102,6 @@ def result_blocks(
             + "\n".join(line_rows)
             + "\n```"
         )
-        if truncated:
-            table_text += f"\n_Showing first {max_rows} of {len(rows)} rows_"
 
         if len(table_text) > 3000:
             while len(table_text) > 3000 and line_rows:
@@ -115,11 +112,10 @@ def result_blocks(
                     + "\n".join(line_rows)
                     + "\n```"
                 )
-                if truncated:
-                    remaining = len(rows) - len(line_rows) + max_rows
-                    table_text += (
-                        f"\n_Showing first {len(line_rows)} of {remaining} rows_"
-                    )
+
+        shown = len(line_rows)
+        if shown < len(rows):
+            table_text += f"\n_Showing first {shown} of {len(rows)} rows_"
 
         blocks.append(
             {
@@ -177,6 +173,10 @@ def error_blocks(error_message: str, question: str | None = None) -> list[dict]:
     return blocks
 
 
+# Slack enforces 50 blocks per message
+MAX_BLOCKS = 50
+
+
 def connection_picker_blocks(connections: list[dict], question: str) -> list[dict]:
     blocks = [
         {
@@ -189,7 +189,12 @@ def connection_picker_blocks(connections: list[dict], question: str) -> list[dic
         {"type": "divider"},
     ]
 
-    for conn in connections:
+    # Slack enforces 50 blocks per message. Reserve space for header, divider,
+    # context, and one connection row as margin, so cap at 45 connection rows.
+    available = MAX_BLOCKS - 5
+    shown = connections[:available]
+
+    for conn in shown:
         alias = conn.get("alias_name") or conn.get("db_id", "?")[:8]
         dialect = conn.get("dialect", "unknown")
         table_count = conn.get("table_count", "?")
@@ -216,13 +221,20 @@ def connection_picker_blocks(connections: list[dict], question: str) -> list[dic
             }
         )
 
+    extra = len(connections) - len(shown)
+    notice = "Tip: Use `/ask connection_name: your question` to skip this step."
+    if extra > 0:
+        notice = (
+            f"{extra} more connection{'s' if extra != 1 else ''} available. {notice}"
+        )
+
     blocks.append(
         {
             "type": "context",
             "elements": [
                 {
                     "type": "mrkdwn",
-                    "text": "Tip: Use `/ask connection_name: your question` to skip this step.",
+                    "text": notice,
                 }
             ],
         }

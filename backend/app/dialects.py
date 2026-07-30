@@ -211,6 +211,14 @@ TRAITS: dict[str, DialectTraits] = {
             "three-part as catalog.schema.table."
         ),
     ),
+    "duckdb": DialectTraits(
+        sqlglot="duckdb",
+        prompt_hint=(
+            "Row limiting: use LIMIT n. "
+            "Dates: use date_diff()/date_trunc()/current_date(); "
+            "string concat is ||; ILIKE is available."
+        ),
+    ),
     "bigquery": DialectTraits(
         sqlglot="bigquery",
         quote="`",

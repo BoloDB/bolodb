@@ -249,6 +249,7 @@ def _validate_db_url(url: str) -> str:
             try:
                 hostname = socket.inet_ntoa(socket.inet_aton(hostname))
             except OSError:
+                # Not an IP literal — leave the hostname as-is for DNS resolution.
                 pass
         if hostname in _BLOCKED_HOSTS:
             raise ValueError(f"Connection to '{hostname}' is not allowed")

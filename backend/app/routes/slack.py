@@ -24,6 +24,7 @@ from urllib.parse import parse_qs
 import jwt
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import RedirectResponse
+from sqlalchemy import select
 
 import backend.app.pgdatabase as mdb
 from backend.app.crypto import encrypt_secret
@@ -34,7 +35,12 @@ from backend.app.dependencies import (
     get_providers,
     get_session_log,
     require_permission,
+    workspace_has_permission,
 )
+from backend.app.models.workspace import WorkspaceMember
+from backend.app.pgdatabase.engine import async_session
+from backend.app.pgdatabase.serialization import _to_uuid
+from backend.app.pgdatabase.slack import SlackTeamConflictError
 from backend.app.integrations.slack.auth import get_oauth_url, handle_oauth_callback
 from backend.app.integrations.slack.bot import (
     handle_interactive_callback,
@@ -85,6 +91,28 @@ async def slack_callback(code: str = "", state: str = "", error: str = ""):
         log.warning("Slack OAuth callback with invalid or expired state")
         return RedirectResponse(f"{fe}/profile?slack=error")
 
+    # Re-validate the user is still a member of the workspace with the
+    # required permission. The state may be up to 10 minutes old, during
+    # which the user could have been removed or their role changed.
+    ws = {
+        "workspace_id": payload["workspace_id"],
+        "user_id": payload["user_id"],
+        "role": "",
+    }
+    async with async_session() as session:
+        result = await session.execute(
+            select(WorkspaceMember).where(
+                WorkspaceMember.workspace_id == _to_uuid(ws["workspace_id"]),
+                WorkspaceMember.user_id == _to_uuid(ws["user_id"]),
+            )
+        )
+        member = result.scalar_one_or_none()
+        if not member:
+            return RedirectResponse(f"{fe}/profile?slack=error")
+        ws["role"] = member.role
+    if not await workspace_has_permission(ws, "connections.manage"):
+        return RedirectResponse(f"{fe}/profile?slack=error")
+
     try:
         data = await handle_oauth_callback(code)
         await mdb.save_installation(
@@ -98,6 +126,8 @@ async def slack_callback(code: str = "", state: str = "", error: str = ""):
         )
     except RuntimeError:
         return RedirectResponse(f"{fe}/profile?slack=config")
+    except SlackTeamConflictError:
+        return RedirectResponse(f"{fe}/profile?slack=conflict")
     except Exception:
         log.exception("Slack OAuth token exchange or persistence failed")
         return RedirectResponse(f"{fe}/profile?slack=error")
