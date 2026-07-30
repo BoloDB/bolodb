@@ -103,19 +103,33 @@ def result_blocks(
             + "\n```"
         )
 
-        if len(table_text) > 3000:
-            while len(table_text) > 3000 and line_rows:
+        shown = len(line_rows)
+        notice = (
+            f"\n_Showing first {shown} of {len(rows)} rows_"
+            if shown < len(rows)
+            else ""
+        )
+
+        candidate = table_text + notice
+        if len(candidate) > 3000:
+            while len(candidate) > 3000 and line_rows:
                 line_rows.pop()
+                shown = len(line_rows)
+                notice = (
+                    f"\n_Showing first {shown} of {len(rows)} rows_"
+                    if shown < len(rows)
+                    else ""
+                )
                 table_text = (
                     f"*Results ({len(rows)} row{'s' if len(rows) != 1 else ''}):*\n"
                     f"```\n{header_row}\n{'—' * min(len(header_row), 60)}\n"
                     + "\n".join(line_rows)
                     + "\n```"
                 )
+                candidate = table_text + notice
 
-        shown = len(line_rows)
-        if shown < len(rows):
-            table_text += f"\n_Showing first {shown} of {len(rows)} rows_"
+        if notice:
+            table_text += notice
 
         blocks.append(
             {

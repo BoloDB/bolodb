@@ -124,6 +124,8 @@ async def slack_callback(code: str = "", state: str = "", error: str = ""):
             workspace_id=payload["workspace_id"],
             scopes=data.get("scope", ""),
         )
+    except SlackTeamConflictError:
+        return RedirectResponse(f"{fe}/profile?slack=conflict")
     except RuntimeError:
         return RedirectResponse(f"{fe}/profile?slack=config")
     except SlackTeamConflictError:
