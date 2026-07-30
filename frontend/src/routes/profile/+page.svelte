@@ -108,7 +108,6 @@
     } catch (e: any) {
       appState.showToast({ title: 'Error', body: e.message || 'Could not disconnect Slack.' });
     } finally {
-      slackLoading = false;
       disconnectingTeam = null;
     }
   }

@@ -128,8 +128,6 @@ async def slack_callback(code: str = "", state: str = "", error: str = ""):
         return RedirectResponse(f"{fe}/profile?slack=conflict")
     except RuntimeError:
         return RedirectResponse(f"{fe}/profile?slack=config")
-    except SlackTeamConflictError:
-        return RedirectResponse(f"{fe}/profile?slack=conflict")
     except Exception:
         log.exception("Slack OAuth token exchange or persistence failed")
         return RedirectResponse(f"{fe}/profile?slack=error")
