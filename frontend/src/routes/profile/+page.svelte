@@ -17,7 +17,7 @@
 
   let slackInstallations = $state<any[]>([]);
   let slackLoading = $state(false);
-  let disconnectingTeam = $state<string | null>(null); (Address code review findings across backend and frontend)
+  let disconnectingTeam = $state<string | null>(null);
 
   onMount(async () => {
     if (!appState.isLoaded) {
