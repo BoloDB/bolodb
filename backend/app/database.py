@@ -431,9 +431,10 @@ class DatabaseManager:
             try:
                 engine = create_engine(engine_url)
             except (NoSuchModuleError, ModuleNotFoundError) as e:
-                # The warehouse drivers are large — a deployment may have
-                # trimmed them out of the image. Say which one is missing
-                # rather than surfacing a bare import traceback.
+                # The warehouse drivers are large enough to be opt-in, so a
+                # default install genuinely does not have them. Say which one is
+                # missing and where it lives rather than surfacing a bare import
+                # traceback.
                 #
                 # Only these two: NoSuchModuleError means SQLAlchemy has no
                 # such dialect registered, ModuleNotFoundError that the driver
@@ -446,8 +447,10 @@ class DatabaseManager:
                     "ok": False,
                     "error": (
                         f"This deployment has no driver installed for "
-                        f"'{dialect}'. Install it (see backend/requirements.txt) "
-                        f"and restart. [{type(e).__name__}]"
+                        f"'{dialect}'. Install it (see "
+                        f"backend/requirements-warehouses.txt, or rebuild with "
+                        f"--build-arg INSTALL_WAREHOUSE_DRIVERS=true) and "
+                        f"restart. [{type(e).__name__}]"
                     ),
                 }
             self._install_call_timeout(engine, dialect)
