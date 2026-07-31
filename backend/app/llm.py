@@ -560,7 +560,7 @@ def _examples_block(retrieved, max_examples):
 def build_sql_system_prompt(
     schema_text, dialect, glossary, retrieved, max_examples, context, catalog=None
 ):
-    hint = prompt_hint(dialect)
+    hint = prompt_hint(dialect) or "Use LIMIT n to cap results."
     return (
         "CRITICAL: You MUST answer entirely in English. Do not use Chinese or Japanese.\n"
         f"You are an expert {dialect} analyst. Convert the user's question into "

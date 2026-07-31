@@ -149,6 +149,7 @@
           <span class="db-logo">SQLite</span>
           <span class="db-logo">Snowflake</span>
           <span class="db-logo">Databricks</span>
+          <span class="db-logo">DuckDB</span>
           <span class="db-logo">BigQuery</span>
         </div>
         <span class="trust-line">read-only · your data stays yours</span>

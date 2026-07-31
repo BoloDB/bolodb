@@ -35,6 +35,7 @@ from backend.app.routes import (
     workspaces,
     dashboards,
     saved_queries,
+    slack,
 )
 
 logger = logging.getLogger(__name__)
@@ -98,6 +99,13 @@ async def lifespan(app):
     try:
         yield
     finally:
+        # Slack queries run in the background after /ask has already returned,
+        # so they are the one piece of work that can still be mid-flight here.
+        # Drain before disposing the database they are querying through.
+        from backend.app.integrations.slack.bot import drain_pending_queries
+
+        with suppress(Exception):
+            await drain_pending_queries()
         if cleanup_task:
             cleanup_task.cancel()
             with suppress(asyncio.CancelledError):
@@ -180,6 +188,7 @@ def create_app(initial_db_url="", readonly=True):
     app.include_router(workspaces.router)
     app.include_router(dashboards.router)
     app.include_router(saved_queries.router)
+    app.include_router(slack.router)
 
     # Catch-all for API 404app
 

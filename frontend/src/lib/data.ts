@@ -186,7 +186,10 @@ export function humanError(msg: string): string {
   if (
     m.includes("connection refused") ||
     m.includes("could not connect to server") ||
-    m.includes("can't connect")
+    m.includes("can't connect") ||
+    // ORA-12541 no listener, DPY-6005 cannot connect.
+    m.includes("ora-12541") ||
+    m.includes("dpy-6005")
   )
     return "The database server isn't running or can't be reached — check the host and port.";
   if (
@@ -197,9 +200,6 @@ export function humanError(msg: string): string {
     m.includes("ora-01017")
   )
     return "Wrong username or password — double-check your credentials.";
-  // ORA-12541 no listener, DPY-6005 cannot connect.
-  if (m.includes("ora-12541") || m.includes("dpy-6005"))
-    return "The database server isn't running or can't be reached — check the host and port.";
   // ORA-12514 unknown service, ORA-12154 could not resolve the connect identifier.
   if (m.includes("ora-12514") || m.includes("ora-12154"))
     return "That Oracle service name wasn't found — check the service_name (or SID) in your connection string.";
@@ -227,7 +227,7 @@ export function humanError(msg: string): string {
     m.includes("invalid access token") ||
     m.includes("403 client error")
   )
-    return "Wrong credentials — double-check your account details or access token.";
+    return "Access denied — check the credentials or that the account has permission for this resource.";
   if (m.includes("no active warehouse") || m.includes("warehouse not found"))
     return "No Snowflake warehouse selected — add a warehouse to the connection.";
   // Covers both readings: the validator rejecting a URL with no http_path at

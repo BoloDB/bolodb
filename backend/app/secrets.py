@@ -53,3 +53,23 @@ def get_resend_api_key():
 def get_resend_from_email():
     """Return the sender email address for Resend. Returns a default if not configured."""
     return os.getenv("RESEND_FROM_EMAIL", "noreply@bolodb.dev")
+
+
+def get_slack_client_id():
+    """Return the Slack app client ID. Returns None if not configured."""
+    return os.getenv("SLACK_CLIENT_ID") or None
+
+
+def get_slack_client_secret():
+    """Return the Slack app client secret. Returns None if not configured."""
+    return os.getenv("SLACK_CLIENT_SECRET") or None
+
+
+def get_slack_redirect_uri():
+    """Return the Slack OAuth redirect URI (backend callback). None if not configured."""
+    return os.getenv("SLACK_REDIRECT_URI") or None
+
+
+def get_slack_signing_secret():
+    """Return the Slack signing secret for verifying inbound events. None if not configured."""
+    return os.getenv("SLACK_SIGNING_SECRET") or None

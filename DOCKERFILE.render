@@ -35,8 +35,14 @@ RUN apt-get update && apt-get install -y nginx && rm -rf /var/lib/apt/lists/* \
 
 WORKDIR /app
 
+# Opt-in warehouse drivers — see backend/requirements-warehouses.txt.
+ARG INSTALL_WAREHOUSE_DRIVERS=false
 COPY backend/requirements.txt /app/backend/requirements.txt
-RUN pip install --no-cache-dir -r /app/backend/requirements.txt
+COPY backend/requirements-warehouses.txt /app/backend/requirements-warehouses.txt
+RUN pip install --no-cache-dir -r /app/backend/requirements.txt \
+    && if [ "$INSTALL_WAREHOUSE_DRIVERS" = "true" ]; then \
+         pip install --no-cache-dir -r /app/backend/requirements-warehouses.txt; \
+       fi
 
 COPY backend/ /app/backend/
 

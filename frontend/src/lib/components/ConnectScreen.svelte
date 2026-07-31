@@ -94,25 +94,29 @@
     pattern: /^\d+$/, patternError: "Port must be a number.",
   });
 
+  const PG_PORT = PORT("5432");
+  const MYSQL_PORT = PORT("3306");
+  const ORACLE_PORT = PORT("1521");
+
   const FORM_DIALECTS: FormDialectSpec[] = [
     {
       id: "postgresql",
       label: "PostgreSQL",
-      fields: [HOST, PORT("5432"), { id: "database", label: "Database", placeholder: "dbname" }, USER, PASSWORD],
-      build: (v) => `postgresql://${credentials(v)}${s(v.host)}:${val(v, PORT("5432"))}/${enc(s(v.database))}`,
+      fields: [HOST, PG_PORT, { id: "database", label: "Database", placeholder: "dbname" }, USER, PASSWORD],
+      build: (v) => `postgresql://${credentials(v)}${s(v.host)}:${val(v, PG_PORT)}/${enc(s(v.database))}`,
     },
     {
       id: "mysql",
       label: "MySQL",
-      fields: [HOST, PORT("3306"), { id: "database", label: "Database", placeholder: "dbname" }, USER, PASSWORD],
-      build: (v) => `mysql+pymysql://${credentials(v)}${s(v.host)}:${val(v, PORT("3306"))}/${enc(s(v.database))}`,
+      fields: [HOST, MYSQL_PORT, { id: "database", label: "Database", placeholder: "dbname" }, USER, PASSWORD],
+      build: (v) => `mysql+pymysql://${credentials(v)}${s(v.host)}:${val(v, MYSQL_PORT)}/${enc(s(v.database))}`,
     },
     {
       id: "oracle",
       label: "Oracle",
       // Oracle names the target with a service_name parameter rather than a path.
-      fields: [HOST, PORT("1521"), { id: "database", label: "Service name", placeholder: "ORCLPDB1" }, USER, PASSWORD],
-      build: (v) => `oracle+oracledb://${credentials(v)}${s(v.host)}:${val(v, PORT("1521"))}/?service_name=${enc(s(v.database))}`,
+      fields: [HOST, ORACLE_PORT, { id: "database", label: "Service name", placeholder: "ORCLPDB1" }, USER, PASSWORD],
+      build: (v) => `oracle+oracledb://${credentials(v)}${s(v.host)}:${val(v, ORACLE_PORT)}/?service_name=${enc(s(v.database))}`,
     },
     {
       id: "snowflake",
@@ -504,7 +508,7 @@
             data-testid="connect-own-card"
           >
             <span class="c-title">Connect my database</span>
-            <span class="c-desc">PostgreSQL, MySQL or Oracle. One connection string, read-only.</span>
+            <span class="c-desc">PostgreSQL, MySQL, Oracle, Snowflake, Databricks, and BigQuery. One connection string, read-only.</span>
             <span class="c-tag accent">RECOMMENDED · ~1 MINUTE</span>
           </button>
           <button
@@ -963,13 +967,12 @@
     grid-template-columns: repeat(6, 1fr);
     gap: 8px;
   }
-  .field { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+  .field { display: flex; flex-direction: column; gap: 5px; min-width: 0; grid-column: span 3; }
   .field-label { font-size: 12px; color: var(--muted); font-weight: 500; }
   .field-opt { font-weight: 400; opacity: 0.65; }
   .field-help { font-size: 11.5px; color: var(--muted); opacity: 0.8; line-height: 1.35; }
   /* A service account key is a multi-line JSON document, not a one-liner. */
   .key-input { resize: vertical; min-height: 96px; line-height: 1.4; }
-  .field { grid-column: span 3; }
   .span-2 { grid-column: 1 / -1; }
   /* Port needs far less room than the host it sits beside. */
   .host-field { grid-column: span 4; }

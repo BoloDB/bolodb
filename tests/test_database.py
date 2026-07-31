@@ -333,6 +333,131 @@ def test_validate_db_url_rejects_every_loopback_address(url):
         _validate_db_url(url)
 
 
+# --- private and internal addresses -----------------------------------------
+
+
+@pytest.mark.parametrize(
+    "host",
+    [
+        "10.0.0.5",
+        "192.168.1.20",
+        "172.16.4.1",
+        "172.31.255.254",
+        "[fd00::1]",
+    ],
+)
+def test_a_private_address_is_refused_by_default(host):
+    """A connection URL is user input. On a shared deployment, letting one
+    workspace point it at 10.0.0.5 turns "add a database" into a scan of
+    whatever else shares the network."""
+    with pytest.raises(ValueError, match="private"):
+        _validate_db_url(f"postgresql://user:pass@{host}:5432/db")
+
+
+@pytest.mark.parametrize("host", ["10.0.0.5", "192.168.1.20"])
+def test_a_private_address_is_allowed_when_the_operator_says_so(host, monkeypatch):
+    """Self-hosted installs whose database genuinely sits on a LAN. Only the
+    operator can know that, which is why it is an env var and not a setting."""
+    monkeypatch.setenv("ALLOW_PRIVATE_DB_HOSTS", "true")
+    url = f"postgresql://user:pass@{host}:5432/db"
+    assert _validate_db_url(url) == url
+
+
+def test_loopback_stays_blocked_even_when_private_hosts_are_allowed(monkeypatch):
+    """The escape hatch is for a LAN, not for reaching back into this server."""
+    monkeypatch.setenv("ALLOW_PRIVATE_DB_HOSTS", "true")
+    # 127.0.0.2 rather than 127.0.0.1: the latter is caught by name from
+    # _BLOCKED_HOSTS, which would pass this test without the IP check running.
+    with pytest.raises(ValueError, match="loopback"):
+        _validate_db_url("postgresql://user:pass@127.0.0.2:5432/db")
+
+
+@pytest.mark.parametrize(
+    "host",
+    [
+        # IPv4 wrapped in IPv6 reports none of the flags for the address it
+        # actually reaches.
+        "[::ffff:127.0.0.1]",
+        "[::ffff:10.0.0.5]",
+    ],
+)
+def test_an_ipv4_mapped_address_is_checked_as_the_address_it_reaches(host):
+    with pytest.raises(ValueError):
+        _validate_db_url(f"postgresql://user:pass@{host}:5432/db")
+
+
+def test_a_public_address_is_accepted():
+    url = "postgresql://user:pass@8.8.8.8:5432/db"
+    assert _validate_db_url(url) == url
+
+
+def test_a_hostname_that_resolves_into_a_private_range_is_refused(monkeypatch):
+    """The text of a hostname says nothing about where it points, which is the
+    whole SSRF shape: the caller picks the name, the resolver picks the address.
+    "10.0.0.5.nip.io" walks past every check that only reads the string."""
+    import ipaddress
+
+    monkeypatch.setattr(
+        "backend.app.database._resolve_all",
+        lambda hostname: [ipaddress.ip_address("10.0.0.5")],
+    )
+    with pytest.raises(ValueError, match="private"):
+        _validate_db_url("postgresql://user:pass@db.example.com:5432/db")
+
+
+def test_a_hostname_that_resolves_publicly_is_accepted(monkeypatch):
+    import ipaddress
+
+    monkeypatch.setattr(
+        "backend.app.database._resolve_all",
+        lambda hostname: [ipaddress.ip_address("93.184.216.34")],
+    )
+    url = "postgresql://user:pass@db.example.com:5432/db"
+    assert _validate_db_url(url) == url
+
+
+def test_a_name_that_does_not_resolve_is_left_to_the_driver(monkeypatch):
+    """It may resolve from wherever the driver runs but not from here, and
+    create_engine is about to give a far better message than this could."""
+    monkeypatch.setattr("backend.app.database._resolve_all", lambda hostname: [])
+    url = "postgresql://user:pass@nonexistent.invalid:5432/db"
+    assert _validate_db_url(url) == url
+
+
+def test_every_address_a_name_resolves_to_is_checked(monkeypatch):
+    """A name with several A records only has to point at one internal address
+    for the connection to reach it."""
+    import ipaddress
+
+    monkeypatch.setattr(
+        "backend.app.database._resolve_all",
+        lambda hostname: [
+            ipaddress.ip_address("93.184.216.34"),
+            ipaddress.ip_address("169.254.169.254"),
+        ],
+    )
+    with pytest.raises(ValueError):
+        _validate_db_url("postgresql://user:pass@db.example.com:5432/db")
+
+
+def test_resolution_is_skipped_when_private_hosts_are_allowed(monkeypatch):
+    """Nothing left for it to reject, so the lookup would be pure latency."""
+    monkeypatch.setenv("ALLOW_PRIVATE_DB_HOSTS", "true")
+
+    def explode(hostname):
+        raise AssertionError("should not resolve when private hosts are allowed")
+
+    monkeypatch.setattr("backend.app.database._resolve_all", explode)
+    url = "postgresql://user:pass@db.example.com:5432/db"
+    assert _validate_db_url(url) == url
+
+
+def test_sqlite_is_not_subjected_to_host_checks(tmp_path):
+    """A file path has no host at all."""
+    url = f"sqlite:///{tmp_path / 'x.db'}"
+    assert _validate_db_url(url) == url
+
+
 # --- Oracle read-only guard -------------------------------------------------
 
 

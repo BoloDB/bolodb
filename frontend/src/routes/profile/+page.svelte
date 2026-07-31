@@ -15,6 +15,19 @@
   let saving = $state(false);
   let savedFlash = $state(false);
 
+  let slackInstallations = $state<any[]>([]);
+  let slackLoading = $state(false);
+  let disconnectingTeam = $state<string | null>(null);
+
+  // Installing and removing a Slack app both require connections.manage, which
+  // the backend enforces. Mirroring it here is about not showing a member a
+  // "Connect Slack" button whose only possible outcome is a 403 — the check
+  // that matters is still the server's.
+  const canManageSlack = $derived(
+    appState.activeWorkspace?.role === 'admin' ||
+      appState.activeWorkspace?.role === 'owner'
+  );
+
   onMount(async () => {
     if (!appState.isLoaded) {
       await appState.init(false);
@@ -34,9 +47,24 @@
       densityPref = meta.densityPref === 'compact' ? 'compact' : 'comfortable';
       analyticsOptIn = meta.analyticsOptIn !== false;
       applyDensity(densityPref);
-      // Apply the saved theme immediately so the page matches the stored
-      // preference even when localStorage is stale.
       appState.applyTheme(resolveTheme(themePref));
+
+      await loadSlackInstallations();
+
+      const params = new URLSearchParams(window.location.search);
+      if (params.get('slack') === 'connected') {
+        appState.showToast({ title: 'Slack connected', body: 'Your Slack workspace has been linked to BoloDB.' });
+        history.replaceState(null, '', '/profile');
+      } else if (params.get('slack') === 'error') {
+        appState.showToast({ title: 'Slack connection failed', body: 'Could not connect Slack. Please try again.' });
+        history.replaceState(null, '', '/profile');
+      } else if (params.get('slack') === 'config') {
+        appState.showToast({ title: 'Slack not configured', body: 'Slack integration is not set up on this server. Contact an administrator.' });
+        history.replaceState(null, '', '/profile');
+      } else if (params.get('slack') === 'conflict') {
+        appState.showToast({ title: 'Slack conflict', body: 'This Slack workspace is already connected to another BoloDB workspace.' });
+        history.replaceState(null, '', '/profile');
+      }
     } catch (e: any) {
       error = e.message || 'Could not load your profile';
       if (e.status === 401) goto('/login');
@@ -44,6 +72,54 @@
       loading = false;
     }
   });
+
+  async function loadSlackInstallations() {
+    try {
+      const res = await apiCall('/api/slack/installations');
+      slackInstallations = res?.installations || [];
+    } catch (e) {
+      console.warn("Failed to load Slack installations:", e);
+      slackInstallations = [];
+    }
+  }
+
+  async function connectSlack() {
+    slackLoading = true;
+    try {
+      const res = await apiCall('/api/slack/install');
+      const url = res?.content?.url || res?.url;
+      if (url) {
+        // A same-tab navigation rather than window.open: the popup blocker
+        // rejects a new window opened after an await, since the user gesture
+        // that started this is already gone. Slack redirects back to /profile.
+        window.location.href = url;
+      } else {
+        appState.showToast({ title: 'Slack unavailable', body: 'Slack is not configured on this server.' });
+      }
+    } catch (e: any) {
+      appState.showToast({ title: 'Error', body: e.message || 'Could not start Slack install.' });
+    } finally {
+      slackLoading = false;
+    }
+  }
+
+  async function disconnectSlack(teamId: string) {
+    disconnectingTeam = teamId;
+    try {
+      const res = await apiCall(`/api/slack/installations/${encodeURIComponent(teamId)}`, undefined, 'DELETE');
+      const ok = res?.content?.ok ?? res?.ok;
+      if (ok) {
+        slackInstallations = slackInstallations.filter(i => i.team_id !== teamId);
+        appState.showToast({ title: 'Slack disconnected', body: 'Slack has been disconnected from your workspace.' });
+      } else {
+        appState.showToast({ title: 'Error', body: 'Could not disconnect Slack.' });
+      }
+    } catch (e: any) {
+      appState.showToast({ title: 'Error', body: e.message || 'Could not disconnect Slack.' });
+    } finally {
+      disconnectingTeam = null;
+    }
+  }
 
   function applyDensity(density: string) {
     if (typeof document === 'undefined') return;
@@ -229,6 +305,54 @@
           </label>
         </section>
 
+        <section class="panel">
+          <div class="panel-head">
+            <h2>Slack Integration</h2>
+            <p>Ask questions from Slack via the <code>/ask</code> command.</p>
+          </div>
+          <div class="rows">
+            {#if slackInstallations.length > 0}
+              {#each slackInstallations as inst}
+                <div class="row">
+                  <div class="info">
+                    <label>{inst.team_name || inst.team_id}</label>
+                    <span>Connected — use <code>/ask</code> in Slack</span>
+                  </div>
+                  {#if canManageSlack}
+                    <button
+                      class="btn ghost danger"
+                      onclick={() => disconnectSlack(inst.team_id)}
+                      disabled={disconnectingTeam === inst.team_id}
+                    >
+                      {disconnectingTeam === inst.team_id ? '…' : 'Disconnect'}
+                    </button>
+                  {/if}
+                </div>
+              {/each}
+            {:else}
+              <div class="row">
+                <div class="info">
+                  <label>Not connected</label>
+                  <span>
+                    {canManageSlack
+                      ? 'Link a Slack workspace to query your databases from Slack.'
+                      : 'Ask a workspace admin to link a Slack workspace.'}
+                  </span>
+                </div>
+                {#if canManageSlack}
+                  <button
+                    class="btn primary"
+                    onclick={connectSlack}
+                    disabled={slackLoading}
+                  >
+                    {slackLoading ? '…' : 'Connect Slack'}
+                  </button>
+                {/if}
+              </div>
+            {/if}
+          </div>
+        </section>
+
         <section class="panel links">
           <a href="/workspaces">Workspace settings →</a>
           <a href="/dashboards">Dashboards →</a>
@@ -364,6 +488,8 @@
     color: var(--muted);
     border: 1px solid var(--border);
   }
+  .btn.ghost.danger { color: var(--c-low-ink); border-color: var(--c-low-tint); }
+  .btn.ghost.danger:hover { background: var(--c-low-tint); }
   .status-list { padding: 14px 16px 18px; display: flex; flex-direction: column; gap: 8px; }
   .status {
     display: flex;

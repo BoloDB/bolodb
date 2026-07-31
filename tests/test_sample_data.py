@@ -7,6 +7,7 @@ a mangled `money` column or dates stuck in 2018 all show up as the product being
 wrong rather than the data being old.
 """
 
+import os
 import sqlite3
 from datetime import datetime, timedelta
 
@@ -201,3 +202,58 @@ def test_build_is_atomic(tmp_path, monkeypatch):
 
     assert not target.exists(), "a partial build must not be left in place"
     assert list(tmp_path.iterdir()) == [], "the temporary file must be cleaned up"
+
+
+# --- staying current over time ----------------------------------------------
+
+
+def test_a_freshly_built_sample_is_not_considered_stale(tmp_path, monkeypatch):
+    monkeypatch.setattr(sample_data, "_DATA_DIR", tmp_path)
+    path = tmp_path / "fresh.db"
+    path.write_bytes(b"")
+    assert sample_data._is_stale(path) is False
+
+
+def test_a_sample_older_than_the_window_is_considered_stale(tmp_path):
+    """`_shift_to_present` fixes the dates as of the build, so the built file
+    ages exactly the way the vendored dump does. Left alone on a data volume it
+    goes stale again, and "orders last week" answers nothing."""
+    path = tmp_path / "old.db"
+    path.write_bytes(b"")
+    old = (datetime.now() - sample_data.SAMPLE_MAX_AGE - timedelta(days=1)).timestamp()
+    os.utime(path, (old, old))
+    assert sample_data._is_stale(path) is True
+
+
+def test_a_stale_sample_is_rebuilt_in_place(tmp_path, monkeypatch):
+    """In place, deliberately: db_id is a hash of this URL, and a workspace's
+    glossary, catalog and verified queries all hang off it. Rebuilding under a
+    new name would orphan that knowledge every time the dates were refreshed."""
+    monkeypatch.setattr(sample_data, "_DATA_DIR", tmp_path)
+    builds = []
+    monkeypatch.setattr(sample_data, "_build", lambda path: builds.append(path))
+
+    first = sample_data.ensure_sample_db()
+    assert len(builds) == 1
+
+    # The stub never wrote a file, so simulate one that exists but is old.
+    target = sample_data.sample_db_path()
+    target.write_bytes(b"")
+    old = (datetime.now() - sample_data.SAMPLE_MAX_AGE - timedelta(days=1)).timestamp()
+    os.utime(target, (old, old))
+
+    second = sample_data.ensure_sample_db()
+    assert len(builds) == 2, "a stale sample must be rebuilt"
+    assert second == first, "the URL — and so db_id — must not change"
+
+
+def test_a_current_sample_is_not_rebuilt(tmp_path, monkeypatch):
+    monkeypatch.setattr(sample_data, "_DATA_DIR", tmp_path)
+    builds = []
+    monkeypatch.setattr(sample_data, "_build", lambda path: builds.append(path))
+
+    sample_data.ensure_sample_db()
+    sample_data.sample_db_path().write_bytes(b"")
+    sample_data.ensure_sample_db()
+
+    assert len(builds) == 1
