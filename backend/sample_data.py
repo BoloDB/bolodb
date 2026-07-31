@@ -186,14 +186,43 @@ def sample_db_path() -> Path:
     return _DATA_DIR / f"sample_webshop_v{SAMPLE_VERSION}.db"
 
 
+# How far the sample data is allowed to drift behind today before the file is
+# rebuilt. `_shift_to_present` slides the history so the newest row lands on the
+# build date, which fixes the dates only as of that build — a file kept on the
+# data volume for a year answers "last week" with nothing at all. A week is
+# short enough that every time-based question in the sample still works and long
+# enough that the rebuild is not something anyone notices.
+SAMPLE_MAX_AGE = timedelta(days=7)
+
+
 def ensure_sample_db() -> str:
-    """Return a connection URL for the sample database, building it if needed."""
+    """Return a connection URL for the sample database, building it if needed.
+
+    The path deliberately does not change as the data is refreshed: `db_id` is a
+    hash of this URL, and a workspace's glossary, catalog and verified queries
+    all hang off it. Rebuilding in place keeps that knowledge attached to the
+    sample rather than orphaning it every time the dates are re-shifted.
+    """
     path = sample_db_path()
     path.parent.mkdir(parents=True, exist_ok=True)
-    if not path.exists():
+    if not path.exists() or _is_stale(path):
         _build(path)
         _remove_stale_samples(path)
     return f"sqlite:///{path.as_posix()}"
+
+
+def _is_stale(path: Path) -> bool:
+    """Whether the built file's dates have drifted too far behind today.
+
+    Keyed on the file's mtime rather than on anything inside it: the build is
+    what applies the shift, so when the build happened *is* how stale the dates
+    are, and reading it costs one stat instead of opening the database.
+    """
+    try:
+        built = datetime.fromtimestamp(path.stat().st_mtime)
+    except OSError:
+        return True
+    return datetime.now() - built > SAMPLE_MAX_AGE
 
 
 def _build(path: Path) -> None:
@@ -247,9 +276,13 @@ def _shift_to_present(blocks):
 
     `build_sample_dump.py` already does this once, against the day the dump was
     generated — but the dump is vendored and then used for months, so those dates
-    go stale the moment it is committed. Redoing the shift at load time keeps
+    go stale the moment it is committed. Redoing the shift at build time keeps
     every "last month" question answerable no matter how old the dump is, and
     preserves the intervals between rows.
+
+    The built file then ages the same way, which is what `SAMPLE_MAX_AGE` and
+    `_is_stale` are for: this shift only ever fixes the dates as of the build,
+    so the build has to be redone periodically for them to stay fixed.
     """
     blocks = list(blocks)
 

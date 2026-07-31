@@ -19,6 +19,15 @@
   let slackLoading = $state(false);
   let disconnectingTeam = $state<string | null>(null);
 
+  // Installing and removing a Slack app both require connections.manage, which
+  // the backend enforces. Mirroring it here is about not showing a member a
+  // "Connect Slack" button whose only possible outcome is a 403 — the check
+  // that matters is still the server's.
+  const canManageSlack = $derived(
+    appState.activeWorkspace?.role === 'admin' ||
+      appState.activeWorkspace?.role === 'owner'
+  );
+
   onMount(async () => {
     if (!appState.isLoaded) {
       await appState.init(false);
@@ -97,7 +106,7 @@
   async function disconnectSlack(teamId: string) {
     disconnectingTeam = teamId;
     try {
-      const res = await apiCall(`/api/slack/installations/${teamId}`, undefined, 'DELETE');
+      const res = await apiCall(`/api/slack/installations/${encodeURIComponent(teamId)}`, undefined, 'DELETE');
       const ok = res?.content?.ok ?? res?.ok;
       if (ok) {
         slackInstallations = slackInstallations.filter(i => i.team_id !== teamId);
@@ -309,28 +318,36 @@
                     <label>{inst.team_name || inst.team_id}</label>
                     <span>Connected — use <code>/ask</code> in Slack</span>
                   </div>
-                  <button
-                    class="btn ghost danger"
-                    onclick={() => disconnectSlack(inst.team_id)}
-                    disabled={disconnectingTeam === inst.team_id}
-                  >
-                    {disconnectingTeam === inst.team_id ? '…' : 'Disconnect'}
-                  </button>
+                  {#if canManageSlack}
+                    <button
+                      class="btn ghost danger"
+                      onclick={() => disconnectSlack(inst.team_id)}
+                      disabled={disconnectingTeam === inst.team_id}
+                    >
+                      {disconnectingTeam === inst.team_id ? '…' : 'Disconnect'}
+                    </button>
+                  {/if}
                 </div>
               {/each}
             {:else}
               <div class="row">
                 <div class="info">
                   <label>Not connected</label>
-                  <span>Link a Slack workspace to query your databases from Slack.</span>
+                  <span>
+                    {canManageSlack
+                      ? 'Link a Slack workspace to query your databases from Slack.'
+                      : 'Ask a workspace admin to link a Slack workspace.'}
+                  </span>
                 </div>
-                <button
-                  class="btn primary"
-                  onclick={connectSlack}
-                  disabled={slackLoading}
-                >
-                  {slackLoading ? '…' : 'Connect Slack'}
-                </button>
+                {#if canManageSlack}
+                  <button
+                    class="btn primary"
+                    onclick={connectSlack}
+                    disabled={slackLoading}
+                  >
+                    {slackLoading ? '…' : 'Connect Slack'}
+                  </button>
+                {/if}
               </div>
             {/if}
           </div>

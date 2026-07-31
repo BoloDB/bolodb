@@ -188,10 +188,13 @@ def _verify_slack_request(body: bytes, timestamp: str, signature: str) -> bool:
     if not secret:
         return False
 
-    sig_basestring = f"v0:{timestamp}:{body.decode()}"
+    # The basestring is bytes all the way down. Decoding the body to build it
+    # would raise UnicodeDecodeError on a non-UTF-8 payload — surfacing as a
+    # 500 from a request that should simply have been rejected, and handing an
+    # unauthenticated caller a way to provoke tracebacks.
+    sig_basestring = b"v0:" + timestamp.encode() + b":" + body
     my_signature = (
-        "v0="
-        + hmac.new(secret.encode(), sig_basestring.encode(), hashlib.sha256).hexdigest()
+        "v0=" + hmac.new(secret.encode(), sig_basestring, hashlib.sha256).hexdigest()
     )
     return hmac.compare_digest(my_signature, signature)
 
@@ -218,29 +221,54 @@ async def slack_events(
     if not _verify_slack_request(body, timestamp, signature):
         raise HTTPException(401, "Invalid Slack request signature")
 
+    # Slack re-delivers a request it considers failed or too slow, marking the
+    # redelivery with X-Slack-Retry-Num. Every handler below starts an LLM call
+    # and a database query, so running a retry would bill and execute the whole
+    # pipeline a second time and post a second answer over the first. The
+    # original attempt is still running and will deliver via response_url, so
+    # acknowledge and do nothing.
+    retry_num = request.headers.get("X-Slack-Retry-Num", "")
+    is_retry = bool(retry_num)
+    if is_retry:
+        log.info(
+            "Ignoring Slack retry #%s (%s)",
+            retry_num,
+            request.headers.get("X-Slack-Retry-Reason", "unknown"),
+        )
+
     content_type = request.headers.get("content-type", "")
 
     if "application/x-www-form-urlencoded" in content_type:
-        form = parse_qs(body.decode())
+        try:
+            form = parse_qs(body.decode())
+        except UnicodeDecodeError:
+            raise HTTPException(400, "Request body is not valid UTF-8")
 
         if "payload" in form:
             try:
                 payload = json.loads(form["payload"][0])
             except (json.JSONDecodeError, IndexError):
                 raise HTTPException(400, "Invalid form payload")
+            if is_retry:
+                return {}
             return await handle_interactive_callback(
                 payload, db, kb, cfg, providers, session_log
             )
         else:
             payload = {k: v[0] for k, v in form.items()}
+            if is_retry:
+                return {}
             return await handle_slash_command(
                 payload, db, kb, cfg, providers, session_log
             )
 
     try:
         data = json.loads(body)
-    except json.JSONDecodeError:
+    except (json.JSONDecodeError, UnicodeDecodeError):
         raise HTTPException(400, "Invalid JSON in request body")
+    # url_verification is exempt from the retry guard: answering the challenge
+    # has no side effects, and refusing a retried one would leave the app's
+    # event subscription unverifiable.
     if data.get("type") == "url_verification":
         challenge = data.get("challenge")
         if not challenge:

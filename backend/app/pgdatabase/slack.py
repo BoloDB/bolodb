@@ -26,22 +26,24 @@ async def save_installation(
     uid = _to_uuid(user_id)
     async with async_session() as session:
         try:
-            # Check if this team is already installed on a different workspace.
-            existing = await session.execute(
-                select(SlackInstallation).where(
-                    SlackInstallation.team_id == team_id,
-                    SlackInstallation.workspace_id != wid,
-                )
-            )
-            existing_other = existing.scalar_one_or_none()
-            if existing_other:
-                raise SlackTeamConflictError(
-                    "This Slack workspace is already connected to a different BoloDB workspace."
-                )
-
+            # This workspace's previous installation, if it was of a *different*
+            # Slack team, has to go — uq_slack_installations_workspace allows
+            # only one. The row for this same team, if any, is left for the
+            # upsert below to update in place.
             await session.execute(
-                delete(SlackInstallation).where(SlackInstallation.workspace_id == wid)
+                delete(SlackInstallation).where(
+                    SlackInstallation.workspace_id == wid,
+                    SlackInstallation.team_id != team_id,
+                )
             )
+            # The conflict clause is where the cross-workspace check lives, not
+            # a SELECT beforehand: a check-then-insert is two statements with a
+            # gap between them, and two installs of the same Slack team racing
+            # through that gap would both pass, the loser's upsert silently
+            # rewriting workspace_id and moving the installation out from under
+            # the workspace that owns it. Restricting the update to rows this
+            # workspace already owns makes the database itself refuse that, and
+            # a hit that updates nothing is the conflict.
             s = (
                 pg_insert(SlackInstallation)
                 .values(
@@ -63,9 +65,14 @@ async def save_installation(
                         workspace_id=wid,
                         scopes=scopes,
                     ),
+                    where=SlackInstallation.workspace_id == wid,
                 )
             )
-            await session.execute(s)
+            result = await session.execute(s)
+            if result.rowcount == 0:
+                raise SlackTeamConflictError(
+                    "This Slack workspace is already connected to a different BoloDB workspace."
+                )
             await session.commit()
         except Exception:
             await session.rollback()
@@ -81,29 +88,6 @@ async def get_installation_by_team(team_id):
         if install is None:
             return None
         return install
-
-
-async def get_installation_by_user(user_id):
-    uid = _to_uuid(user_id)
-    async with async_session() as session:
-        result = await session.execute(
-            select(SlackInstallation).where(SlackInstallation.user_id == uid)
-        )
-        install = result.scalars().all()
-        return install
-
-
-async def delete_installation(team_id):
-    async with async_session() as session:
-        try:
-            result = await session.execute(
-                delete(SlackInstallation).where(SlackInstallation.team_id == team_id)
-            )
-            await session.commit()
-            return result.rowcount > 0
-        except Exception:
-            await session.rollback()
-            raise
 
 
 async def get_installations_by_workspace(workspace_id):

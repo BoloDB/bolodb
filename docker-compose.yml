@@ -27,6 +27,11 @@ services:
       - SUPABASE_JWT_SECRET=${SUPABASE_JWT_SECRET:?SUPABASE_JWT_SECRET must be set}
       - MYEMAILVERIFIER_API_KEY=${MYEMAILVERIFIER_API_KEY}
       - RESEND_API_KEY=${RESEND_API_KEY}
+      - FRONTEND_URL=${FRONTEND_URL}
+      - SLACK_CLIENT_ID=${SLACK_CLIENT_ID}
+      - SLACK_CLIENT_SECRET=${SLACK_CLIENT_SECRET}
+      - SLACK_SIGNING_SECRET=${SLACK_SIGNING_SECRET}
+      - SLACK_REDIRECT_URI=${SLACK_REDIRECT_URI}
     healthcheck:
       test: ["CMD-SHELL", "python -c \"import httpx; httpx.get('http://localhost:4321/api/health', timeout=3).raise_for_status()\" || exit 1"]
       interval: 10s

@@ -99,6 +99,13 @@ async def lifespan(app):
     try:
         yield
     finally:
+        # Slack queries run in the background after /ask has already returned,
+        # so they are the one piece of work that can still be mid-flight here.
+        # Drain before disposing the database they are querying through.
+        from backend.app.integrations.slack.bot import drain_pending_queries
+
+        with suppress(Exception):
+            await drain_pending_queries()
         if cleanup_task:
             cleanup_task.cancel()
             with suppress(asyncio.CancelledError):

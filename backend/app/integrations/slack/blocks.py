@@ -1,5 +1,25 @@
 import json
 
+# Slack caps a section's text at 3000 characters and a message at 50 blocks.
+MAX_SECTION_TEXT = 3000
+MAX_BLOCKS = 50
+
+# Rows shown in a result table before it says "showing first N of M".
+MAX_TABLE_ROWS = 10
+
+
+def _fence_safe(text) -> str:
+    """Text that cannot close a Slack code fence it is being placed inside.
+
+    Cell values and generated SQL both go into ``` blocks, and either can
+    contain a literal triple backtick — a column holding a snippet of markdown,
+    or a SQL string literal. Slack ends the fence at the first one it sees, so
+    the rest of the table renders as prose and any backticks after it re-open
+    it. A zero-width space between the backticks is invisible in the rendered
+    message and breaks the sequence.
+    """
+    return str(text).replace("```", "`\u200b``")
+
 
 def loading_blocks(connection_name: str, question: str) -> list[dict]:
     return [
@@ -20,6 +40,50 @@ def loading_blocks(connection_name: str, question: str) -> list[dict]:
             ],
         },
     ]
+
+
+def _table_block(columns: list, rows: list) -> dict:
+    """A fenced text table of the first rows, trimmed to Slack's 3000 chars.
+
+    Built once and then shortened a row at a time, rather than rebuilt from
+    scratch each pass: the two used to be separate format strings that had to
+    be kept identical, and a change to one silently produced a different table
+    on the truncation path than on the normal one.
+    """
+    header = _fence_safe(" | ".join(str(c) for c in columns))
+    rule = "—" * min(len(header), 60)
+    total = len(rows)
+    lines = [
+        _fence_safe(" | ".join("NULL" if v is None else str(v) for v in row))
+        for row in rows[:MAX_TABLE_ROWS]
+    ]
+
+    def render(visible: list[str]) -> str:
+        body = "\n".join(visible)
+        notice = (
+            f"\n_Showing first {len(visible)} of {total} rows_"
+            if len(visible) < total
+            else ""
+        )
+        if not visible:
+            # Every row was too wide to fit. An empty fence renders as a blank
+            # grey box that looks like a bug; say what happened instead.
+            return (
+                f"*Results ({total} row{'s' if total != 1 else ''}):*\n"
+                "_The rows are too wide to show in Slack — run the SQL above "
+                "in BoloDB to see them._"
+            )
+        return (
+            f"*Results ({total} row{'s' if total != 1 else ''}):*\n"
+            f"```\n{header}\n{rule}\n{body}\n```{notice}"
+        )
+
+    text = render(lines)
+    while len(text) > MAX_SECTION_TEXT and lines:
+        lines.pop()
+        text = render(lines)
+
+    return {"type": "section", "text": {"type": "mrkdwn", "text": text}}
 
 
 def result_blocks(
@@ -73,9 +137,11 @@ def result_blocks(
         )
 
     if result.get("sql"):
-        sql = result["sql"]
-        if len(sql) > 2985:
-            sql = sql[:2982] + "..."
+        sql = _fence_safe(result["sql"])
+        # Leave room for the "*SQL:*" label and the fence itself.
+        budget = MAX_SECTION_TEXT - 20
+        if len(sql) > budget:
+            sql = sql[: budget - 3] + "..."
         blocks.append(
             {
                 "type": "section",
@@ -86,57 +152,7 @@ def result_blocks(
     columns = result.get("columns", [])
     rows = result.get("rows", [])
     if columns and rows:
-        max_rows = 10
-        display_rows = rows[:max_rows]
-
-        header_row = " | ".join(str(c) for c in columns)
-        line_rows = []
-        for row in display_rows:
-            line_rows.append(
-                " | ".join(str(v) if v is not None else "NULL" for v in row)
-            )
-
-        table_text = (
-            f"*Results ({len(rows)} row{'s' if len(rows) != 1 else ''}):*\n"
-            f"```\n{header_row}\n{'—' * min(len(header_row), 60)}\n"
-            + "\n".join(line_rows)
-            + "\n```"
-        )
-
-        shown = len(line_rows)
-        notice = (
-            f"\n_Showing first {shown} of {len(rows)} rows_"
-            if shown < len(rows)
-            else ""
-        )
-
-        candidate = table_text + notice
-        if len(candidate) > 3000:
-            while len(candidate) > 3000 and line_rows:
-                line_rows.pop()
-                shown = len(line_rows)
-                notice = (
-                    f"\n_Showing first {shown} of {len(rows)} rows_"
-                    if shown < len(rows)
-                    else ""
-                )
-                table_text = (
-                    f"*Results ({len(rows)} row{'s' if len(rows) != 1 else ''}):*\n"
-                    f"```\n{header_row}\n{'—' * min(len(header_row), 60)}\n"
-                    + "\n".join(line_rows)
-                    + "\n```"
-                )
-                candidate = table_text + notice
-
-        if notice:
-            table_text += notice
-
-        blocks.append(
-            {
-                "type": "section",
-                "text": {"type": "mrkdwn", "text": table_text},
-            }
-        )
+        blocks.append(_table_block(columns, rows))
     elif result.get("sql"):
         blocks.append(
             {
@@ -185,10 +201,6 @@ def error_blocks(error_message: str, question: str | None = None) -> list[dict]:
         }
     )
     return blocks
-
-
-# Slack enforces 50 blocks per message
-MAX_BLOCKS = 50
 
 
 def connection_picker_blocks(connections: list[dict], question: str) -> list[dict]:

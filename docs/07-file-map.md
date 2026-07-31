@@ -23,6 +23,7 @@ Use this as an index: find the thing you care about, open the file next to it.
 | `backend/app/semantic.py` | Semantic catalog helpers: `suggest_from_schema()` derives joins and value maps from the schema, `merge_catalog_suggestions()` combines them with LLM enrichment, `filter_catalog()` scopes entries to linked tables. → [chapter 12](12-semantic-layer.md) |
 | `backend/app/database.py` | `DatabaseManager` — connects to *your* database (SQLAlchemy), introspects schema (tables, columns, PKs, FKs, sample rows, row counts, distinct values), read-only guard via AST parsing, SSRF validation, statement timeout. Keyed per workspace+db_id. |
 | `backend/app/dialects.py` | Per-dialect traits table — the single source of truth for which databases are connectable, their sqlglot name, row-limiting syntax (`LIMIT` vs Oracle's `FETCH FIRST`), identifier quoting and casing, bulk row-count SQL, statement-timeout mechanism, and LLM syntax hint, plus which query parameters are refused outright (they name a target or read a file the SSRF guard cannot inspect) and which carry a credential and are redacted. Add a database by adding one entry here. |
+| `backend/app/crypto.py` | Generic secret encryption at rest, reusing the `RECENT_CONNECTIONS_KEY`-derived Fernet key. Used for integration secrets such as the Slack bot token. |
 | `backend/app/config.py` | In-memory only. API key read from `OPENROUTER_API_KEY` env var. Activity log retention settings also live here. |
 | `backend/app/utils.py` | `_tokens()` — the cached word tokenizer used by schema linking and similarity scoring. |
 
@@ -44,6 +45,7 @@ Routes (`backend/app/routes/`) are thin — they parse the request, enforce perm
 | `routes/workspaces.py` | `GET/POST/PATCH/DELETE /api/workspaces`, invites, members | `controllers/workspaces.py` |
 | `routes/dashboards.py` | `GET/POST/PATCH/DELETE /api/dashboards`, panel batch update | `controllers/dashboards.py` |
 | `routes/saved_queries.py` | `GET/POST/DELETE /api/saved-queries` | `controllers/dashboards.py` |
+| `routes/slack.py` | `GET /api/slack/install`, `GET /api/slack/oauth/callback`, `GET/DELETE /api/slack/installations`, `POST /api/slack/events` | `integrations/slack/` |
 | — | Activity logs controller | `controllers/activity.py` |
 
 ### Auth, permissions, and dependencies
@@ -62,6 +64,7 @@ Routes (`backend/app/routes/`) are thin — they parse the request, enforce perm
 | `pgdatabase/engine.py` | Async SQLAlchemy engine and session factory. `get_engine()`, `DATABASE_URL` env var → `create_async_engine()`. `async_session`, `dispose_db()`. |
 | `pgdatabase/knowledge.py` | `KnowledgeService` — verified Q&A storage, glossary, semantic catalog (column descriptions, metrics, joins, synonyms, value maps). All async, all PostgreSQL. `add_verified()`, `retrieve_similar()`, `get_glossary()`, `set_glossary()`, `get_catalog()`, `set_catalog()`. |
 | `pgdatabase/users.py` | User CRUD: `create_user()`, `get_user_by_email()`, `update_user()`. |
+| `pgdatabase/slack.py` | Slack installations, one per workspace and one per Slack team. `save_installation()` upserts under a conflict clause scoped to the owning workspace, so a team already installed elsewhere is refused by the database rather than by a racy pre-check. |
 | `pgdatabase/connections.py` | Recent connections with Fernet encryption at rest. `RECENT_CONNECTIONS_KEY` env var. `save_recent_connection()`, `get_recent_connections()`, `get_recent_connection_by_db_id()`. |
 | `pgdatabase/conversations.py` | Conversation CRUD, scoped per workspace+user. |
 | `pgdatabase/history.py` | Query history CRUD, scoped per workspace+user+db. |
@@ -88,10 +91,16 @@ Routes (`backend/app/routes/`) are thin — they parse the request, enforce perm
 | `backend/app/models/recent_connection.py` | RecentConnection ORM model. |
 | `backend/app/models/auth_token.py` | AuthToken ORM model. |
 | `backend/app/models/base.py` | Base ORM model class with `_uuid7()` helper. |
+| `backend/app/models/orm_slack.py` | SlackInstallation ORM model — one row per Slack team, unique on both `team_id` and `workspace_id`. |
 | `backend/app/logbook.py` | `SessionLog` — thin class that mints per-query IDs. Durable records live in PostgreSQL (`query_history`). |
+| `backend/app/integrations/slack/auth.py` | Slack OAuth v2 — builds the authorize URL and exchanges the code for a bot token. |
+| `backend/app/integrations/slack/bot.py` | `/ask` handlers: parses the command, picks the connection, and runs the query in the background under a concurrency cap and a timeout, answering via Slack's `response_url`. `drain_pending_queries()` is called from the app lifespan so a redeploy tells users their query was abandoned instead of leaving them on a spinner. |
+| `backend/app/integrations/slack/blocks.py` | Block Kit builders, kept inside Slack's 50-block / 3000-character limits — a message that overruns either does not render badly, it does not render at all. |
+| `backend/app/integrations/slack/models.py` | Pydantic response model for the installations endpoint. Deliberately carries no `bot_token`. |
 | `backend/app/services/email.py` | Email sending via Resend API. |
 | `backend/app/services/email_verification.py` | Email verification + forgot-password token flows. |
 | `backend/requirements.txt` | Python dependencies. |
+| `backend/requirements-warehouses.txt` | Optional Snowflake / Databricks / BigQuery drivers. Kept separate because they pull pandas, numpy, pyarrow, boto3 and grpcio between them; install with `--build-arg INSTALL_WAREHOUSE_DRIVERS=true` or `pip install -r`. Without them those dialects report the missing driver by name. |
 | `backend/alembic/` | Alembic migration files for schema versioning. Automatically runs `upgrade head` on server start. |
 | `backend/alembic.ini` | Alembic configuration. |
 | `backend/DOCKERFILE` | Backend Docker image. |
@@ -170,6 +179,7 @@ The repository includes a 38-file backend unit and integration test suite:
 
 | File | Covers |
 |---|---|
+| `tests/conftest.py` | Shared fixtures. Stubs hostname resolution so the suite never touches DNS. |
 | `tests/test_activity_cleanup.py` | Retention and automated cleanup of workspace activity logs. |
 | `tests/test_catalog_controller.py` | Data catalog endpoints (read, save, AI suggest). |
 | `tests/test_config.py` | Config defaults, env-var key fallback, secret protection. |
@@ -195,6 +205,11 @@ The repository includes a 38-file backend unit and integration test suite:
 | `tests/test_query_pipeline.py` | End-to-end pipeline execution (`run_query()`), schema linking, and self-repair. |
 | `tests/test_query_stream.py` | Server-Sent Events (SSE) streaming query endpoint (`POST /api/query/stream`). |
 | `tests/test_repair.py` | Isolated SQL self-repair loop: feedback generation, time and iteration bounds. |
+| `tests/test_slack_blocks.py` | Block Kit builders: Slack's size limits, code-fence escaping, row trimming. |
+| `tests/test_slack_bot.py` | `/ask` routing: command parsing, connection selection, rejecting a button for a database outside the workspace, concurrency cap, timeout, shutdown drain. |
+| `tests/test_slack_installations.py` | Installation persistence: the workspace-scoped conflict clause, rollback, and that no unscoped delete is exported. |
+| `tests/test_slack_routes.py` | `/api/slack/events`: signature enforcement, retry suppression, payload dispatch, malformed bodies. |
+| `tests/test_slack_signature.py` | Slack HMAC verification — forgery, replay window, missing secret, non-UTF-8 bodies. |
 | `tests/test_sample_data.py` | Sample database seeding, schema introspection, and pre-populated Q&A verification. |
 | `tests/test_schema_link.py` | Table relevance scoring, FK expansion, schema compression, and confidence badge calculation. |
 | `tests/test_semantic.py` | Automatic catalog inference from schema, suggestion merging, and table catalog filtering. |

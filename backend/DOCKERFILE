@@ -13,8 +13,18 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 WORKDIR /app
 
 # ── 1. Install Python dependencies (cached layer) ──
+# The Snowflake / Databricks / BigQuery drivers are opt-in: they pull pandas,
+# numpy, pyarrow, boto3 and grpcio between them, several hundred megabytes that
+# a deployment connecting to Postgres has no use for. Build with
+#   --build-arg INSTALL_WAREHOUSE_DRIVERS=true
+# to include them; without them those dialects report the missing driver by name.
+ARG INSTALL_WAREHOUSE_DRIVERS=false
 COPY backend/requirements.txt /app/backend/requirements.txt
-RUN pip install --no-cache-dir -r /app/backend/requirements.txt
+COPY backend/requirements-warehouses.txt /app/backend/requirements-warehouses.txt
+RUN pip install --no-cache-dir -r /app/backend/requirements.txt \
+    && if [ "$INSTALL_WAREHOUSE_DRIVERS" = "true" ]; then \
+         pip install --no-cache-dir -r /app/backend/requirements-warehouses.txt; \
+       fi
 
 # ── 2. Copy application source ──
 COPY backend/        /app/backend/

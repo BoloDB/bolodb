@@ -58,9 +58,7 @@ from backend.app.pgdatabase.conversations import (
 from backend.app.pgdatabase.slack import (
     save_installation,
     get_installation_by_team,
-    get_installation_by_user,
     get_installations_by_workspace,
-    delete_installation,
     delete_installation_for_workspace,
 )
 from backend.app.pgdatabase.serialization import serialize_doc
@@ -118,8 +116,6 @@ __all__ = [
     "SlackInstallation",
     "save_installation",
     "get_installation_by_team",
-    "get_installation_by_user",
     "get_installations_by_workspace",
-    "delete_installation",
     "delete_installation_for_workspace",
 ]

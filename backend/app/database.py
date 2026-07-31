@@ -2,6 +2,7 @@
 
 import hashlib
 import ipaddress
+import os
 import re
 import socket
 import logging
@@ -256,17 +257,88 @@ def _validate_db_url(url: str) -> str:
         if hostname.startswith("169.254.") or hostname.startswith("100.100."):
             raise ValueError("Connection to metadata endpoints is not allowed")
         try:
-            # Not an IP literal at all — a name, which we cannot resolve here.
+            # Not an IP literal at all — a name, to be resolved below.
             ip = ipaddress.ip_address(hostname)
         except ValueError:
             ip = None
         # Raised outside the try: inside it, the except would swallow it.
-        if ip is not None and ip.is_loopback:
-            raise ValueError(
-                f"Connection to loopback address '{hostname}' is not allowed"
-            )
+        if ip is not None:
+            _reject_internal_address(ip, hostname)
+        elif not _allow_private_hosts():
+            # A name can point anywhere, and the checks above only ever saw the
+            # text of it. "internal.corp" and "10.0.0.5.nip.io" both walk
+            # straight past them, which is the whole SSRF shape: the attacker
+            # picks the name, the resolver picks the address.
+            #
+            # Not airtight — a record with a short TTL can answer differently
+            # here than it will when the driver dials, and closing that means
+            # pinning the checked address through to the socket, which no
+            # SQLAlchemy driver lets us do. It still turns the one-liner version
+            # of this attack into one that needs a rebinding setup.
+            #
+            # Skipped entirely when private hosts are allowed: there is then
+            # nothing left for it to reject, and the lookup is pure latency.
+            for addr in _resolve_all(hostname):
+                _reject_internal_address(addr, hostname)
 
     return url
+
+
+def _allow_private_hosts() -> bool:
+    """Whether databases on private/internal addresses may be connected to.
+
+    Off by default: a shared deployment must not let one workspace point a
+    connection at the metadata service or at whatever else shares its network.
+    Self-hosted installs whose database genuinely sits on a private LAN turn it
+    on — the reason it is an environment variable and not a per-workspace
+    setting is that only the operator can know the network is theirs.
+    """
+    return os.getenv("ALLOW_PRIVATE_DB_HOSTS", "").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+    }
+
+
+def _resolve_all(hostname: str) -> list:
+    """Every address ``hostname`` currently resolves to, or [] if it does not.
+
+    A failure to resolve is deliberately not an error: the name may be resolvable
+    from wherever the driver runs but not from here, and `create_engine` is
+    about to produce a far better message about it than this function could.
+    """
+    try:
+        infos = socket.getaddrinfo(hostname, None, proto=socket.IPPROTO_TCP)
+    except (OSError, UnicodeError):
+        return []
+    out = []
+    for info in infos:
+        try:
+            out.append(ipaddress.ip_address(info[4][0]))
+        except ValueError:
+            continue
+    return out
+
+
+def _reject_internal_address(ip, hostname: str) -> None:
+    """Raise if ``ip`` is somewhere a user's database has no business being."""
+    if ip.is_loopback:
+        raise ValueError(f"Connection to loopback address '{hostname}' is not allowed")
+    if ip.is_link_local or getattr(ip, "is_site_local", False):
+        raise ValueError("Connection to link-local addresses is not allowed")
+    if ip.is_multicast or ip.is_unspecified or ip.is_reserved:
+        raise ValueError(f"Connection to '{hostname}' is not allowed")
+    # IPv6 addresses that wrap an IPv4 one — ::ffff:127.0.0.1, ::ffff:10.0.0.5 —
+    # report none of the flags above for the address they actually reach.
+    mapped = getattr(ip, "ipv4_mapped", None)
+    if mapped is not None:
+        _reject_internal_address(mapped, hostname)
+    if ip.is_private and not _allow_private_hosts():
+        raise ValueError(
+            f"'{hostname}' resolves to the private address {ip}, which this "
+            "deployment does not allow databases on. If the database really is "
+            "on this network, set ALLOW_PRIVATE_DB_HOSTS=true."
+        )
 
 
 def db_id_for(url):

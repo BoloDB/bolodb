@@ -77,11 +77,32 @@ Snowflake takes the account identifier (the part before
 `.snowflakecomputing.com`) in place of a host, and needs a `warehouse` unless
 the user has a default one.
 
-The Snowflake, Databricks and BigQuery drivers are large — they add roughly
-half a gigabyte to the image, mostly pyarrow, pandas and numpy. A deployment
-that does not need them can drop those pins from `backend/requirements.txt`;
-connecting to one afterwards reports the missing driver rather than failing
-with an import traceback.
+The Snowflake, Databricks and BigQuery drivers are large — roughly half a
+gigabyte between them, mostly pyarrow, pandas, numpy, boto3 and grpcio — so
+they are **not installed by default**. They live in
+`backend/requirements-warehouses.txt`:
+
+```bash
+# local
+pip install -r backend/requirements.txt -r backend/requirements-warehouses.txt
+
+# docker
+docker compose build --build-arg INSTALL_WAREHOUSE_DRIVERS=true backend
+```
+
+Everything BoloDB needs to *support* those dialects — URL validation, the
+read-only guard, identifier quoting, prompt hints — ships in the base install;
+only the drivers are optional. Connecting to one without them reports the
+missing driver by name rather than failing with an import traceback. Oracle is
+included by default: `python-oracledb` is small and pure Python.
+
+By default BoloDB refuses to connect to databases on private or internal
+addresses — `10.x`, `192.168.x`, `172.16–31.x`, and hostnames that resolve into
+them — because on a shared deployment a connection URL is user input, and
+allowing private targets turns "add a database" into a way to reach the rest of
+the network. Self-hosted installs whose database really is on a LAN set
+`ALLOW_PRIVATE_DB_HOSTS=true`. Loopback, link-local and cloud metadata
+endpoints stay blocked either way.
 
 ---
 
