@@ -34,6 +34,7 @@ SLACK_TIMEOUT = 10.0
 # Slack gives a response_url 30 minutes and 5 uses. Nothing here should be
 # holding one open for anywhere near that, but a query that hangs would keep a
 # semaphore slot forever, so bound the whole thing well inside the window.
+# "The whole thing" includes queueing for a slot — see `run` in _execute_query.
 QUERY_TIMEOUT = 300.0
 
 
@@ -297,24 +298,29 @@ async def _execute_query(
     from backend.app.models.api import QueryReq
 
     async def run():
-        await ensure_connection(db, workspace_id, db_id)
-        req = QueryReq(question=question)
-        return await ctrl.run_query(
-            workspace_id,
-            db,
-            kb,
-            cfg,
-            providers,
-            session_log,
-            req,
-            db_id=db_id,
-            user_id=user_id,
-        )
+        # Inside the timeout, not outside it: waiting for a slot is time the
+        # user is sitting in front of, and under a backlog it is unbounded.
+        # With the acquire outside, QUERY_TIMEOUT bounded only the query, so a
+        # deeply queued one could still outlive the 30 minutes Slack gives a
+        # response_url and finish with nowhere to deliver its answer.
+        async with _query_slots():
+            await ensure_connection(db, workspace_id, db_id)
+            req = QueryReq(question=question)
+            return await ctrl.run_query(
+                workspace_id,
+                db,
+                kb,
+                cfg,
+                providers,
+                session_log,
+                req,
+                db_id=db_id,
+                user_id=user_id,
+            )
 
     try:
         try:
-            async with _query_slots():
-                out = await asyncio.wait_for(run(), timeout=QUERY_TIMEOUT)
+            out = await asyncio.wait_for(run(), timeout=QUERY_TIMEOUT)
             body = {
                 "response_type": "ephemeral",
                 "replace_original": True,

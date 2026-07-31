@@ -1,4 +1,5 @@
 from fastapi import HTTPException
+from fastapi.concurrency import run_in_threadpool
 from backend.app.database import sanitize_url, db_id_for
 from backend.sample_data import ensure_sample_db, sample_db_path
 import backend.app.pgdatabase as mdb
@@ -7,6 +8,25 @@ import logging
 from backend.app.controllers.activity import log_activity
 
 logger = logging.getLogger(__name__)
+
+
+async def _connect_off_the_loop(db, workspace_id, url):
+    """``db.connect`` on a worker thread.
+
+    Every step of it blocks: resolving the host, opening the socket,
+    authenticating, `SELECT 1`, and `inspect().get_table_names()` — against a
+    remote warehouse that is seconds, and against a host that blackholes packets
+    it is however long the TCP stack takes to give up. Called directly from an
+    async route, as it was, that time is time the whole server is not serving
+    anyone: this deployment is single-process by design (see `create_app`), so
+    one connect attempt stalls every other request in flight.
+
+    `db.execute` is already dispatched this way from the query and onboarding
+    controllers; connecting is the heavier of the two and was the one still on
+    the loop.
+    """
+    return await run_in_threadpool(db.connect, workspace_id, url)
+
 
 # A server-misconfiguration message, distinct from a transient save failure:
 # every save fails the same way until an operator sets RECENT_CONNECTIONS_KEY,
@@ -50,10 +70,10 @@ def _sample_db_id() -> str:
     return db_id_for(f"sqlite:///{sample_db_path().as_posix()}")
 
 
-def _connect_sample_url(db, workspace_id):
+async def _connect_sample_url(db, workspace_id):
     """Build (if needed) and connect the sample database. Returns its db_id."""
-    url = ensure_sample_db()
-    result = db.connect(workspace_id, url)
+    url = await run_in_threadpool(ensure_sample_db)
+    result = await _connect_off_the_loop(db, workspace_id, url)
     if not result["ok"]:
         logger.warning("Could not connect the sample database: %s", result["error"])
         return None
@@ -100,10 +120,10 @@ async def ensure_connection(db, workspace_id, db_id=None):
         # restarted and lost the live connection. A blank db_id is left alone so
         # nothing silently auto-connects the sample.
         if db_id and db_id == _sample_db_id():
-            return _connect_sample_url(db, workspace_id)
+            return await _connect_sample_url(db, workspace_id)
         return None
 
-    result = db.connect(workspace_id, conn["db_url"])
+    result = await _connect_off_the_loop(db, workspace_id, conn["db_url"])
     if not result["ok"]:
         logger.warning(
             "Could not restore connection %s: %s", conn["db_id"], result["error"]
@@ -114,7 +134,7 @@ async def ensure_connection(db, workspace_id, db_id=None):
 
 
 async def connect(db, kb, cfg, req_data, workspace_id=None, user_id=None):
-    result = db.connect(workspace_id, req_data.db_url)
+    result = await _connect_off_the_loop(db, workspace_id, req_data.db_url)
     if not result["ok"]:
         raise HTTPException(400, result["error"])
     db_id = result["db_id"]
@@ -177,8 +197,8 @@ async def connect_sample(db, kb, cfg, workspace_id=None, user_id=None):
     Returns:
         dict: Connection details enriched with trust, glossary, knowledge availability, starter questions, and a sample-database flag.
     """
-    url = ensure_sample_db()
-    result = db.connect(workspace_id, url)
+    url = await run_in_threadpool(ensure_sample_db)
+    result = await _connect_off_the_loop(db, workspace_id, url)
     if not result["ok"]:
         raise HTTPException(500, result["error"])
 

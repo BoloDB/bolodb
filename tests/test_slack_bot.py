@@ -334,6 +334,48 @@ async def _record(sink, body):
 
 
 @pytest.mark.asyncio
+async def test_the_timeout_covers_the_wait_for_a_concurrency_slot(monkeypatch):
+    """Queueing is time the user is sitting in front of. With the acquire
+    outside wait_for, the timeout bounded only the query, so a deeply queued one
+    could outlive the 30 minutes Slack gives a response_url and finish with
+    nowhere to deliver its answer."""
+    monkeypatch.setattr(bot, "MAX_CONCURRENT_QUERIES", 1)
+    monkeypatch.setattr(bot, "QUERY_TIMEOUT", 0.1)
+    monkeypatch.setattr(bot, "_QUERY_SLOTS", None)
+
+    release = asyncio.Event()
+
+    async def holds_the_slot(*a, **kw):
+        await release.wait()
+        return {"answered": True, "sql": "", "columns": [], "rows": []}
+
+    posted = []
+    monkeypatch.setattr(bot, "_post_response", lambda url, body: _record(posted, body))
+    monkeypatch.setattr(
+        "backend.app.controllers.database.ensure_connection", _async_none
+    )
+    monkeypatch.setattr("backend.app.controllers.query.run_query", holds_the_slot)
+
+    # The first query takes the only slot and holds it; the second can do
+    # nothing but queue, and must time out rather than wait indefinitely.
+    first = asyncio.ensure_future(
+        bot._execute_query(
+            "q1", WORKSPACE, "db-a", INSTALLER, RESPONSE_URL, *[None] * 5
+        )
+    )
+    await asyncio.sleep(0.01)
+    await bot._execute_query(
+        "q2", WORKSPACE, "db-a", INSTALLER, RESPONSE_URL, *[None] * 5
+    )
+
+    assert posted, "the queued query must be answered, not abandoned"
+    assert "took too long" in str(posted[0])
+
+    release.set()
+    await first
+
+
+@pytest.mark.asyncio
 async def test_a_failing_query_still_answers_the_user(monkeypatch):
     monkeypatch.setattr(bot, "_QUERY_SLOTS", None)
 

@@ -143,3 +143,47 @@ def test_schema_route_passes_workspace_id_to_controller(monkeypatch):
 
     assert res == {"ok": True}
     assert called["args"] == ("w1", "db-ref", True)
+
+
+def test_connecting_does_not_block_the_event_loop():
+    """Every step of `db.connect` blocks — resolving the host, opening the
+    socket, authenticating, `SELECT 1`, `inspect().get_table_names()`. Called
+    straight from an async route, as it was, that time is time the whole server
+    is not serving anyone: this deployment is single-process by design, so one
+    connect attempt against a slow or blackholed host stalled every other
+    request in flight.
+    """
+    import time
+
+    class SlowDB:
+        def connect(self, workspace_id, url):
+            time.sleep(0.3)
+            return {
+                "ok": True,
+                "dialect": "sqlite",
+                "tables": 1,
+                "db_id": "db-1",
+                "url": url,
+            }
+
+    async def scenario():
+        ticks = 0
+
+        async def ticker():
+            nonlocal ticks
+            while True:
+                await asyncio.sleep(0.01)
+                ticks += 1
+
+        beat = asyncio.ensure_future(ticker())
+        try:
+            await database_ctrl._connect_off_the_loop(
+                SlowDB(), "w1", "sqlite:///tmp.db"
+            )
+        finally:
+            beat.cancel()
+        return ticks
+
+    ticks = asyncio.run(scenario())
+    # On the loop this is 0: nothing else gets to run for the whole 0.3s.
+    assert ticks > 5, f"the event loop only advanced {ticks} times during connect"
