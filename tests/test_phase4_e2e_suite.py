@@ -78,9 +78,9 @@ class TestTier1Feature1CentralPermissionsRegistry:
     """Feature 1: Central Permissions Registry & Default Role Matrix (5 cases)."""
 
     def test_tier1_f1_registry_total_count_and_categories(self):
-        """1. Verify registry defines exactly 21 capabilities across 7 resource categories."""
-        assert len(PERMISSIONS) == 21, (
-            f"Expected 21 permissions, got {len(PERMISSIONS)}"
+        """1. Verify registry defines exactly 23 capabilities across 8 resource categories."""
+        assert len(PERMISSIONS) == 23, (
+            f"Expected 23 permissions, got {len(PERMISSIONS)}"
         )
 
         expected_categories = {
@@ -89,6 +89,7 @@ class TestTier1Feature1CentralPermissionsRegistry:
             "catalog": 2,
             "dashboards": 3,
             "queries": 4,
+            "schedules": 2,
             "activity": 2,
             "workspace_management": 3,
         }
@@ -100,25 +101,25 @@ class TestTier1Feature1CentralPermissionsRegistry:
         assert category_counts == expected_categories
 
     def test_tier1_f1_owner_default_role_matrix(self):
-        """2. Verify owner default role matrix grants all 21 permissions."""
+        """2. Verify owner default role matrix grants all 23 permissions."""
         owner_matrix = DEFAULT_ROLE_PERMISSIONS["owner"]
-        assert len(owner_matrix) == 21
+        assert len(owner_matrix) == 23
         assert all(val is True for val in owner_matrix.values())
 
     def test_tier1_f1_admin_default_role_matrix(self):
-        """3. Verify admin default role matrix grants all 21 permissions."""
+        """3. Verify admin default role matrix grants all 23 permissions."""
         admin_matrix = DEFAULT_ROLE_PERMISSIONS["admin"]
-        assert len(admin_matrix) == 21
+        assert len(admin_matrix) == 23
         assert all(val is True for val in admin_matrix.values())
 
     def test_tier1_f1_member_default_role_matrix(self):
-        """4. Verify member default role matrix grants 9 True and 12 False permissions."""
+        """4. Verify member default role matrix grants 10 True and 13 False permissions."""
         member_matrix = DEFAULT_ROLE_PERMISSIONS["member"]
-        assert len(member_matrix) == 21
+        assert len(member_matrix) == 23
         true_keys = {k for k, v in member_matrix.items() if v is True}
         assert true_keys == MEMBER_DEFAULT_PERMISSIONS
-        assert len(true_keys) == 9
-        assert sum(1 for v in member_matrix.values() if v is False) == 12
+        assert len(true_keys) == 10
+        assert sum(1 for v in member_matrix.values() if v is False) == 13
 
     def test_tier1_f1_resolve_role_permissions_defaults(self):
         """5. Verify resolve_role_permissions resolves defaults correctly for standard roles."""
@@ -576,13 +577,13 @@ class TestTier1Feature6FrontendSettingsMatrixUI:
         assert "owner" in matrix and "admin" in matrix and "member" in matrix
 
     def test_tier1_f6_matrix_payload_all_keys_presence(self):
-        """27. Verify all 21 permission keys exist in resolved_matrix for every role."""
+        """27. Verify all 23 permission keys exist in resolved_matrix for every role."""
         matrix = {
             role: resolve_role_permissions(role)
             for role in ["owner", "admin", "member"]
         }
         for role in ["owner", "admin", "member"]:
-            assert len(matrix[role]) == 21
+            assert len(matrix[role]) == 23
             for key in PERMISSIONS:
                 assert key in matrix[role]
 
@@ -656,7 +657,7 @@ class TestTier2Feature1CentralPermissionsRegistryBoundaries:
     def test_tier2_f1_unknown_role_resolution_all_false(self):
         """31. Verify resolve_role_permissions for unknown role returns all False."""
         res = resolve_role_permissions("guest")
-        assert len(res) == 21
+        assert len(res) == 23
         assert all(v is False for v in res.values())
 
     def test_tier2_f1_has_permission_non_existent_key(self):
@@ -679,7 +680,7 @@ class TestTier2Feature1CentralPermissionsRegistryBoundaries:
         assert has_permission("member", None) is False
 
     def test_tier2_f1_all_categories_exhaustive_check(self):
-        """35. Verify all 21 permission keys resolve boolean for member role."""
+        """35. Verify all 23 permission keys resolve boolean for member role."""
         resolved = resolve_role_permissions("member")
         for key in PERMISSIONS:
             assert isinstance(resolved[key], bool)
