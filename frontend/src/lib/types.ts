@@ -205,3 +205,55 @@ export interface ConversationTurn {
 export interface ConversationDetail extends Conversation {
   turns: ConversationTurn[];
 }
+
+/** A saved query that re-runs on a cron schedule and emails its results. */
+export interface Schedule {
+  id: string;
+  _id?: string;
+  name: string;
+  description?: string | null;
+  question?: string | null;
+  sql: string;
+  database_id?: string | null;
+  cron: string;
+  /** Server-rendered summary of `cron`, e.g. "Daily at 09:00 UTC". */
+  cron_description?: string;
+  /** The next five firing times, as ISO strings. */
+  upcoming_runs?: string[];
+  starts_at?: string | null;
+  ends_at?: string | null;
+  is_active: boolean;
+  recipients: string[];
+  subject_template?: string | null;
+  intro?: string | null;
+  footer?: string | null;
+  /** Null means every column the query returns. */
+  display_columns?: string[] | null;
+  max_rows: number;
+  attach_csv: boolean;
+  send_condition: "always" | "non_empty" | "row_count_gte" | "row_count_lte";
+  condition_value?: number | null;
+  next_run_at?: string | null;
+  last_run_at?: string | null;
+  last_status?: "success" | "failed" | "skipped" | null;
+  consecutive_failures: number;
+  created_at?: string;
+  updated_at?: string;
+}
+
+/** One execution of a Schedule, including the ones that deliberately sent nothing. */
+export interface ScheduleRun {
+  id: string;
+  _id?: string;
+  schedule_id: string;
+  started_at: string;
+  finished_at?: string | null;
+  status: "success" | "failed" | "skipped";
+  row_count?: number | null;
+  duration_ms?: number | null;
+  /** Why it failed, or which condition suppressed the email. */
+  detail?: string | null;
+  delivered_to?: string[] | null;
+  /** True when started from "Run now" rather than by the scheduler. */
+  manual: boolean;
+}
