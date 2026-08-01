@@ -18,6 +18,7 @@ from backend.app.models.catalog import (
 )
 from backend.app.models.auth_token import PasswordResetToken, OtpCode
 from backend.app.models.orm_slack import SlackInstallation
+from backend.app.models.scheduled_query import ScheduledQuery, ScheduleRun
 
 __all__ = [
     "Base",
@@ -45,4 +46,6 @@ __all__ = [
     "Dashboard",
     "DashboardPanel",
     "SlackInstallation",
+    "ScheduledQuery",
+    "ScheduleRun",
 ]
