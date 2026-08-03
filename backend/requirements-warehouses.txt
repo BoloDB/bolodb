@@ -55,7 +55,7 @@ pyasn1_modules==0.4.2
 sqlalchemy-bigquery==1.17.1
 
 # ── Shared transitive dependencies ──
-boto3==1.43.56
+boto3==1.43.61
 botocore==1.43.56
 charset-normalizer==3.4.9
 jmespath==1.1.0
