@@ -110,6 +110,10 @@ async def lifespan(app):
             cleanup_task.cancel()
             with suppress(asyncio.CancelledError):
                 await cleanup_task
+        from backend.app.controllers.system import close_jwks_http_client
+
+        with suppress(Exception):
+            await close_jwks_http_client()
         await dispose_db()
 
 
