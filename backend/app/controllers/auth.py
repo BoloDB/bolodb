@@ -38,6 +38,31 @@ log = logging.getLogger(__name__)
 _JWKS_CLIENT: PyJWKClient | None = None
 
 
+# ── Password hashing ────────────────────────────────────────────────────
+# bcrypt is deliberately expensive -- roughly 750ms per call at the default
+# cost factor on our container. That cost is the point, but it is CPU-bound
+# and releases nothing, so calling it straight from an async handler parks the
+# event loop for its whole duration: every other request being served by that
+# worker stalls too, not just the one doing the hashing. Push it to the
+# threadpool so only the caller waits.
+
+
+async def hash_password(password: str) -> str:
+    """Hash a password with a fresh salt, off the event loop."""
+    return await run_in_threadpool(
+        lambda: bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode(
+            "utf-8"
+        )
+    )
+
+
+async def verify_password(password: str, hashed: str) -> bool:
+    """Check a password against its bcrypt hash, off the event loop."""
+    return await run_in_threadpool(
+        lambda: bcrypt.checkpw(password.encode("utf-8"), hashed.encode("utf-8"))
+    )
+
+
 def _get_jwks_client():
     global _JWKS_CLIENT
     if _JWKS_CLIENT is None:
@@ -99,8 +124,7 @@ async def login(email: EmailStr, password: str):
     # Accounts without a password hash (Google/Supabase-only) cannot log in via password.
     if not user_details.get("hashed_pass"):
         raise HTTPException(status_code=401, detail="Invalid credentials")
-    user_bytes = password.encode()
-    if bcrypt.checkpw(user_bytes, user_details["hashed_pass"].encode("utf-8")):
+    if await verify_password(password, user_details["hashed_pass"]):
         return create_jwt(str(user_details["_id"]), user_details["role"])
     raise HTTPException(status_code=401, detail="Invalid credentials")
 
@@ -150,10 +174,7 @@ async def signup(user: UserSignup):
         raise HTTPException(
             status_code=400, detail="An account with this email already exists"
         )
-    encoded_pass = user.password.encode("utf-8")
-    salt = bcrypt.gensalt()
-    hashed_pw = bcrypt.hashpw(encoded_pass, salt)
-    hashed_pw = hashed_pw.decode("utf-8")
+    hashed_pw = await hash_password(user.password)
     user_in_db = UserInDB(email=user.email, hashed_pass=hashed_pw, role=Role.user)
     try:
         uid = await create_user(user_in_db)
@@ -289,12 +310,8 @@ async def change_password(user_id, old_password, new_password):
             status_code=400,
             detail="Social login accounts cannot change password here",
         )
-    old_pass_enc = old_password.encode("utf-8")
-    new_pass_enc = new_password.encode("utf-8")
-    if bcrypt.checkpw(old_pass_enc, user_details["hashed_pass"].encode("utf-8")):
-        salt = bcrypt.gensalt()
-        new_hashed_pw = bcrypt.hashpw(new_pass_enc, salt)
-        user_details["hashed_pass"] = new_hashed_pw.decode("utf-8")
+    if await verify_password(old_password, user_details["hashed_pass"]):
+        user_details["hashed_pass"] = await hash_password(new_password)
         await update_user(
             user_id,
             hashed_pass=user_details["hashed_pass"],
@@ -516,7 +533,6 @@ async def reset_password(token: str, new_password: str):
             .values(consumed=True)
         )
 
-    salt = bcrypt.gensalt()
-    new_hashed = bcrypt.hashpw(new_password.encode("utf-8"), salt).decode("utf-8")
+    new_hashed = await hash_password(new_password)
     await update_user(user_id, hashed_pass=new_hashed)
     return True
