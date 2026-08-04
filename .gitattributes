@@ -1,0 +1,11 @@
+# Shell scripts must keep LF endings even on Windows checkouts. Docker copies
+# them into Linux images verbatim, and a CRLF shebang makes the kernel look for
+# an interpreter named "/bin/sh\r", which fails with a confusing
+# "no such file or directory" on a file that plainly exists.
+*.sh text eol=lf
+docker-entrypoint.sh text eol=lf
+
+# Same reasoning for container and tooling files read by Linux.
+DOCKERFILE* text eol=lf
+Dockerfile* text eol=lf
+*.conf text eol=lf
