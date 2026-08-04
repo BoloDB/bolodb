@@ -1,5 +1,5 @@
 import { trustFor, schemaObjToDisplay } from "$lib/data";
-import { apiCall, getConversations, listDatabases } from "$lib/api";
+import { apiCall, getConversations, listDatabases, updateProfile } from "$lib/api";
 import type { Conversation, DbInfo, SchemaTable, Toast } from "$lib/types";
 import { goto } from "$app/navigation";
 import { browser } from "$app/environment";
@@ -52,8 +52,23 @@ class AppState {
     }
   }
 
-  toggleTheme() {
-    this.applyTheme(this.theme === "dark" ? "light" : "dark");
+  /**
+   * Toggling only flips the local/DOM theme instantly; it also has to persist
+   * `themePref` to the account so the Profile page's `resolveTheme('system')`
+   * fallback doesn't silently revert this choice the next time it mounts.
+   * The metadata column is replaced wholesale server-side, so the existing
+   * metadata has to be fetched and merged rather than sent partially.
+   */
+  async toggleTheme() {
+    const next = this.theme === "dark" ? "light" : "dark";
+    this.applyTheme(next);
+    try {
+      const res = await apiCall("/api/auth/me");
+      const metadata = { ...(res?.content?.metadata || {}), themePref: next };
+      await updateProfile({ metadata });
+    } catch (e) {
+      console.error("Failed to persist theme preference:", e);
+    }
   }
 
   get prevLevel() {
