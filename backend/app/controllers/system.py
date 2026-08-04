@@ -1,6 +1,8 @@
 import os
 import logging
+import time
 
+import httpx
 from fastapi import HTTPException
 
 from backend.app import config as cfgmod
@@ -13,6 +15,61 @@ from backend.app.secrets import (
 import backend.app.pgdatabase as mdb
 
 log = logging.getLogger(__name__)
+
+
+# ── JWKS reachability probe ─────────────────────────────────────────────
+# /api/health is polled by the container healthcheck every 10-30s. Probing
+# Supabase on each of those calls means a third-party network round trip on a
+# fixed timer forever, and it made the endpoint take 1.8-3.2s. Worse, the old
+# code built an httpx.AsyncClient per call and never closed it, so every probe
+# leaked its connection pool.
+#
+# Reachability is not something that changes between two polls seconds apart,
+# so cache the answer briefly and share one client. A liveness probe should be
+# cheap; the diagnostic value survives a short TTL.
+_JWKS_PROBE_TTL_SECONDS = 60.0
+_jwks_probe_cache: tuple[str, str, float] | None = None  # (url, status, checked_at)
+_jwks_http_client: httpx.AsyncClient | None = None
+
+
+def _get_jwks_http_client() -> httpx.AsyncClient:
+    global _jwks_http_client
+    if _jwks_http_client is None or _jwks_http_client.is_closed:
+        _jwks_http_client = httpx.AsyncClient(timeout=5)
+    return _jwks_http_client
+
+
+async def close_jwks_http_client() -> None:
+    """Release the shared probe client on shutdown."""
+    global _jwks_http_client, _jwks_probe_cache
+    if _jwks_http_client is not None and not _jwks_http_client.is_closed:
+        await _jwks_http_client.aclose()
+    _jwks_http_client = None
+    _jwks_probe_cache = None
+
+
+async def _probe_jwks(supabase_url: str) -> str:
+    """Report whether the Supabase JWKS endpoint answers, cached for a short TTL."""
+    global _jwks_probe_cache
+
+    now = time.monotonic()
+    if _jwks_probe_cache is not None:
+        cached_url, cached_status, checked_at = _jwks_probe_cache
+        if cached_url == supabase_url and (now - checked_at) < _JWKS_PROBE_TTL_SECONDS:
+            return cached_status
+
+    jwks_url = f"{supabase_url}/auth/v1/.well-known/jwks.json"
+    try:
+        resp = await _get_jwks_http_client().get(jwks_url)
+        if resp.status_code == 200:
+            status = "reachable"
+        else:
+            status = f"unexpected_status:{resp.status_code}"
+    except Exception as e:
+        status = f"unreachable:{e.__class__.__name__}"
+
+    _jwks_probe_cache = (supabase_url, status, now)
+    return status
 
 
 async def get_state(user_id, workspace_id, db_id, db, cfg, kb):
@@ -88,17 +145,7 @@ async def get_health(pg_status="unknown"):
     jwks_status = "unchecked"
     supabase_url = get_supabase_url()
     if supabase_url:
-        try:
-            import httpx
-
-            jwks_url = f"{supabase_url}/auth/v1/.well-known/jwks.json"
-            resp = await httpx.AsyncClient(timeout=5).get(jwks_url)
-            if resp.status_code == 200:
-                jwks_status = "reachable"
-            else:
-                jwks_status = f"unexpected_status:{resp.status_code}"
-        except Exception as e:
-            jwks_status = f"unreachable:{e.__class__.__name__}"
+        jwks_status = await _probe_jwks(supabase_url)
 
     return {
         "status": "ok" if pg_status == "connected" else "degraded",
