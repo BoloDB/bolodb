@@ -183,6 +183,7 @@ async def change_password(
 
 
 @router.post("/forgot-password")
+@limiter.limit("5/minute")
 async def forgot_password(req: ForgotPasswordReq, request: Request):
     """Request a password reset link. Always returns success to prevent user enumeration."""
     frontend_url = get_frontend_url()
@@ -201,7 +202,8 @@ async def forgot_password(req: ForgotPasswordReq, request: Request):
 
 
 @router.post("/reset-password")
-async def reset_password(req: ResetPasswordReq):
+@limiter.limit("10/minute")
+async def reset_password(request: Request, req: ResetPasswordReq):
     """
     Reset a user's password using a password-reset token.
 
@@ -216,7 +218,8 @@ async def reset_password(req: ResetPasswordReq):
 
 
 @router.post("/verify-email")
-async def verify_email(req: VerifyEmailReq):
+@limiter.limit("10/minute")
+async def verify_email(request: Request, req: VerifyEmailReq):
     """Verify email with OTP code and log the user in."""
     tokens = await backend.app.controllers.auth.verify_email_code(req.email, req.code)
     response = JSONResponse({"message": "Email verified successfully"})
@@ -239,7 +242,8 @@ async def verify_email(req: VerifyEmailReq):
 
 
 @router.post("/resend-verification")
-async def resend_verification(req: ResendVerificationReq):
+@limiter.limit("3/minute")
+async def resend_verification(request: Request, req: ResendVerificationReq):
     """Resend the email verification OTP code."""
     result = await backend.app.controllers.auth.resend_verification_email(req.email)
     return JSONResponse(result)
