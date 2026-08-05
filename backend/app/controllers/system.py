@@ -8,6 +8,7 @@ from fastapi import HTTPException
 from backend.app import config as cfgmod
 import backend.app.controllers.database as dbctrl
 from backend.app.secrets import (
+    get_cookie_secure,
     get_jwt_secret,
     get_supabase_url,
     get_supabase_anon_key,
@@ -138,7 +139,11 @@ async def get_health(pg_status="unknown"):
         "SUPABASE_ANON_KEY": bool(get_supabase_anon_key()),
         "SUPABASE_JWT_SECRET": bool(os.getenv("SUPABASE_JWT_SECRET")),
         "DATABASE_URL": bool(os.getenv("DATABASE_URL")),
-        "COOKIE_SECURE": os.getenv("COOKIE_SECURE", "false"),
+        # The resolved value, not the raw env var. Reporting the string as
+        # written would say "false" for an unset deployment that is in fact
+        # issuing Secure cookies — the one place an operator looks to check
+        # this should not be the one place that disagrees with the code.
+        "COOKIE_SECURE": get_cookie_secure(),
         "CORS_ORIGINS": os.getenv("CORS_ORIGINS", "(not set, using defaults)"),
     }
 
