@@ -147,6 +147,20 @@ def test_explain_select_allowed(db):
     assert "error" not in res
 
 
+# Every rejection the read-only guard itself can produce. Tests assert against
+# this set rather than merely "an error happened": SQLite rejects some of the
+# statements below on its own syntax grounds, so a bare `"error" in res` would
+# still pass if the guard had waved the statement through and the database
+# happened to refuse it. Only these messages prove the guard is what stopped it.
+READONLY_GUARD_ERRORS = {
+    "Only SELECT queries are allowed (read-only mode).",
+    "Only read-only SELECT queries are allowed.",
+    "Only one statement is allowed (no stacked queries).",
+    "SELECT INTO is not allowed.",
+    "Empty statement.",
+}
+
+
 def test_explain_analyze_delete_does_not_delete(db):
     """EXPLAIN ANALYZE runs the statement it is given — it must not be a way in.
 
@@ -155,7 +169,7 @@ def test_explain_analyze_delete_does_not_delete(db):
     thing through. On Postgres and MySQL that executes the DELETE for real.
     """
     res = db.execute(TEST_USER, "EXPLAIN ANALYZE DELETE FROM items")
-    assert "error" in res
+    assert res.get("error") in READONLY_GUARD_ERRORS
     # The rows are the actual claim; the error message alone would still hold if
     # the statement had run and then failed on something else.
     assert db.execute(TEST_USER, "SELECT COUNT(*) AS n FROM items")["rows"][0]["n"] == 8
@@ -178,7 +192,7 @@ def test_explain_analyze_delete_does_not_delete(db):
     ],
 )
 def test_explain_wrapping_a_write_is_rejected(db, sql):
-    assert "error" in db.execute(TEST_USER, sql)
+    assert db.execute(TEST_USER, sql).get("error") in READONLY_GUARD_ERRORS
 
 
 @pytest.mark.parametrize("dialect", ["postgres", "mysql", "sqlite", "duckdb"])
@@ -215,6 +229,11 @@ def test_explain_write_rejected_on_every_dialect(dialect, sql):
         ("postgres", "EXPLAIN (ANALYZE, BUFFERS) SELECT * FROM items"),
         ("sqlite", "EXPLAIN QUERY PLAN SELECT * FROM items"),
         ("sqlite", "EXPLAIN SELECT * FROM items"),
+        # Snowflake's output-format clause. Unwrapping has to know every
+        # dialect's option syntax or it rejects valid read-only plans.
+        ("snowflake", "EXPLAIN USING TABULAR SELECT * FROM items"),
+        ("snowflake", "EXPLAIN USING JSON SELECT * FROM items"),
+        ("snowflake", "EXPLAIN USING TEXT SELECT * FROM items"),
     ],
 )
 def test_explain_select_still_allowed_after_the_fix(dialect, sql):
@@ -225,6 +244,24 @@ def test_explain_select_still_allowed_after_the_fix(dialect, sql):
 
     stmts = [s for s in sqlglot.parse(sql, dialect=dialect) if s is not None]
     assert _statement_violation(stmts[0], dialect) is None
+
+
+@pytest.mark.parametrize(
+    "sql",
+    [
+        "EXPLAIN USING TABULAR DELETE FROM items",
+        "EXPLAIN USING JSON UPDATE items SET name = 'x'",
+        "EXPLAIN USING TEXT DROP TABLE items",
+    ],
+)
+def test_snowflake_explain_options_do_not_smuggle_a_write(sql):
+    """Teaching the unwrapper an option must not turn it into a way past the guard."""
+    import sqlglot
+
+    from backend.app.database import _statement_violation
+
+    stmts = [s for s in sqlglot.parse(sql, dialect="snowflake") if s is not None]
+    assert _statement_violation(stmts[0], "snowflake") is not None
 
 
 def test_truncation_flag_is_exact(db):

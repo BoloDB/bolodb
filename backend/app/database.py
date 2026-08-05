@@ -52,13 +52,20 @@ _MODIFYING_NODES = (
 
 # Tokens that can sit between EXPLAIN and the statement it explains. Postgres
 # takes a parenthesised option list or bare ANALYZE / VERBOSE, MySQL takes
-# ANALYZE / EXTENDED / FORMAT=..., SQLite spells it QUERY PLAN and Oracle
-# EXPLAIN PLAN FOR. Stripping them leaves the explained statement on its own, to
-# be parsed and checked like any other (see _explain_body).
+# ANALYZE / EXTENDED / FORMAT=..., SQLite spells it QUERY PLAN, Snowflake
+# USING TABULAR|JSON|TEXT, and Oracle EXPLAIN PLAN FOR. Stripping them leaves the
+# explained statement on its own, to be parsed and checked like any other (see
+# _explain_body).
+#
+# Missing an option here costs a false rejection of a valid EXPLAIN, not a hole —
+# an unrecognised option stays glued to the front of the body and the reparse
+# fails closed. Cheap to be wrong in that direction, so this errs towards
+# listing more.
 _EXPLAIN_OPTIONS = re.compile(
     r"^\s*(?:\([^)]*\)|analyze|verbose|costs|settings|buffers|wal|timing|"
     r"summary|generic_plan|memory|serialize|extended|partitions|query\s+plan|"
-    r"plan\s+for|format\s*=?\s*\w+|on|off|true|false|,)\s*",
+    r"plan\s+for|using\s+(?:tabular|json|text)|format\s*=?\s*\w+|on|off|true|"
+    r"false|,)\s*",
     re.IGNORECASE,
 )
 
