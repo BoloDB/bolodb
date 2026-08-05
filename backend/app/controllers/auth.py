@@ -124,9 +124,27 @@ async def login(email: EmailStr, password: str):
     # Accounts without a password hash (Google/Supabase-only) cannot log in via password.
     if not user_details.get("hashed_pass"):
         raise HTTPException(status_code=401, detail="Invalid credentials")
-    if await verify_password(password, user_details["hashed_pass"]):
-        return create_jwt(str(user_details["_id"]), user_details["role"])
-    raise HTTPException(status_code=401, detail="Invalid credentials")
+    if not await verify_password(password, user_details["hashed_pass"]):
+        raise HTTPException(status_code=401, detail="Invalid credentials")
+
+    # Signup sends a code but nothing ever required it, so an address could be
+    # used without its owner having agreed to anything. That is what makes
+    # account pre-hijacking work: register victim@corp.com, never verify, and
+    # wait. When the real owner signs in with Google, supabase_google_login
+    # matches on email and links their identity into the account already
+    # standing — whose password the registrant still knows.
+    #
+    # Checked after the password so this says nothing to anyone who has not
+    # already proved they hold the credentials.
+    if not user_details.get("email_verified"):
+        raise HTTPException(
+            status_code=403,
+            detail=(
+                "Please verify your email address before signing in. "
+                "Check your inbox, or request a new code."
+            ),
+        )
+    return create_jwt(str(user_details["_id"]), user_details["role"])
 
 
 def create_access_jwt(user_id, role):
