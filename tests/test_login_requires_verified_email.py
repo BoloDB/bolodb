@@ -105,3 +105,45 @@ async def test_social_only_account_is_unchanged(monkeypatch):
         await auth.login(EMAIL, PASSWORD)
     assert exc.value.status_code == 401
     assert exc.value.detail == "Invalid credentials"
+
+
+# ── the refresh endpoint ─────────────────────────────────────────────────
+
+
+def _refresh_token_for(user_id="11111111-1111-1111-1111-111111111111"):
+    import jwt
+
+    from backend.app.secrets import get_jwt_secret
+
+    return jwt.encode(
+        {"user_id": user_id, "role": "user"}, get_jwt_secret(), algorithm="HS256"
+    )
+
+
+@pytest.mark.asyncio
+async def test_refresh_refuses_an_unverified_account(monkeypatch):
+    """Checking only at login leaves a week-long way around it.
+
+    A refresh token issued before the rule existed would keep minting access
+    tokens and never meet the login path again.
+    """
+    import backend.app.routes.auth as routes
+
+    async def _get_me(_uid):
+        return _user(email_verified=False)
+
+    monkeypatch.setattr(routes.backend.app.controllers.auth, "get_me", _get_me)
+    with pytest.raises(HTTPException) as exc:
+        await routes.refresh_jwt(_refresh_token_for())
+    assert exc.value.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_refresh_still_works_for_a_verified_account(monkeypatch):
+    import backend.app.routes.auth as routes
+
+    async def _get_me(_uid):
+        return _user()
+
+    monkeypatch.setattr(routes.backend.app.controllers.auth, "get_me", _get_me)
+    assert (await routes.refresh_jwt(_refresh_token_for())).status_code == 200

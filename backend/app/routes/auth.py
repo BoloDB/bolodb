@@ -52,6 +52,13 @@ async def refresh_jwt(refresh_token: str = Cookie(None)):
         raise HTTPException(status_code=401, detail="Access Denied")
     try:
         token = jwt.decode(refresh_token, get_jwt_secret(), algorithms=["HS256"])
+        # Checked here too, not only at login. This endpoint mints access
+        # tokens, so an unverified account holding a refresh token issued before
+        # the login check existed would keep renewing itself for another week
+        # and never meet the new rule at all.
+        user = await backend.app.controllers.auth.get_me(token["user_id"])
+        if not user or not user.get("email_verified"):
+            raise HTTPException(status_code=401, detail="Invalid Token")
         response = JSONResponse({"message": "Token Set successfully"})
         new_token = backend.app.controllers.auth.create_access_jwt(
             user_id=token["user_id"], role=token["role"]
