@@ -2,6 +2,7 @@ from fastapi import HTTPException, Cookie, Request, Depends, Header
 import jwt
 from sqlalchemy import select
 
+from backend.app import tokens
 from backend.app.secrets import get_jwt_secret
 from backend.app.pgdatabase.engine import async_session
 from backend.app.models.workspace import WorkspaceMember
@@ -15,6 +16,12 @@ async def get_current_user(access_token: str = Cookie(None)):
         raise HTTPException(status_code=401, detail="Access Denied")
     try:
         token_data = jwt.decode(access_token, get_jwt_secret(), algorithms=["HS256"])
+        # A valid signature only says we minted this, not what for. Every token
+        # this app issues carries a user_id and verifies against the same secret,
+        # so without the kind check a refresh token, a password-reset token or a
+        # Slack OAuth state would each work here as a session.
+        if not tokens.is_kind(token_data, tokens.ACCESS):
+            raise HTTPException(status_code=401, detail="Invalid Token")
         return token_data
     except jwt.ExpiredSignatureError:
         raise HTTPException(

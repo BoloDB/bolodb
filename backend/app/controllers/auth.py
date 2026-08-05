@@ -22,6 +22,7 @@ from backend.app.pgdatabase import (
 )
 from backend.app.models.auth_token import PasswordResetToken
 from backend.app.pgdatabase.engine import get_engine
+from backend.app import tokens
 import jwt
 from jwt import PyJWKClient
 from datetime import datetime, timedelta, UTC
@@ -131,17 +132,24 @@ async def login(email: EmailStr, password: str):
 
 def create_access_jwt(user_id, role):
     ALGORITHM = "HS256"
-    data = {"user_id": user_id, "role": role}
+    data = {"user_id": user_id, "role": role, tokens.TYPE_CLAIM: tokens.ACCESS}
     expiry = datetime.now(UTC) + timedelta(minutes=60)
     data.update({"exp": expiry})
     return jwt.encode(data, get_jwt_secret(), algorithm=ALGORITHM)
 
 
 def create_jwt(user_id, role):
+    """Mint the access/refresh pair issued on a successful sign-in.
+
+    The two differ by more than their expiry: each names its own kind, so the
+    refresh token cannot be presented as a session. Without that they were
+    byte-identical apart from ``exp``, which made the one-hour access lifetime
+    decorative — the 7-day refresh token opened every door the access token did.
+    """
     ALGORITHM = "HS256"
     secret = get_jwt_secret()
-    data = {"user_id": user_id, "role": role}
-    refresh_data = {"user_id": user_id, "role": role}
+    data = {"user_id": user_id, "role": role, tokens.TYPE_CLAIM: tokens.ACCESS}
+    refresh_data = {"user_id": user_id, "role": role, tokens.TYPE_CLAIM: tokens.REFRESH}
     access_expiry = datetime.now(UTC) + timedelta(hours=1)
     refresh_expiry = datetime.now(UTC) + timedelta(days=7)
     data.update({"exp": access_expiry})
@@ -425,9 +433,12 @@ async def create_reset_token(user_id: str) -> str:
             )
         )
 
+    # Named with the same claim as every other token here. A reset token travels
+    # by email — through inboxes, mail scanners and browser history — so of all
+    # of them this is the one that must never double as a session cookie.
     data = {
         "user_id": user_id,
-        "type": "password_reset",
+        tokens.TYPE_CLAIM: tokens.PASSWORD_RESET,
         "jti": jti,
         "exp": expires_at,
     }
@@ -481,7 +492,7 @@ async def reset_password(token: str, new_password: str):
     except jwt.InvalidTokenError:
         raise HTTPException(status_code=400, detail="Invalid reset link.")
 
-    if payload.get("type") != "password_reset":
+    if not tokens.is_kind(payload, tokens.PASSWORD_RESET):
         raise HTTPException(status_code=400, detail="Invalid reset link.")
 
     jti = payload.get("jti")
