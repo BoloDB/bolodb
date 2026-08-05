@@ -147,6 +147,86 @@ def test_explain_select_allowed(db):
     assert "error" not in res
 
 
+def test_explain_analyze_delete_does_not_delete(db):
+    """EXPLAIN ANALYZE runs the statement it is given — it must not be a way in.
+
+    sqlglot keeps everything after EXPLAIN as one opaque string, so the guard
+    used to see a bare Command with no DELETE node in it and wave the whole
+    thing through. On Postgres and MySQL that executes the DELETE for real.
+    """
+    res = db.execute(TEST_USER, "EXPLAIN ANALYZE DELETE FROM items")
+    assert "error" in res
+    # The rows are the actual claim; the error message alone would still hold if
+    # the statement had run and then failed on something else.
+    assert db.execute(TEST_USER, "SELECT COUNT(*) AS n FROM items")["rows"][0]["n"] == 8
+
+
+@pytest.mark.parametrize(
+    "sql",
+    [
+        "EXPLAIN ANALYZE DELETE FROM items",
+        "EXPLAIN ANALYZE UPDATE items SET name = 'x'",
+        "EXPLAIN ANALYZE INSERT INTO items(name) VALUES ('x')",
+        "EXPLAIN (ANALYZE, BUFFERS) DELETE FROM items",
+        "EXPLAIN VERBOSE DROP TABLE items",
+        "EXPLAIN ANALYZE CREATE TABLE t (id INT)",
+        "EXPLAIN ANALYZE TRUNCATE items",
+        # Nested past the unwrap limit must fail closed, not fall through.
+        "EXPLAIN EXPLAIN EXPLAIN EXPLAIN EXPLAIN DELETE FROM items",
+        # An EXPLAIN with nothing to explain tells us nothing — reject it.
+        "EXPLAIN",
+    ],
+)
+def test_explain_wrapping_a_write_is_rejected(db, sql):
+    assert "error" in db.execute(TEST_USER, sql)
+
+
+@pytest.mark.parametrize("dialect", ["postgres", "mysql", "sqlite", "duckdb"])
+@pytest.mark.parametrize(
+    "sql",
+    [
+        "EXPLAIN ANALYZE DELETE FROM users",
+        "EXPLAIN ANALYZE UPDATE users SET a = 1",
+        "EXPLAIN ANALYZE INSERT INTO users VALUES (1)",
+    ],
+)
+def test_explain_write_rejected_on_every_dialect(dialect, sql):
+    """The bypass is dialect-independent, so the fix has to be too.
+
+    Checked against the parser directly rather than through a live connection —
+    the guard picks its sqlglot dialect from the connection, and there is no
+    Postgres or MySQL to connect to in this suite.
+    """
+    import sqlglot
+
+    from backend.app.database import _statement_violation
+
+    stmts = [s for s in sqlglot.parse(sql, dialect=dialect) if s is not None]
+    assert len(stmts) == 1
+    assert _statement_violation(stmts[0], dialect) is not None
+
+
+@pytest.mark.parametrize(
+    "dialect,sql",
+    [
+        ("postgres", "EXPLAIN SELECT * FROM items"),
+        ("postgres", "EXPLAIN ANALYZE SELECT * FROM items"),
+        ("postgres", "EXPLAIN VERBOSE SELECT 1"),
+        ("postgres", "EXPLAIN (ANALYZE, BUFFERS) SELECT * FROM items"),
+        ("sqlite", "EXPLAIN QUERY PLAN SELECT * FROM items"),
+        ("sqlite", "EXPLAIN SELECT * FROM items"),
+    ],
+)
+def test_explain_select_still_allowed_after_the_fix(dialect, sql):
+    """Reading a plan is the point of the feature — don't regress it."""
+    import sqlglot
+
+    from backend.app.database import _statement_violation
+
+    stmts = [s for s in sqlglot.parse(sql, dialect=dialect) if s is not None]
+    assert _statement_violation(stmts[0], dialect) is None
+
+
 def test_truncation_flag_is_exact(db):
     res = db.execute(TEST_USER, "SELECT * FROM items LIMIT 5")
     assert res["row_count"] == 5
