@@ -131,6 +131,31 @@ async def test_a_malformed_subject_is_refused(stored_version):
         await deps.get_current_user(bad)
 
 
+def test_password_and_revocation_land_in_one_transaction():
+    """Both or neither.
+
+    As two separate awaits, a failure in between leaves the password changed and
+    the old sessions alive — the worst outcome available, because the user has
+    been told their account is secured and it is not. In the reset flow the
+    token is already consumed by then, so they cannot even retry the link.
+    """
+    import inspect
+
+    from backend.app.controllers import auth
+    from backend.app.pgdatabase.users import set_password_and_revoke_sessions
+
+    source = inspect.getsource(set_password_and_revoke_sessions)
+    assert "hashed_pass=hashed_pass" in source
+    assert "token_version=User.token_version + 1" in source
+    # One execute, one commit — not two statements hoping both land.
+    assert source.count("await session.commit()") == 1
+
+    for flow in (auth.change_password, auth.reset_password):
+        body = inspect.getsource(flow)
+        assert "set_password_and_revoke_sessions" in body, flow.__name__
+        assert "bump_token_version" not in body, flow.__name__
+
+
 def test_the_version_is_bumped_in_sql_not_read_modify_write():
     """Two concurrent revocations must not settle on the same number.
 

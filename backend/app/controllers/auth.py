@@ -13,12 +13,12 @@ from backend.app.models.user import (
     validate_password_strength,
 )
 from backend.app.pgdatabase import (
-    bump_token_version,
     create_user,
     get_user_by_email,
     get_user_by_supabase_id,
     get_user_by_id,
     update_user,
+    set_password_and_revoke_sessions,
     UserAlreadyExistsError,
 )
 from backend.app.models.auth_token import PasswordResetToken
@@ -339,15 +339,12 @@ async def change_password(user_id, old_password, new_password):
         )
     if await verify_password(old_password, user_details["hashed_pass"]):
         user_details["hashed_pass"] = await hash_password(new_password)
-        await update_user(
-            user_id,
-            hashed_pass=user_details["hashed_pass"],
-        )
-        # Whoever else was holding a session on this account stops holding one.
-        # A password change is often a response to suspecting exactly that, and
-        # until now it did nothing to them — their token outlived the password
-        # it was obtained with.
-        await bump_token_version(user_id)
+        # One transaction: whoever else was holding a session on this account
+        # stops holding one, and that happens if and only if the password
+        # actually changed. A password change is often a response to suspecting
+        # exactly that, and until now it did nothing to them — their token
+        # outlived the password it was obtained with.
+        await set_password_and_revoke_sessions(user_id, user_details["hashed_pass"])
         return True
     raise HTTPException(status_code=401, detail="Incorrect Password, Please try again")
 
@@ -569,8 +566,10 @@ async def reset_password(token: str, new_password: str):
         )
 
     new_hashed = await hash_password(new_password)
-    await update_user(user_id, hashed_pass=new_hashed)
     # Recovery has to actually recover the account: ending every session is the
-    # point of resetting a password you believe someone else has used.
-    await bump_token_version(user_id)
+    # point of resetting a password you believe someone else has used. Done in
+    # one transaction so it cannot half-happen — a new password with the old
+    # sessions still live is worse than neither, because the user is told they
+    # are safe.
+    await set_password_and_revoke_sessions(user_id, new_hashed)
     return True

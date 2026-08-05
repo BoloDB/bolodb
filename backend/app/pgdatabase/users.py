@@ -153,6 +153,41 @@ async def update_user(user_id: str, **fields):
             raise
 
 
+async def set_password_and_revoke_sessions(user_id: str, hashed_pass: str) -> bool:
+    """Change the password and retire every existing session, in one transaction.
+
+    Both or neither. Committed separately — as two awaits, which is the obvious
+    way to write it — a failure in between leaves the password changed and the
+    old sessions alive. That is the worst of the available outcomes, because the
+    user has been told their account is secured and it is not: the very sessions
+    they changed the password to end are the ones still running.
+
+    Recovery makes it worse still. By the time this runs, the reset token has
+    already been consumed, so a user who hits that failure cannot simply retry
+    the link — they have to request a new one. Rolling the password back with
+    the bump at least leaves their old password working in the meantime.
+    """
+    try:
+        uid = _to_uuid(user_id)
+    except (ValueError, TypeError):
+        return False
+    async with async_session() as session:
+        try:
+            result = await session.execute(
+                update(User)
+                .where(User.id == uid)
+                .values(
+                    hashed_pass=hashed_pass,
+                    token_version=User.token_version + 1,
+                )
+            )
+            await session.commit()
+            return result.rowcount > 0
+        except Exception:
+            await session.rollback()
+            raise
+
+
 async def bump_token_version(user_id: str) -> bool:
     """Retire every token already issued to this user.
 
