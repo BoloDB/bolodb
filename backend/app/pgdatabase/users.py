@@ -39,6 +39,7 @@ def _user_to_dict(user) -> dict:
             "supabase_id": user.supabase_id,
             "email_verified": user.email_verified,
             "tour_completed": user.tour_completed,
+            "token_version": user.token_version,
             "created_at": user.created_at,
             "first_name": user.first_name,
             "last_name": user.last_name,
@@ -145,6 +146,33 @@ async def update_user(user_id: str, **fields):
         try:
             stmt = update(User).where(User.id == uid).values(**fields)
             result = await session.execute(stmt)
+            await session.commit()
+            return result.rowcount > 0
+        except Exception:
+            await session.rollback()
+            raise
+
+
+async def bump_token_version(user_id: str) -> bool:
+    """Retire every token already issued to this user.
+
+    Deliberately not routed through ``update_user``: this is not a field a
+    caller should be able to set to a value of its choosing, only one the server
+    may advance. Incrementing in SQL rather than read-modify-write also means
+    two concurrent revocations cannot land on the same number and leave one of
+    them ineffective.
+    """
+    try:
+        uid = _to_uuid(user_id)
+    except (ValueError, TypeError):
+        return False
+    async with async_session() as session:
+        try:
+            result = await session.execute(
+                update(User)
+                .where(User.id == uid)
+                .values(token_version=User.token_version + 1)
+            )
             await session.commit()
             return result.rowcount > 0
         except Exception:

@@ -28,6 +28,7 @@ from backend.app.pgdatabase.users import (
     get_user_by_id,
     create_user,
     update_user,
+    bump_token_version,
     UserAlreadyExistsError,
 )
 from backend.app.pgdatabase.history import (
@@ -91,6 +92,7 @@ __all__ = [
     "get_user_by_id",
     "create_user",
     "update_user",
+    "bump_token_version",
     "UserAlreadyExistsError",
     "save_query",
     "get_query_history",

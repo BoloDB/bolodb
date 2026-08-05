@@ -13,6 +13,12 @@ a token usable only where it was meant to be used.
 # only the payload is covered by the signature check we do.
 TYPE_CLAIM = "typ"
 
+# The user's token generation at the moment this token was minted. Compared
+# against the stored one on every request, so raising that number retires every
+# token issued before it. Absent means 0 — the value a user starts at — so a
+# token predating this claim stays valid until something actually revokes it.
+VERSION_CLAIM = "ver"
+
 ACCESS = "access"
 REFRESH = "refresh"
 PASSWORD_RESET = "password_reset"

@@ -3,7 +3,7 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from backend.app.models.user import UserSignup, UserLogin, SupabaseLogin
 import backend.app.controllers.auth
-from backend.app.dependencies import get_current_user
+from backend.app.dependencies import _token_version_is_current, get_current_user
 from backend.app import tokens
 from backend.app.ratelimit import limiter
 from backend.app.secrets import get_jwt_secret, get_cookie_secure, get_frontend_url
@@ -58,9 +58,16 @@ async def refresh_jwt(refresh_token: str = Cookie(None)):
         # the whole point of having two kinds.
         if not tokens.is_kind(token, tokens.REFRESH):
             raise HTTPException(status_code=401, detail="Invalid Token")
+        # Checked here as well as in get_current_user: this endpoint mints a new
+        # access token, so a revoked refresh token left unchecked would hand
+        # back a *valid* session and undo the revocation entirely.
+        if not await _token_version_is_current(token):
+            raise HTTPException(status_code=401, detail="Invalid Token")
         response = JSONResponse({"message": "Token Set successfully"})
         new_token = backend.app.controllers.auth.create_access_jwt(
-            user_id=token["user_id"], role=token["role"]
+            user_id=token["user_id"],
+            role=token["role"],
+            token_version=int(token.get(tokens.VERSION_CLAIM, 0)),
         )
         secure = get_cookie_secure()
         response.set_cookie(
