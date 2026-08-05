@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, Header
+from fastapi import APIRouter, Depends, Header, HTTPException
 from fastapi.responses import JSONResponse
 from sqlalchemy import text
 from backend.app.dependencies import (
@@ -75,8 +75,21 @@ async def health():
     return JSONResponse(content=result)
 
 
+def _require_admin(user_token=Depends(get_current_user)):
+    """Gate on the global admin role, not merely on being signed in.
+
+    Any signed-up stranger holds a valid session, so authentication alone barely
+    narrows the audience for deployment configuration. This is operator data —
+    which secrets are set, the CORS allowlist, the Supabase project — and the
+    role that exists for operators is the one that should see it.
+    """
+    if user_token.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Admin role required")
+    return user_token
+
+
 @router.get("/api/health/diagnostics")
-async def health_diagnostics(user_token=Depends(get_current_user)):
+async def health_diagnostics(user_token=Depends(_require_admin)):
     """The operator view of the same thing — behind authentication.
 
     Everything here was previously served to anyone who asked: which secrets are

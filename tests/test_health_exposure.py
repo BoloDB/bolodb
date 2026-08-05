@@ -59,20 +59,34 @@ async def test_diagnostics_still_carries_the_operator_detail(monkeypatch):
     assert "DATABASE_URL" in result["env"]
 
 
-def test_diagnostics_is_behind_get_current_user():
+def test_diagnostics_is_behind_the_admin_gate():
     """The dependency *is* the control, so assert the route actually carries it.
 
     Checked on the signature rather than by driving a request: the guard is
     declared, not written inline, and a refactor that dropped it would leave the
-    handler working perfectly — just open to everyone, which is the state this
-    change exists to end.
+    handler working perfectly — just open again, which is the state this change
+    exists to end.
     """
     import inspect
 
-    from backend.app.dependencies import get_current_user
+    from backend.app.routes.system import _require_admin
 
     param = inspect.signature(health_diagnostics).parameters["user_token"]
-    assert param.default.dependency is get_current_user
+    assert param.default.dependency is _require_admin
+
+
+def test_being_signed_in_is_not_enough_for_diagnostics():
+    """Any stranger who signs up holds a valid session — that is not an operator."""
+    import pytest as _pytest
+    from fastapi import HTTPException
+
+    from backend.app.routes.system import _require_admin
+
+    with _pytest.raises(HTTPException) as exc:
+        _require_admin({"user_id": "u", "role": "user"})
+    assert exc.value.status_code == 403
+
+    assert _require_admin({"user_id": "u", "role": "admin"})
 
 
 def test_public_health_takes_no_dependencies():
