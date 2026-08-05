@@ -15,8 +15,20 @@ def get_jwt_secret():
 
 
 def get_cookie_secure():
-    """Return True if cookies should use the Secure flag (HTTPS only)."""
-    return os.getenv("COOKIE_SECURE", "false").lower() == "true"
+    """Whether session cookies carry the Secure flag (sent over HTTPS only).
+
+    Defaults to **on**. Forgetting to set this used to mean session cookies were
+    sent in clear over HTTP — and forgetting is the common case, because nothing
+    about the app misbehaves when it is wrong. The two failure modes are not
+    comparable: left off in production, credentials are readable by anyone on the
+    path; left on in local development, the browser drops the cookie and you find
+    out immediately, at the first sign-in.
+
+    So the default fails towards the one you notice. Plain-HTTP deployments set
+    COOKIE_SECURE=false explicitly, which is a decision someone has to make on
+    purpose rather than one they can drift into.
+    """
+    return os.getenv("COOKIE_SECURE", "true").lower() != "false"
 
 
 def get_supabase_url():
