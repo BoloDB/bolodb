@@ -85,7 +85,6 @@ async def get_state(user_id, workspace_id, db_id, db, cfg, kb):
         knowledge metadata when the user has a connected database.
     """
     config = cfgmod.public_config(cfg)
-    config.pop("last_db_url", None)
     user = await mdb.get_user_by_id(user_id)
     # Restore the workspace's database from its stored credentials if this
     # process doesn't hold a live engine for it — otherwise a restart reads to
@@ -172,18 +171,3 @@ async def set_tour_completed(user_id):
         raise HTTPException(404, "User not found")
     return {"ok": True, "tour_completed": True}
 
-
-async def update_config(user_id, cfg, providers, req_data):
-    """
-    Update the persisted configuration with the supported database URL setting.
-
-    Parameters:
-        req_data: Request data containing an optional ``last_db_url`` value.
-
-    Returns:
-        A dictionary containing the public configuration.
-    """
-    if req_data.last_db_url is not None:
-        cfg["last_db_url"] = req_data.last_db_url
-    cfgmod.save_config(cfg)
-    return {"config": cfgmod.public_config(cfg)}
