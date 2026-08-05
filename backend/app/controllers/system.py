@@ -123,14 +123,31 @@ async def get_state(user_id, workspace_id, db_id, db, cfg, kb):
 
 
 async def get_health(pg_status="unknown"):
+    """Readiness: can this instance serve requests? Nothing about how it is configured.
+
+    Deliberately thin. This is the only health surface an unauthenticated caller
+    reaches, so it says whether Postgres answers and stops there — the operator
+    detail that used to live here moved to ``get_diagnostics``.
     """
-    Build a health and diagnostics summary for PostgreSQL, environment configuration, and Supabase JWKS reachability.
+    return {
+        "status": "ok" if pg_status == "connected" else "degraded",
+        "postgres": pg_status,
+    }
 
-    Parameters:
-        pg_status (str): Current PostgreSQL connection status.
 
-    Returns:
-        dict: Health status, PostgreSQL status, environment checks, and Supabase JWKS reachability status.
+async def get_diagnostics(pg_status="unknown"):
+    """The operator view: which settings are present, and can Supabase be reached.
+
+    Authenticated, because none of it is a stranger's business. Naming which
+    secrets are set, the Supabase project URL and the CORS allowlist tells an
+    attacker which auth paths are live and which are unconfigured — a map of
+    where to push — and it is exactly the map that is useless to a legitimate
+    anonymous caller.
+
+    The JWKS probe lives behind the same door for a second reason: it is an
+    outbound HTTPS request, so unauthenticated it let anyone make this server
+    call a third party on demand. The TTL cache below bounds that, but a cache
+    bounds the rate, not the right to trigger it.
     """
     env_checks = {
         "JWT_SECRET": bool(get_jwt_secret()) if os.getenv("JWT_SECRET") else False,

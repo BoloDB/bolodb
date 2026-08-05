@@ -49,15 +49,7 @@ async def tour_complete(
     return await ctrl.set_tour_completed(user_id)
 
 
-@router.get("/api/health")
-async def health():
-    """
-    Check PostgreSQL connectivity and provide application health information.
-
-    Returns:
-        JSONResponse: Health information with status code 503 when PostgreSQL is unavailable.
-    """
-    pg_status = "connected"
+async def _postgres_status() -> str:
     try:
         from backend.app.pgdatabase import get_engine
 
@@ -65,8 +57,36 @@ async def health():
         async with engine.connect() as conn:
             await conn.execute(text("SELECT 1"))
     except Exception as e:
-        pg_status = f"disconnected:{e.__class__.__name__}"
+        return f"disconnected:{e.__class__.__name__}"
+    return "connected"
+
+
+@router.get("/api/health")
+async def health():
+    """Readiness probe. Unauthenticated, and says only whether we can serve.
+
+    503 when Postgres is unreachable, which is what the container healthcheck
+    and any load balancer in front of this needs to see.
+    """
+    pg_status = await _postgres_status()
     result = await ctrl.get_health(pg_status)
+    if pg_status != "connected":
+        return JSONResponse(content=result, status_code=503)
+    return JSONResponse(content=result)
+
+
+@router.get("/api/health/diagnostics")
+async def health_diagnostics(user_token=Depends(get_current_user)):
+    """The operator view of the same thing — behind authentication.
+
+    Everything here was previously served to anyone who asked: which secrets are
+    configured, the Supabase project URL, the CORS allowlist, and an outbound
+    request to Supabase per call. The first three map which auth paths are live
+    for someone deciding where to push; the fourth let a stranger make this
+    server talk to a third party on demand.
+    """
+    pg_status = await _postgres_status()
+    result = await ctrl.get_diagnostics(pg_status)
     if pg_status != "connected":
         return JSONResponse(content=result, status_code=503)
     return JSONResponse(content=result)
