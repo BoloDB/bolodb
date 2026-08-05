@@ -170,4 +170,3 @@ async def set_tour_completed(user_id):
     if not ok:
         raise HTTPException(404, "User not found")
     return {"ok": True, "tour_completed": True}
-

@@ -78,4 +78,3 @@ async def public_config():
             "supabase_anon_key": get_supabase_anon_key(),
         }
     )
-
