@@ -37,6 +37,14 @@ def jwt_secret(monkeypatch):
     monkeypatch.setattr(deps, "_token_version_is_current", _current)
     monkeypatch.setattr(auth_routes, "_token_version_is_current", _current)
 
+    # Same reasoning for the email-verification check the refresh endpoint now
+    # makes: it is a second database lookup, and these tests are not about
+    # verification state. Requiring a verified email has its own tests.
+    async def _verified(_user_id):
+        return {"_id": USER_ID, "role": "user", "email_verified": True}
+
+    monkeypatch.setattr(auth_routes.backend.app.controllers.auth, "get_me", _verified)
+
 
 def _encode(claims):
     return jwt.encode(claims, SECRET, algorithm="HS256")

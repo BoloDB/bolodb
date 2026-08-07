@@ -63,6 +63,13 @@ async def refresh_jwt(refresh_token: str = Cookie(None)):
         # back a *valid* session and undo the revocation entirely.
         if not await _token_version_is_current(token):
             raise HTTPException(status_code=401, detail="Invalid Token")
+        # Checked here too, not only at login. This endpoint mints access
+        # tokens, so an unverified account holding a refresh token issued before
+        # the login check existed would keep renewing itself for another week
+        # and never meet the new rule at all.
+        user = await backend.app.controllers.auth.get_me(token["user_id"])
+        if not user or not user.get("email_verified"):
+            raise HTTPException(status_code=401, detail="Invalid Token")
         response = JSONResponse({"message": "Token Set successfully"})
         new_token = backend.app.controllers.auth.create_access_jwt(
             user_id=token["user_id"],
