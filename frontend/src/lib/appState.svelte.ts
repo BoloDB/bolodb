@@ -70,8 +70,15 @@ class AppState {
   async loadWorkspaces() {
     try {
       const previousWorkspaceId = this.activeWorkspace?.id;
-      this.workspaces = await apiCall("/api/workspaces");
-      this.invites = await apiCall("/api/workspaces/invites/me");
+      // Independent requests: /invites/me is scoped to the authenticated user
+      // and needs nothing from the workspace list. Awaiting them one after the
+      // other cost a full extra round trip on every app load.
+      const [workspaces, invites] = await Promise.all([
+        apiCall("/api/workspaces"),
+        apiCall("/api/workspaces/invites/me"),
+      ]);
+      this.workspaces = workspaces;
+      this.invites = invites;
       this.announceNewInvites();
       const stored = localStorage.getItem("bolodb_active_workspace_id");
       if (stored && this.workspaces.find((w: any) => w.id === stored)) {
@@ -166,12 +173,12 @@ class AppState {
         this.verifiedCount = s.trust?.verified || 0;
         this.dbInfo = s.database || null;
         this.starters = s.starters || [];
-        try {
-          const schema = await apiCall("/api/schema");
-          this.realSchema = schemaObjToDisplay(schema);
-        } catch (e) {
-          console.error("Failed to load schema:", e);
-        }
+        // Deliberately not awaited. The schema only feeds the chat UI, which
+        // already renders with realSchema null and fills in when it arrives.
+        // Awaiting it here held up isLoaded and the redirect below for a whole
+        // round trip, so the user sat on a loading screen waiting for data
+        // that the next screen does not need in order to appear.
+        void this.fetchSchemaAsync();
         this.isLoaded = true;
         if (this.workspaces.length === 0) {
           goto("/workspaces/setup");
