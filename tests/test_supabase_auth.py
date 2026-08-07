@@ -81,7 +81,7 @@ async def test_links_existing_email_when_google_verified(monkeypatch):
         return None
 
     async def fake_get_by_email(e):
-        return {"_id": "existing-id", "role": "user"}
+        return {"_id": "existing-id", "role": "user", "email_verified": True}
 
     async def fake_update_user(uid, **kw):
         return None
@@ -160,3 +160,94 @@ async def test_skips_linking_for_non_google_provider(monkeypatch):
     tokens = await auth.supabase_google_login(token)
     assert "access_token" in tokens
     assert len(update_called) == 0  # linking was skipped
+
+
+@pytest.mark.asyncio
+async def test_refuses_to_link_into_an_unverified_account(monkeypatch):
+    """The pre-hijack merge itself, not just the use of its result.
+
+    Registering an address without proving it and waiting for the real owner to
+    arrive via Google used to fold their identity into the registrant's row.
+    Google proving the address says nothing about who set that row's password.
+    """
+    monkeypatch.setenv("JWT_SECRET", "test-secret")
+    monkeypatch.setenv("SUPABASE_JWT_SECRET", "test-secret")
+    token = _make_valid_token({"sub": "supabase-link", "email": "victim@corp.com"})
+
+    update_called = []
+
+    async def none(*a, **k):
+        return None
+
+    async def fake_get_by_email(e):
+        return {"_id": "squatted-id", "role": "user", "email_verified": False}
+
+    async def fake_update_user(uid, **kw):
+        update_called.append((uid, kw))
+
+    monkeypatch.setattr(auth, "get_user_by_supabase_id", none)
+    monkeypatch.setattr(auth, "get_user_by_email", fake_get_by_email)
+    monkeypatch.setattr(auth, "update_user", fake_update_user)
+
+    with pytest.raises(HTTPException) as exc:
+        await auth.supabase_google_login(token)
+    assert exc.value.status_code == 403
+    assert update_called == []
+
+
+@pytest.mark.asyncio
+async def test_new_google_account_starts_verified(monkeypatch):
+    """Google just proved the address.
+
+    Left at the model default of False, every SSO account would fail the
+    email_verified check on /refresh an hour after signing in.
+    """
+    monkeypatch.setenv("JWT_SECRET", "test-secret")
+    monkeypatch.setenv("SUPABASE_JWT_SECRET", "test-secret")
+    token = _make_valid_token({"sub": "supabase-new", "email": "new@example.com"})
+
+    created = []
+
+    async def none(*a, **k):
+        return None
+
+    async def fake_create_user(u):
+        created.append(u)
+        return "uid-new"
+
+    monkeypatch.setattr(auth, "get_user_by_supabase_id", none)
+    monkeypatch.setattr(auth, "get_user_by_email", none)
+    monkeypatch.setattr(auth, "create_user", fake_create_user)
+
+    await auth.supabase_google_login(token)
+    assert created[0].email_verified is True
+
+
+@pytest.mark.asyncio
+async def test_unverified_google_account_does_not_start_verified(monkeypatch):
+    """Only the provider's own assertion may set the flag."""
+    monkeypatch.setenv("JWT_SECRET", "test-secret")
+    monkeypatch.setenv("SUPABASE_JWT_SECRET", "test-secret")
+    token = _make_valid_token(
+        {
+            "sub": "supabase-unverified",
+            "email": "unproven@example.com",
+            "user_metadata": {"email_verified": False},
+        }
+    )
+
+    created = []
+
+    async def none(*a, **k):
+        return None
+
+    async def fake_create_user(u):
+        created.append(u)
+        return "uid-new"
+
+    monkeypatch.setattr(auth, "get_user_by_supabase_id", none)
+    monkeypatch.setattr(auth, "get_user_by_email", none)
+    monkeypatch.setattr(auth, "create_user", fake_create_user)
+
+    await auth.supabase_google_login(token)
+    assert created[0].email_verified is False

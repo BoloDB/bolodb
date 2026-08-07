@@ -111,39 +111,67 @@ async def test_social_only_account_is_unchanged(monkeypatch):
 
 
 def _refresh_token_for(user_id="11111111-1111-1111-1111-111111111111"):
+    """A token the endpoint's earlier gates actually accept.
+
+    It has to carry the type claim: without it ``is_kind`` rejects the token
+    before the verification check is ever reached, and both tests below would
+    then be asserting on the wrong refusal.
+    """
     import jwt
 
+    from backend.app import tokens
     from backend.app.secrets import get_jwt_secret
 
     return jwt.encode(
-        {"user_id": user_id, "role": "user"}, get_jwt_secret(), algorithm="HS256"
+        {
+            "user_id": user_id,
+            "role": "user",
+            tokens.TYPE_CLAIM: tokens.REFRESH,
+            tokens.VERSION_CLAIM: 0,
+        },
+        get_jwt_secret(),
+        algorithm="HS256",
     )
 
 
+@pytest.fixture
+def refresh_route(monkeypatch):
+    """The refresh endpoint with only the token-version lookup stubbed out.
+
+    That check owns a DB round trip and is covered by its own tests; leaving it
+    live here would make these fail on the database rather than on the flag
+    under test.
+    """
+    import backend.app.routes.auth as routes
+
+    async def _version_ok(_token):
+        return True
+
+    monkeypatch.setattr(routes, "_token_version_is_current", _version_ok)
+    return routes
+
+
 @pytest.mark.asyncio
-async def test_refresh_refuses_an_unverified_account(monkeypatch):
+async def test_refresh_refuses_an_unverified_account(monkeypatch, refresh_route):
     """Checking only at login leaves a week-long way around it.
 
     A refresh token issued before the rule existed would keep minting access
     tokens and never meet the login path again.
     """
-    import backend.app.routes.auth as routes
 
     async def _get_me(_uid):
         return _user(email_verified=False)
 
-    monkeypatch.setattr(routes.backend.app.controllers.auth, "get_me", _get_me)
+    monkeypatch.setattr(refresh_route.backend.app.controllers.auth, "get_me", _get_me)
     with pytest.raises(HTTPException) as exc:
-        await routes.refresh_jwt(_refresh_token_for())
+        await refresh_route.refresh_jwt(_refresh_token_for())
     assert exc.value.status_code == 401
 
 
 @pytest.mark.asyncio
-async def test_refresh_still_works_for_a_verified_account(monkeypatch):
-    import backend.app.routes.auth as routes
-
+async def test_refresh_still_works_for_a_verified_account(monkeypatch, refresh_route):
     async def _get_me(_uid):
         return _user()
 
-    monkeypatch.setattr(routes.backend.app.controllers.auth, "get_me", _get_me)
-    assert (await routes.refresh_jwt(_refresh_token_for())).status_code == 200
+    monkeypatch.setattr(refresh_route.backend.app.controllers.auth, "get_me", _get_me)
+    assert (await refresh_route.refresh_jwt(_refresh_token_for())).status_code == 200

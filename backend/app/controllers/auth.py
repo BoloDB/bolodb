@@ -300,23 +300,46 @@ async def supabase_google_login(access_token: str):
                 str(existing["_id"]), existing["role"], existing.get("token_version", 0)
             )
 
-        if provider == "google" and email_verified is True:
-            existing_by_email = await get_user_by_email(email)
-            if existing_by_email:
-                await update_user(existing_by_email["_id"], supabase_id=supabase_id)
-                return create_jwt(
-                    str(existing_by_email["_id"]),
-                    existing_by_email["role"],
-                    existing_by_email.get("token_version", 0),
-                )
+        google_verified = provider == "google" and email_verified is True
 
-        user_in_db = UserInDB(email=email, role=Role.user, supabase_id=supabase_id)
+        # Matching on email alone is the step account pre-hijacking relies on:
+        # a registrant who never proved the address still knows its password, so
+        # folding the real owner's Google identity into that row leaves both
+        # parties holding the same account. Only link into an account that has
+        # already proved the address on its own.
+        existing_by_email = await get_user_by_email(email) if google_verified else None
+        if existing_by_email:
+            if not existing_by_email.get("email_verified"):
+                raise HTTPException(
+                    status_code=403,
+                    detail=(
+                        "An unverified account already uses this email address. "
+                        "Verify it from your inbox before signing in with Google."
+                    ),
+                )
+            await update_user(existing_by_email["_id"], supabase_id=supabase_id)
+            return create_jwt(
+                str(existing_by_email["_id"]),
+                existing_by_email["role"],
+                existing_by_email.get("token_version", 0),
+            )
+
+        # Google has just proved the address, so the account starts verified.
+        # Without this every SSO account would sit at email_verified=False and
+        # fail the /refresh check an hour after signing in.
+        user_in_db = UserInDB(
+            email=email,
+            role=Role.user,
+            supabase_id=supabase_id,
+            email_verified=google_verified,
+        )
         try:
             uid = await create_user(user_in_db)
         except UserAlreadyExistsError:
-            existing = await get_user_by_supabase_id(
-                supabase_id
-            ) or await get_user_by_email(email)
+            # Only a genuine race on the same identity is recoverable here.
+            # Falling back to an email lookup would hand out a session for the
+            # very account the check above just declined to link.
+            existing = await get_user_by_supabase_id(supabase_id)
             if existing:
                 return create_jwt(
                     str(existing["_id"]),
