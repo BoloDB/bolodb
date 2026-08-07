@@ -24,6 +24,7 @@ def _fake_user(**overrides):
         supabase_id=None,
         email_verified=False,
         tour_completed=False,
+        token_version=0,
         created_at=None,
         first_name=None,
         last_name=None,

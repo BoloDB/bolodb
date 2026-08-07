@@ -1,10 +1,6 @@
 from pydantic import BaseModel
 
 
-class ConfigUpdate(BaseModel):
-    last_db_url: str | None = None
-
-
 class ConnectReq(BaseModel):
     db_url: str
     alias_name: str | None = None

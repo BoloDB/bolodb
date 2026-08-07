@@ -2,12 +2,45 @@ from fastapi import HTTPException, Cookie, Request, Depends, Header
 import jwt
 from sqlalchemy import select
 
+from backend.app import tokens
 from backend.app.secrets import get_jwt_secret
 from backend.app.pgdatabase.engine import async_session
+from backend.app.models.orm_user import User
 from backend.app.models.workspace import WorkspaceMember
 from backend.app.models.workspace_settings import WorkspaceSettings
 from backend.app.permissions import has_permission
 from backend.app.pgdatabase.serialization import _to_uuid
+
+
+async def _token_version_is_current(token_data) -> bool:
+    """Whether this token was minted since the account was last recovered.
+
+    This is the one part of authentication that cannot be answered from the
+    token alone. A JWT is only a claim the server signed at some point in the
+    past; deciding it is *no longer* valid means keeping something on the server
+    that the token can be measured against, and one integer per user is the
+    cheapest form of that — far cheaper than remembering every token issued.
+
+    Costs a primary-key lookup per authenticated request. Most routes already
+    make one for workspace membership, so this roughly doubles auth queries
+    rather than introducing the first. If that ever shows up in a profile, cache
+    it with a short TTL — but note the TTL becomes the window in which a revoked
+    session still works, which is exactly the thing being bought here.
+    """
+    try:
+        uid = _to_uuid(token_data.get("user_id", token_data.get("sub")))
+    except (ValueError, TypeError):
+        return False
+
+    async with async_session() as session:
+        stored = await session.scalar(select(User.token_version).where(User.id == uid))
+
+    if stored is None:
+        # No such user — a token for a deleted account is not a live session.
+        return False
+    # A token predating the claim reads as 0, which is where every user starts,
+    # so nothing is revoked until something actually bumps the number.
+    return int(token_data.get(tokens.VERSION_CLAIM, 0)) == int(stored)
 
 
 async def get_current_user(access_token: str = Cookie(None)):
@@ -15,6 +48,18 @@ async def get_current_user(access_token: str = Cookie(None)):
         raise HTTPException(status_code=401, detail="Access Denied")
     try:
         token_data = jwt.decode(access_token, get_jwt_secret(), algorithms=["HS256"])
+        # A valid signature only says we minted this, not what for. Every token
+        # this app issues carries a user_id and verifies against the same secret,
+        # so without the kind check a refresh token, a password-reset token or a
+        # Slack OAuth state would each work here as a session.
+        if not tokens.is_kind(token_data, tokens.ACCESS):
+            raise HTTPException(status_code=401, detail="Invalid Token")
+        if not await _token_version_is_current(token_data):
+            # The account was recovered (password changed or reset) after this
+            # token was minted, so it belongs to a session that is meant to be
+            # over. Same message as any other bad token: which one it is is not
+            # the holder's business.
+            raise HTTPException(status_code=401, detail="Invalid Token")
         return token_data
     except jwt.ExpiredSignatureError:
         raise HTTPException(

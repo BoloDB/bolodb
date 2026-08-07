@@ -48,5 +48,18 @@ HEALTHCHECK --interval=30s --timeout=5s --retries=3 \
 # the schema to head before the app serves its first request.
 ENTRYPOINT ["/app/backend/docker-entrypoint.sh"]
 
+# Bind every address family. "0.0.0.0" is IPv4-only, but the compose network
+# runs with enable_ipv6, so DNS for `backend` answers with both an A and an
+# AAAA record. nginx uses both, and the AAAA half of its requests hit
+# ECONNREFUSED because nothing listens there -- "upstream server temporarily
+# disabled" in the error log, and a wasted connection attempt on the way to
+# the IPv4 fallback.
+#
+# The empty host is deliberate and "::" is *not* a substitute: asyncio sets
+# IPV6_V6ONLY on any AF_INET6 server socket, so binding "::" listens on IPv6
+# **only** and refuses IPv4 -- trading one broken family for the other. An
+# empty host makes asyncio open one socket per family, which is real
+# dual-stack. Verified in-container: 0.0.0.0 -> IPv4 only, :: -> IPv6 only,
+# "" -> both.
 CMD ["python", "-m", "uvicorn", "backend.app.server:create_app", \
-     "--factory", "--host", "0.0.0.0", "--port", "4321", "--log-level", "warning"]
+     "--factory", "--host", "", "--port", "4321", "--log-level", "warning"]

@@ -3,7 +3,8 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from backend.app.models.user import UserSignup, UserLogin, SupabaseLogin
 import backend.app.controllers.auth
-from backend.app.dependencies import get_current_user
+from backend.app.dependencies import _token_version_is_current, get_current_user
+from backend.app import tokens
 from backend.app.ratelimit import limiter
 from backend.app.secrets import get_jwt_secret, get_cookie_secure, get_frontend_url
 import jwt
@@ -52,6 +53,16 @@ async def refresh_jwt(refresh_token: str = Cookie(None)):
         raise HTTPException(status_code=401, detail="Access Denied")
     try:
         token = jwt.decode(refresh_token, get_jwt_secret(), algorithms=["HS256"])
+        # Only a refresh token buys a new access token. An access token presented
+        # here would otherwise renew itself indefinitely, and its one-hour life is
+        # the whole point of having two kinds.
+        if not tokens.is_kind(token, tokens.REFRESH):
+            raise HTTPException(status_code=401, detail="Invalid Token")
+        # Checked here as well as in get_current_user: this endpoint mints a new
+        # access token, so a revoked refresh token left unchecked would hand
+        # back a *valid* session and undo the revocation entirely.
+        if not await _token_version_is_current(token):
+            raise HTTPException(status_code=401, detail="Invalid Token")
         # Checked here too, not only at login. This endpoint mints access
         # tokens, so an unverified account holding a refresh token issued before
         # the login check existed would keep renewing itself for another week
@@ -61,7 +72,9 @@ async def refresh_jwt(refresh_token: str = Cookie(None)):
             raise HTTPException(status_code=401, detail="Invalid Token")
         response = JSONResponse({"message": "Token Set successfully"})
         new_token = backend.app.controllers.auth.create_access_jwt(
-            user_id=token["user_id"], role=token["role"]
+            user_id=token["user_id"],
+            role=token["role"],
+            token_version=int(token.get(tokens.VERSION_CLAIM, 0)),
         )
         secure = get_cookie_secure()
         response.set_cookie(
@@ -190,6 +203,7 @@ async def change_password(
 
 
 @router.post("/forgot-password")
+@limiter.limit("5/minute")
 async def forgot_password(req: ForgotPasswordReq, request: Request):
     """Request a password reset link. Always returns success to prevent user enumeration."""
     frontend_url = get_frontend_url()
@@ -208,7 +222,8 @@ async def forgot_password(req: ForgotPasswordReq, request: Request):
 
 
 @router.post("/reset-password")
-async def reset_password(req: ResetPasswordReq):
+@limiter.limit("10/minute")
+async def reset_password(request: Request, req: ResetPasswordReq):
     """
     Reset a user's password using a password-reset token.
 
@@ -223,7 +238,8 @@ async def reset_password(req: ResetPasswordReq):
 
 
 @router.post("/verify-email")
-async def verify_email(req: VerifyEmailReq):
+@limiter.limit("10/minute")
+async def verify_email(request: Request, req: VerifyEmailReq):
     """Verify email with OTP code and log the user in."""
     tokens = await backend.app.controllers.auth.verify_email_code(req.email, req.code)
     response = JSONResponse({"message": "Email verified successfully"})
@@ -246,7 +262,8 @@ async def verify_email(req: VerifyEmailReq):
 
 
 @router.post("/resend-verification")
-async def resend_verification(req: ResendVerificationReq):
+@limiter.limit("3/minute")
+async def resend_verification(request: Request, req: ResendVerificationReq):
     """Resend the email verification OTP code."""
     result = await backend.app.controllers.auth.resend_verification_email(req.email)
     return JSONResponse(result)

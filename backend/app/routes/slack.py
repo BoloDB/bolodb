@@ -27,6 +27,7 @@ from fastapi.responses import RedirectResponse
 from sqlalchemy import select
 
 import backend.app.pgdatabase as mdb
+from backend.app import tokens
 from backend.app.crypto import encrypt_secret
 from backend.app.dependencies import (
     get_cfg,
@@ -66,10 +67,14 @@ def _frontend_base() -> str:
 @router.get("/install")
 async def slack_install(workspace=Depends(require_permission("connections.manage"))):
     """Return the Slack OAuth authorize URL for the frontend to open."""
+    # Typed like every other token: this one is handed to Slack in a URL, so it
+    # is the most exposed thing we sign, and it carries a user_id. Untyped, it
+    # was a working session cookie for anyone who saw the redirect.
     state = jwt.encode(
         {
             "workspace_id": workspace["workspace_id"],
             "user_id": workspace["user_id"],
+            tokens.TYPE_CLAIM: tokens.SLACK_OAUTH_STATE,
             "exp": int(time.time()) + STATE_TTL_SECONDS,
         },
         get_jwt_secret(),
@@ -89,6 +94,12 @@ async def slack_callback(code: str = "", state: str = "", error: str = ""):
         payload = jwt.decode(state, get_jwt_secret(), algorithms=["HS256"])
     except jwt.InvalidTokenError:
         log.warning("Slack OAuth callback with invalid or expired state")
+        return RedirectResponse(f"{fe}/profile?slack=error")
+    if not tokens.is_kind(payload, tokens.SLACK_OAUTH_STATE):
+        # Any other token of ours would satisfy the membership re-check below, so
+        # without this an access token would serve as a state and defeat the CSRF
+        # protection the state exists to provide.
+        log.warning("Slack OAuth callback with a state that is not an install state")
         return RedirectResponse(f"{fe}/profile?slack=error")
 
     # Re-validate the user is still a member of the workspace with the

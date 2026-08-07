@@ -8,6 +8,7 @@ from fastapi import HTTPException
 from backend.app import config as cfgmod
 import backend.app.controllers.database as dbctrl
 from backend.app.secrets import (
+    get_cookie_secure,
     get_jwt_secret,
     get_supabase_url,
     get_supabase_anon_key,
@@ -85,7 +86,6 @@ async def get_state(user_id, workspace_id, db_id, db, cfg, kb):
         knowledge metadata when the user has a connected database.
     """
     config = cfgmod.public_config(cfg)
-    config.pop("last_db_url", None)
     user = await mdb.get_user_by_id(user_id)
     # Restore the workspace's database from its stored credentials if this
     # process doesn't hold a live engine for it — otherwise a restart reads to
@@ -123,14 +123,31 @@ async def get_state(user_id, workspace_id, db_id, db, cfg, kb):
 
 
 async def get_health(pg_status="unknown"):
+    """Readiness: can this instance serve requests? Nothing about how it is configured.
+
+    Deliberately thin. This is the only health surface an unauthenticated caller
+    reaches, so it says whether Postgres answers and stops there — the operator
+    detail that used to live here moved to ``get_diagnostics``.
     """
-    Build a health and diagnostics summary for PostgreSQL, environment configuration, and Supabase JWKS reachability.
+    return {
+        "status": "ok" if pg_status == "connected" else "degraded",
+        "postgres": pg_status,
+    }
 
-    Parameters:
-        pg_status (str): Current PostgreSQL connection status.
 
-    Returns:
-        dict: Health status, PostgreSQL status, environment checks, and Supabase JWKS reachability status.
+async def get_diagnostics(pg_status="unknown"):
+    """The operator view: which settings are present, and can Supabase be reached.
+
+    Authenticated, because none of it is a stranger's business. Naming which
+    secrets are set, the Supabase project URL and the CORS allowlist tells an
+    attacker which auth paths are live and which are unconfigured — a map of
+    where to push — and it is exactly the map that is useless to a legitimate
+    anonymous caller.
+
+    The JWKS probe lives behind the same door for a second reason: it is an
+    outbound HTTPS request, so unauthenticated it let anyone make this server
+    call a third party on demand. The TTL cache below bounds that, but a cache
+    bounds the rate, not the right to trigger it.
     """
     env_checks = {
         "JWT_SECRET": bool(get_jwt_secret()) if os.getenv("JWT_SECRET") else False,
@@ -138,7 +155,11 @@ async def get_health(pg_status="unknown"):
         "SUPABASE_ANON_KEY": bool(get_supabase_anon_key()),
         "SUPABASE_JWT_SECRET": bool(os.getenv("SUPABASE_JWT_SECRET")),
         "DATABASE_URL": bool(os.getenv("DATABASE_URL")),
-        "COOKIE_SECURE": os.getenv("COOKIE_SECURE", "false"),
+        # The resolved value, not the raw env var. Reporting the string as
+        # written would say "false" for an unset deployment that is in fact
+        # issuing Secure cookies — the one place an operator looks to check
+        # this should not be the one place that disagrees with the code.
+        "COOKIE_SECURE": get_cookie_secure(),
         "CORS_ORIGINS": os.getenv("CORS_ORIGINS", "(not set, using defaults)"),
     }
 
@@ -171,19 +192,3 @@ async def set_tour_completed(user_id):
     if not ok:
         raise HTTPException(404, "User not found")
     return {"ok": True, "tour_completed": True}
-
-
-async def update_config(user_id, cfg, providers, req_data):
-    """
-    Update the persisted configuration with the supported database URL setting.
-
-    Parameters:
-        req_data: Request data containing an optional ``last_db_url`` value.
-
-    Returns:
-        A dictionary containing the public configuration.
-    """
-    if req_data.last_db_url is not None:
-        cfg["last_db_url"] = req_data.last_db_url
-    cfgmod.save_config(cfg)
-    return {"config": cfgmod.public_config(cfg)}
