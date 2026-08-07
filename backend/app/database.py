@@ -50,6 +50,96 @@ _MODIFYING_NODES = (
     exp.Command,
 )
 
+# Tokens that can sit between EXPLAIN and the statement it explains. Postgres
+# takes a parenthesised option list or bare ANALYZE / VERBOSE, MySQL takes
+# ANALYZE / EXTENDED / FORMAT=..., SQLite spells it QUERY PLAN, Snowflake
+# USING TABULAR|JSON|TEXT, and Oracle EXPLAIN PLAN FOR. Stripping them leaves the
+# explained statement on its own, to be parsed and checked like any other (see
+# _explain_body).
+#
+# Missing an option here costs a false rejection of a valid EXPLAIN, not a hole —
+# an unrecognised option stays glued to the front of the body and the reparse
+# fails closed. Cheap to be wrong in that direction, so this errs towards
+# listing more.
+_EXPLAIN_OPTIONS = re.compile(
+    r"^\s*(?:\([^)]*\)|analyze|verbose|costs|settings|buffers|wal|timing|"
+    r"summary|generic_plan|memory|serialize|extended|partitions|query\s+plan|"
+    r"plan\s+for|using\s+(?:tabular|json|text)|format\s*=?\s*\w+|on|off|true|"
+    r"false|,)\s*",
+    re.IGNORECASE,
+)
+
+# How many nested EXPLAINs to unwrap before giving up. No dialect accepts more
+# than one; the bound only stops a pathological "EXPLAIN EXPLAIN EXPLAIN ..."
+# from driving unbounded recursion.
+_MAX_EXPLAIN_DEPTH = 4
+
+
+def _explain_body(stmt):
+    """The statement an EXPLAIN ``Command`` wraps, as text ("" if there is none).
+
+    sqlglot does not parse what follows EXPLAIN — it keeps the whole remainder as
+    one opaque string literal on the ``Command`` — so ``find_all`` sees no nodes
+    inside it and cannot tell ``EXPLAIN SELECT`` from ``EXPLAIN ANALYZE DELETE``.
+    Recovering the text is what lets the caller parse it and judge it on its own
+    merits instead of taking the EXPLAIN at its word.
+    """
+    expression = stmt.args.get("expression")
+    body = expression.this if isinstance(expression, exp.Literal) else expression
+    body = "" if body is None else str(body)
+    while True:
+        stripped = _EXPLAIN_OPTIONS.sub("", body, count=1)
+        if stripped == body:
+            return body.strip()
+        body = stripped
+
+
+def _statement_violation(stmt, dialect, depth=0):
+    """Return an error string if ``stmt`` is not read-only, else None.
+
+    Separate from ``_readonly_violation`` so the body of an EXPLAIN can be put
+    through the identical checks: it is re-parsed and handed back here, rather
+    than trusted because of the keyword in front of it.
+    """
+    root = type(stmt).__name__
+
+    if root == "Command" and str(stmt.this).upper() == "EXPLAIN":
+        # EXPLAIN ANALYZE *executes* the statement it is given (Postgres, MySQL),
+        # so "it is only an EXPLAIN" is no reason to let a DELETE through. What
+        # is being explained decides whether this is read-only.
+        if depth >= _MAX_EXPLAIN_DEPTH:
+            return "Only SELECT queries are allowed (read-only mode)."
+        body = _explain_body(stmt)
+        if not body:
+            return "Only SELECT queries are allowed (read-only mode)."
+        try:
+            inner = [s for s in sqlglot.parse(body, dialect=dialect) if s is not None]
+        except Exception:
+            # Fail closed: an EXPLAIN whose body we cannot read is one we cannot
+            # vouch for, and the keyword guard below never sees it.
+            return "Only read-only SELECT queries are allowed."
+        if len(inner) > 1:
+            return "Only one statement is allowed (no stacked queries)."
+        if not inner:
+            return "Only SELECT queries are allowed (read-only mode)."
+        return _statement_violation(inner[0], dialect, depth + 1)
+
+    # Root must be a read-only statement type.
+    if root not in ("Select", "Union", "Explain"):
+        return "Only SELECT queries are allowed (read-only mode)."
+
+    # No modifying node may appear anywhere in the tree (catches CTE writes). A
+    # Command reaching this point is nested inside a SELECT rather than being the
+    # EXPLAIN handled above, and there is no read-only form of that worth
+    # allowing — so, unlike before, none are skipped here.
+    if next(stmt.find_all(*_MODIFYING_NODES), None) is not None:
+        return "Only read-only SELECT queries are allowed."
+
+    # Block SELECT ... INTO (creates/overwrites a table).
+    if next(stmt.find_all(exp.Into), None) is not None:
+        return "SELECT INTO is not allowed."
+    return None
+
 
 def _redact_secret_params(url):
     """Mask query parameters whose value is itself a credential.
@@ -776,12 +866,16 @@ class DatabaseManager:
         precise: identifiers that merely *contain* a keyword (e.g. `updates_log`)
         are not flagged. If the statement can't be parsed, we fall back to the
         conservative keyword regex so unparseable SQL is never executed blindly.
+
+        The per-statement checks live in ``_statement_violation`` so that the body
+        of an EXPLAIN can be run through the same ones.
         """
         if not cleaned:
             return "Empty statement."
         c = self._get(workspace_id, db_id)
+        dialect = glot_dialect(c["dialect"])
         try:
-            stmts = sqlglot.parse(cleaned, dialect=glot_dialect(c["dialect"]))
+            stmts = sqlglot.parse(cleaned, dialect=dialect)
         except Exception:
             # Fallback: couldn't build an AST — apply the conservative regex guard.
             first = cleaned.split()[0].upper() if cleaned else ""
@@ -796,24 +890,7 @@ class DatabaseManager:
             return "Only one statement is allowed (no stacked queries)."
         if not stmts:
             return "Empty statement."
-        stmt = stmts[0]
-
-        # Root must be a read-only statement type.
-        root = type(stmt).__name__
-        is_explain = root == "Command" and str(stmt.this).upper() == "EXPLAIN"
-        if root not in ("Select", "Union", "Explain") and not is_explain:
-            return "Only SELECT queries are allowed (read-only mode)."
-
-        # No modifying node may appear anywhere in the tree (catches CTE writes).
-        for node in stmt.find_all(*_MODIFYING_NODES):
-            if type(node).__name__ == "Command" and str(node.this).upper() == "EXPLAIN":
-                continue
-            return "Only read-only SELECT queries are allowed."
-
-        # Block SELECT ... INTO (creates/overwrites a table).
-        if next(stmt.find_all(exp.Into), None) is not None:
-            return "SELECT INTO is not allowed."
-        return None
+        return _statement_violation(stmts[0], dialect)
 
     def _apply_statement_timeout(self, conn, dialect):
         """Best-effort server-enforced per-statement timeout on ``conn``.
