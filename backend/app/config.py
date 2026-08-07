@@ -53,7 +53,6 @@ ACTIVITY_CLEANUP_INTERVAL_HOURS = _env_number(
 
 DEFAULTS = {
     "openrouter_key": "",
-    "last_db_url": "",
 }
 
 
@@ -69,18 +68,11 @@ def load_config():
     return cfg
 
 
-def save_config(cfg):
-    """No-op: config is in-memory only.
-
-    Kept so callers that update `last_db_url` don't have to special-case
-    persistence — mutating the shared `cfg` dict is the whole effect, and it
-    lasts exactly as long as the process, which is all that value needs.
-    """
-    return None
-
-
 def public_config(cfg):
-    """Config as exposed to the frontend — never includes the API key."""
-    return {
-        "last_db_url": cfg.get("last_db_url", ""),
-    }
+    """Config as exposed to the frontend — never includes the API key.
+
+    Empty today. Kept as a function, and as a key in the state payload, so the
+    shape the frontend already receives does not change and there is somewhere
+    obvious to put the next publicly-safe setting.
+    """
+    return {}

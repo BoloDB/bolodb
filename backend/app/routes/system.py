@@ -7,10 +7,8 @@ from backend.app.dependencies import (
     get_db,
     get_cfg,
     get_kb,
-    get_providers,
     get_current_db_id,
 )
-from backend.app.models.api import ConfigUpdate
 from backend.app.secrets import get_supabase_url, get_supabase_anon_key
 import backend.app.controllers.system as ctrl
 
@@ -80,13 +78,3 @@ async def public_config():
             "supabase_anon_key": get_supabase_anon_key(),
         }
     )
-
-
-@router.post("/api/config")
-async def update_config(
-    req: ConfigUpdate,
-    user_token=Depends(get_current_user),
-    cfg=Depends(get_cfg),
-    providers=Depends(get_providers),
-):
-    return await ctrl.update_config(user_token["user_id"], cfg, providers, req)
