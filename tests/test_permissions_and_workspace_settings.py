@@ -11,8 +11,8 @@ from backend.app.models import WorkspaceSettings as ImportedWorkspaceSettings
 
 
 def test_permissions_registry_structure():
-    """Verify PERMISSIONS dictionary contains 21 capabilities across 7 resources."""
-    assert len(PERMISSIONS) == 21, f"Expected 21 permissions, got {len(PERMISSIONS)}"
+    """Verify PERMISSIONS dictionary contains 23 capabilities across 8 resources."""
+    assert len(PERMISSIONS) == 23, f"Expected 23 permissions, got {len(PERMISSIONS)}"
 
     expected_categories = {
         "members",
@@ -20,6 +20,7 @@ def test_permissions_registry_structure():
         "catalog",
         "dashboards",
         "queries",
+        "schedules",
         "activity",
         "workspace_management",
     }
@@ -37,6 +38,7 @@ def test_permissions_registry_structure():
     assert category_counts["catalog"] == 2
     assert category_counts["dashboards"] == 3
     assert category_counts["queries"] == 4
+    assert category_counts["schedules"] == 2
     assert category_counts["activity"] == 2
     assert category_counts["workspace_management"] == 3
 
@@ -51,19 +53,19 @@ def test_permissions_registry_structure():
 
 def test_default_role_permissions():
     """Verify default permission maps for owner, admin, and member."""
-    # Owner: all 21 True
+    # Owner: all 23 True
     owner_perms = DEFAULT_ROLE_PERMISSIONS["owner"]
-    assert len(owner_perms) == 21
+    assert len(owner_perms) == 23
     assert all(val is True for val in owner_perms.values())
 
-    # Admin: all 21 True
+    # Admin: all 23 True
     admin_perms = DEFAULT_ROLE_PERMISSIONS["admin"]
-    assert len(admin_perms) == 21
+    assert len(admin_perms) == 23
     assert all(val is True for val in admin_perms.values())
 
-    # Member: exactly 9 True, 12 False
+    # Member: exactly 10 True, 13 False
     member_perms = DEFAULT_ROLE_PERMISSIONS["member"]
-    assert len(member_perms) == 21
+    assert len(member_perms) == 23
 
     expected_true_member_keys = {
         "members.view",
@@ -74,15 +76,19 @@ def test_default_role_permissions():
         "queries.execute",
         "queries.explain",
         "queries.save",
+        # Members can see schedules but not create them: a schedule mails query
+        # results to arbitrary addresses, so schedules.manage stays admin-gated.
+        "schedules.view",
         "workspace.view",
     }
 
     actual_true_member_keys = {key for key, val in member_perms.items() if val is True}
     assert actual_true_member_keys == expected_true_member_keys
-    assert len(actual_true_member_keys) == 9
+    assert len(actual_true_member_keys) == 10
 
     false_member_keys = {key for key, val in member_perms.items() if val is False}
-    assert len(false_member_keys) == 12
+    assert len(false_member_keys) == 13
+    assert "schedules.manage" in false_member_keys
 
 
 def test_resolve_role_permissions_defaults():
@@ -176,7 +182,7 @@ def test_unknown_role_edge_cases():
         "MEMBER",
     ]:
         resolved = resolve_role_permissions(unknown_role)
-        assert len(resolved) == 21
+        assert len(resolved) == 23
         assert all(val is False for val in resolved.values()), (
             f"Role '{unknown_role}' did not resolve to all-False"
         )
@@ -305,13 +311,13 @@ def test_owner_bypass_immutability_thorough():
     # Flat overrides set all permissions to False
     all_false_flat = {perm_key: False for perm_key in PERMISSIONS}
     resolved_owner_flat = resolve_role_permissions("owner", all_false_flat)
-    assert len(resolved_owner_flat) == 21
+    assert len(resolved_owner_flat) == 23
     assert all(val is True for val in resolved_owner_flat.values())
 
     # Nested role overrides set all permissions to False
     all_false_nested = {"owner": {perm_key: False for perm_key in PERMISSIONS}}
     resolved_owner_nested = resolve_role_permissions("owner", all_false_nested)
-    assert len(resolved_owner_nested) == 21
+    assert len(resolved_owner_nested) == 23
     assert all(val is True for val in resolved_owner_nested.values())
 
     # Check has_permission for owner with overrides

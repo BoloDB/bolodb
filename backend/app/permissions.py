@@ -1,12 +1,13 @@
 """
 RBAC Permissions Registry and Resolution Utilities for BoloDB.
 
-Defines 21 fine-grained capabilities categorized across 7 resources:
+Defines 23 fine-grained capabilities categorized across 8 resources:
 - members: members.view, members.invite, members.update_role, members.remove
 - connections: connections.view, connections.manage, connections.view_schema
 - catalog: catalog.view, catalog.manage
 - dashboards: dashboards.view, dashboards.create, dashboards.manage
 - queries: queries.execute, queries.explain, queries.save, queries.delete_saved
+- schedules: schedules.view, schedules.manage
 - activity: activity.view, activity.export
 - workspace_management: workspace.view, workspace.update, workspace.settings
 """
@@ -131,6 +132,24 @@ PERMISSIONS: Dict[str, Dict[str, Any]] = {
         "description": "Delete saved queries",
         "default_roles": ["owner", "admin"],
     },
+    # Resource: schedules
+    "schedules.view": {
+        "key": "schedules.view",
+        "name": "View Schedules",
+        "category": "schedules",
+        "description": "View scheduled queries and their execution history",
+        "default_roles": ["owner", "admin", "member"],
+    },
+    # Deliberately not a member default: a schedule mails query results to
+    # arbitrary addresses, so creating one is a way to move workspace data
+    # outside the workspace. It sits with the other admin-gated capabilities.
+    "schedules.manage": {
+        "key": "schedules.manage",
+        "name": "Manage Schedules",
+        "category": "schedules",
+        "description": "Create, edit, pause, run, and delete scheduled queries",
+        "default_roles": ["owner", "admin"],
+    },
     # Resource: activity
     "activity.view": {
         "key": "activity.view",
@@ -179,6 +198,7 @@ MEMBER_DEFAULT_PERMISSIONS: set[str] = {
     "queries.execute",
     "queries.explain",
     "queries.save",
+    "schedules.view",
     "workspace.view",
 }
 

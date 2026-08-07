@@ -1,19 +1,33 @@
 <script lang="ts">
-  import './layout.css';
-  import '$lib/styles/auth.css';
-  import { appState } from '$lib/appState.svelte';
-  import { page } from '$app/stores';
-  import { beforeNavigate } from '$app/navigation';
-  import { updated } from '$app/state';
-  import Navbar from '$lib/components/ui/Navbar.svelte';
-  import TrustToast from '$lib/components/TrustToast.svelte';
+  import "./layout.css";
+  import "$lib/styles/auth.css";
+  import { appState } from "$lib/appState.svelte";
+  import { page } from "$app/stores";
+  import { beforeNavigate } from "$app/navigation";
+  import { updated } from "$app/state";
+  import Navbar from "$lib/components/ui/Navbar.svelte";
+  import TrustToast from "$lib/components/TrustToast.svelte";
 
   let { children } = $props();
 
   // Global navbar is hidden on /chat because the chat page provides its own sidebar.
   // Also hidden on marketing/auth/onboard pages.
-  const hiddenPaths = ['/', '/chat', '/login', '/signup', '/onboard', '/forgot-password', '/reset-password', '/verify-email', '/privacy', '/terms', '/workspaces/setup'];
-  const hiddenPrefixes = ['/dashboards'];
+  const hiddenPaths = [
+    "/",
+    "/chat",
+    "/login",
+    "/signup",
+    "/onboard",
+    "/forgot-password",
+    "/reset-password",
+    "/verify-email",
+    "/privacy",
+    "/terms",
+    "/workspaces/setup",
+  ];
+  // Routes that render inside AppShell, which brings its own sidebar — the
+  // global navbar would sit on top of it.
+  const hiddenPrefixes = ["/dashboards", "/schedules"];
   // Stale-chunk-after-deploy recovery: when a new build has shipped, the old
   // content-hashed JS chunks stop existing, so client-side navigation into a
   // lazily-loaded route fails with "error loading dynamically imported module".
@@ -28,7 +42,10 @@
   const showNavbar = $derived(
     appState.isLoaded &&
       !hiddenPaths.includes($page.url.pathname) &&
-      !hiddenPrefixes.some((p) => $page.url.pathname === p || $page.url.pathname.startsWith(p + '/')),
+      !hiddenPrefixes.some(
+        (p) =>
+          $page.url.pathname === p || $page.url.pathname.startsWith(p + "/"),
+      ),
   );
 </script>
 

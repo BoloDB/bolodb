@@ -5,19 +5,19 @@
    * moving between chat, dashboards and settings never feels like leaving the
    * app — the sidebar and the active database stay put.
    */
-  import { onMount } from 'svelte';
-  import { goto } from '$app/navigation';
-  import type { Snippet } from 'svelte';
-  import Sidebar from '$lib/components/Sidebar.svelte';
-  import InviteBell from '$lib/components/ui/InviteBell.svelte';
-  import { apiCall } from '$lib/api';
-  import { appState } from '$lib/appState.svelte';
-  import type { DbInfo, SchemaTable } from '$lib/types';
+  import { onMount } from "svelte";
+  import { goto } from "$app/navigation";
+  import type { Snippet } from "svelte";
+  import Sidebar from "$lib/components/Sidebar.svelte";
+  import InviteBell from "$lib/components/ui/InviteBell.svelte";
+  import { apiCall } from "$lib/api";
+  import { appState } from "$lib/appState.svelte";
+  import type { DbInfo, SchemaTable } from "$lib/types";
 
-  type Tab = 'ask' | 'dash' | 'settings';
+  type Tab = "ask" | "dash" | "schedules" | "settings";
 
   let {
-    activeTab = 'ask',
+    activeTab = "ask",
     onTab = (_t: Tab) => {},
     dbInfo = null,
     verifiedCount = 0,
@@ -47,7 +47,7 @@
   const databases = $derived(appState.databases);
   let showDbDropdown = $state(false);
   let mobileNavOpen = $state(false);
-  let userEmail = $state('');
+  let userEmail = $state("");
   let switchingDbId = $state<string | null>(null);
 
   /**
@@ -59,30 +59,30 @@
   const dbLabel = $derived(
     dbInfo?.alias_name ||
       databases.find((d: any) => d.db_id === dbInfo?.db_id)?.alias_name ||
-      (dbInfo?.url || '').split('/').pop() ||
+      (dbInfo?.url || "").split("/").pop() ||
       dbInfo?.dialect ||
-      'your database',
+      "your database",
   );
   const tableCount = $derived(dbInfo ? dbInfo.tables || 0 : 0);
   const canAddDatabase = $derived(
-    appState.activeWorkspace?.role === 'admin' ||
-      appState.activeWorkspace?.role === 'owner',
+    appState.activeWorkspace?.role === "admin" ||
+      appState.activeWorkspace?.role === "owner",
   );
 
   // The list endpoint never returns db_url — label from what it does send.
   function dbItemLabel(db: any): string {
     return (
       db.alias_name ||
-      db.display_url?.split('@').pop()?.split('/')[0] ||
+      db.display_url?.split("@").pop()?.split("/")[0] ||
       db.dialect ||
-      'Database'
+      "Database"
     );
   }
 
   function dbItemMeta(db: any): string {
     const tables = db.table_count;
-    return typeof tables === 'number'
-      ? `${db.dialect} · ${tables} table${tables === 1 ? '' : 's'}`
+    return typeof tables === "number"
+      ? `${db.dialect} · ${tables} table${tables === 1 ? "" : "s"}`
       : db.dialect;
   }
 
@@ -92,8 +92,8 @@
 
   onMount(async () => {
     try {
-      const res = await apiCall('/api/auth/me');
-      userEmail = res?.content?.email || '';
+      const res = await apiCall("/api/auth/me");
+      userEmail = res?.content?.email || "";
     } catch {}
     appState.loadDatabases();
   });
@@ -101,14 +101,14 @@
   // Close the mobile drawer when the viewport leaves the mobile breakpoint,
   // otherwise it stays open as an orphaned overlay on desktop.
   onMount(() => {
-    if (typeof window === 'undefined') return;
-    const mq = window.matchMedia('(max-width: 768px)');
+    if (typeof window === "undefined") return;
+    const mq = window.matchMedia("(max-width: 768px)");
     const onChange = (e: MediaQueryListEvent | MediaQueryList) => {
       if (!e.matches) mobileNavOpen = false;
     };
     onChange(mq);
-    mq.addEventListener('change', onChange);
-    return () => mq.removeEventListener('change', onChange);
+    mq.addEventListener("change", onChange);
+    return () => mq.removeEventListener("change", onChange);
   });
 
   async function handleSwitchDb(dbId: string) {
@@ -137,7 +137,7 @@
     {onConversationSelect}
     {onNewChat}
     {userEmail}
-    theme={appState.theme as 'light' | 'dark'}
+    theme={appState.theme as "light" | "dark"}
     onToggleTheme={() => appState.toggleTheme()}
     onLogout={() => appState.logout()}
     mobileOpen={mobileNavOpen}
@@ -154,10 +154,23 @@
 
   <main class="main">
     <div class="mobile-topbar">
-      <button class="hamburger" aria-label="Open menu" onclick={() => (mobileNavOpen = true)}>
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M4 6h16M4 12h16M4 18h16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+      <button
+        class="hamburger"
+        aria-label="Open menu"
+        onclick={() => (mobileNavOpen = true)}
+      >
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none"
+          ><path
+            d="M4 6h16M4 12h16M4 18h16"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+          /></svg
+        >
       </button>
-      <span class="mobile-brand">Bolo<span style="color:var(--brand)">DB</span></span>
+      <span class="mobile-brand"
+        >Bolo<span style="color:var(--brand)">DB</span></span
+      >
     </div>
 
     {#if showDbHeader}
@@ -166,27 +179,51 @@
           <button
             class="db-dropdown-btn"
             aria-expanded={showDbDropdown}
-            onclick={(e) => { e.stopPropagation(); showDbDropdown = !showDbDropdown; }}
+            onclick={(e) => {
+              e.stopPropagation();
+              showDbDropdown = !showDbDropdown;
+            }}
           >
             <span class="db-icon">🗄</span>
-            <div style="display:flex;flex-direction:column;align-items:flex-start">
+            <div
+              style="display:flex;flex-direction:column;align-items:flex-start"
+            >
               <span class="db-name mono">{dbLabel}</span>
-              <span class="db-sub">{tableCount > 0 ? `${tableCount} table${tableCount === 1 ? '' : 's'} · ` : ''}read-only</span>
+              <span class="db-sub"
+                >{tableCount > 0
+                  ? `${tableCount} table${tableCount === 1 ? "" : "s"} · `
+                  : ""}read-only</span
+              >
             </div>
-            <svg class="dd-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="m6 9 6 6 6-6"/></svg>
+            <svg
+              class="dd-chevron"
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"><path d="m6 9 6 6 6-6" /></svg
+            >
           </button>
           {#if showDbDropdown}
             <div class="db-dropdown-menu">
               {#if databases.length === 0}
-                <div class="db-dropdown-empty">No databases in this workspace yet.</div>
+                <div class="db-dropdown-empty">
+                  No databases in this workspace yet.
+                </div>
               {/if}
               {#each databases as db (db.db_id)}
                 <button
-                  class="db-dropdown-item {db.db_id === dbInfo?.db_id ? 'active' : ''}"
+                  class="db-dropdown-item {db.db_id === dbInfo?.db_id
+                    ? 'active'
+                    : ''}"
                   onclick={() => handleSwitchDb(db.db_id)}
                   disabled={!!switchingDbId}
                 >
-                  <div style="display:flex;flex-direction:column;align-items:flex-start;min-width:0">
+                  <div
+                    style="display:flex;flex-direction:column;align-items:flex-start;min-width:0"
+                  >
                     <span class="db-item-name">{dbItemLabel(db)}</span>
                     <span class="db-item-url mono">{dbItemMeta(db)}</span>
                   </div>
@@ -199,7 +236,11 @@
               {/each}
               {#if canAddDatabase}
                 <div class="db-dropdown-div"></div>
-                <button class="db-dropdown-item" style="color:var(--brand)" onclick={() => goto('/connect')}>
+                <button
+                  class="db-dropdown-item"
+                  style="color:var(--brand)"
+                  onclick={() => goto("/connect")}
+                >
                   <span class="db-item-name">+ Connect new database</span>
                 </button>
               {/if}
@@ -255,8 +296,12 @@
     text-align: left;
     transition: background 0.15s;
   }
-  .db-dropdown-btn:hover { background: var(--surface); }
-  .db-dropdown-btn[aria-expanded="true"] .dd-chevron { transform: rotate(180deg); }
+  .db-dropdown-btn:hover {
+    background: var(--surface);
+  }
+  .db-dropdown-btn[aria-expanded="true"] .dd-chevron {
+    transform: rotate(180deg);
+  }
   .dd-chevron {
     color: var(--muted);
     transition: transform 0.2s;
@@ -292,10 +337,21 @@
     cursor: pointer;
     transition: background 0.1s;
   }
-  .db-dropdown-item:hover { background: var(--surface); }
-  .db-dropdown-item:disabled { cursor: default; opacity: 0.7; }
-  .db-dropdown-item.active { background: var(--brand-tint); }
-  .db-dropdown-div { height: 1px; background: var(--border-2); margin: 4px 6px; }
+  .db-dropdown-item:hover {
+    background: var(--surface);
+  }
+  .db-dropdown-item:disabled {
+    cursor: default;
+    opacity: 0.7;
+  }
+  .db-dropdown-item.active {
+    background: var(--brand-tint);
+  }
+  .db-dropdown-div {
+    height: 1px;
+    background: var(--border-2);
+    margin: 4px 6px;
+  }
   .db-dropdown-empty {
     padding: 12px;
     font-size: 12.5px;
@@ -310,8 +366,16 @@
     text-overflow: ellipsis;
     white-space: nowrap;
   }
-  .db-item-url { font-size: 11px; color: var(--muted); margin-top: 2px; }
-  .db-check { color: var(--brand); font-weight: 700; font-size: 14px; }
+  .db-item-url {
+    font-size: 11px;
+    color: var(--muted);
+    margin-top: 2px;
+  }
+  .db-check {
+    color: var(--brand);
+    font-weight: 700;
+    font-size: 14px;
+  }
 
   .db-icon {
     display: inline-flex;
@@ -323,8 +387,15 @@
     background: var(--surface-2);
     font-size: 13px;
   }
-  .db-name { font-size: 13px; font-weight: 600; color: var(--ink); }
-  .db-sub { font-size: 11.5px; color: var(--faint); }
+  .db-name {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--ink);
+  }
+  .db-sub {
+    font-size: 11.5px;
+    color: var(--faint);
+  }
 
   /* mobile top bar — hidden on desktop */
   .mobile-topbar {
@@ -370,12 +441,20 @@
     }
   }
   @keyframes fadeIn {
-    from { opacity: 0; }
-    to { opacity: 1; }
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
   }
 
   @media (max-width: 768px) {
-    .mobile-topbar { display: flex; }
-    .db-header { padding: 10px 16px; }
+    .mobile-topbar {
+      display: flex;
+    }
+    .db-header {
+      padding: 10px 16px;
+    }
   }
 </style>

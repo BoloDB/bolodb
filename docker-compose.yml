@@ -27,7 +27,12 @@ services:
       - SUPABASE_JWT_SECRET=${SUPABASE_JWT_SECRET:?SUPABASE_JWT_SECRET must be set}
       - MYEMAILVERIFIER_API_KEY=${MYEMAILVERIFIER_API_KEY}
       - RESEND_API_KEY=${RESEND_API_KEY}
+      # Without this the sender silently falls back to the hardcoded default,
+      # which fails to deliver unless that exact domain is verified in Resend.
+      - RESEND_FROM_EMAIL=${RESEND_FROM_EMAIL}
       - FRONTEND_URL=${FRONTEND_URL}
+      - SCHEDULED_QUERIES_ENABLED=${SCHEDULED_QUERIES_ENABLED:-true}
+      - SCHEDULER_TICK_SECONDS=${SCHEDULER_TICK_SECONDS:-60}
       - SLACK_CLIENT_ID=${SLACK_CLIENT_ID}
       - SLACK_CLIENT_SECRET=${SLACK_CLIENT_SECRET}
       - SLACK_SIGNING_SECRET=${SLACK_SIGNING_SECRET}

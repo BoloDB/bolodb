@@ -51,6 +51,34 @@ ACTIVITY_CLEANUP_INTERVAL_HOURS = _env_number(
     "ACTIVITY_CLEANUP_INTERVAL_HOURS", 24, float, minimum=0.1
 )
 
+# ── Scheduled queries ───────────────────────────────────────────────
+# Same single-process caveat as the cleanup loop above, but with sharper teeth:
+# a duplicated cleanup pass is invisible, a duplicated report is already in
+# someone's inbox. The scheduler guards against that with a compare-and-swap on
+# next_run_at, so a second process would contend rather than double-send — but
+# the flag is the clean way to turn it off if the job ever moves to a worker.
+SCHEDULED_QUERIES_ENABLED = os.environ.get(
+    "SCHEDULED_QUERIES_ENABLED", "true"
+).lower() not in ("false", "0", "no")
+# How often to look for due schedules. Cron resolves to the minute, so polling
+# faster than that buys nothing.
+SCHEDULER_TICK_SECONDS = _env_number("SCHEDULER_TICK_SECONDS", 60, float, minimum=5)
+# A report query gets longer than an interactive one — nobody is waiting on it —
+# but not unbounded, or one pathological query stalls every other schedule.
+SCHEDULE_QUERY_TIMEOUT_SECONDS = _env_number(
+    "SCHEDULE_QUERY_TIMEOUT_SECONDS", 300, float, minimum=10
+)
+# Reports run against customer databases that are also serving live traffic.
+SCHEDULE_MAX_CONCURRENT = _env_number("SCHEDULE_MAX_CONCURRENT", 4, int, minimum=1)
+# Consecutive failures before a schedule pauses itself and emails the owner.
+SCHEDULE_MAX_FAILURES = _env_number("SCHEDULE_MAX_FAILURES", 5, int, minimum=1)
+# How late a run may fire after its slot. Past this the occurrence is recorded as
+# skipped instead — a restart after a long outage should not deliver yesterday's
+# 9am report at 3pm today.
+SCHEDULE_MISFIRE_GRACE_SECONDS = _env_number(
+    "SCHEDULE_MISFIRE_GRACE_SECONDS", 3600, float, minimum=60
+)
+
 DEFAULTS = {
     "openrouter_key": "",
 }

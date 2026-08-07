@@ -4,6 +4,7 @@ Uses httpx (already a dependency) to call Resend's transactional email API.
 Falls back gracefully when RESEND_API_KEY is not configured.
 """
 
+import base64
 import logging
 import os
 
@@ -13,6 +14,7 @@ log = logging.getLogger(__name__)
 
 RESEND_API_URL = "https://api.resend.com/emails"
 TIMEOUT_SECONDS = 10.0
+ATTACHMENT_TIMEOUT_SECONDS = 30.0
 
 
 def _get_api_key() -> str | None:
@@ -20,36 +22,72 @@ def _get_api_key() -> str | None:
 
 
 def _get_from_email() -> str:
-    return os.environ.get("RESEND_FROM_EMAIL", "noreply@bolodb.dev")
+    # Blank counts as unset: docker-compose substitutes an undefined variable to
+    # an empty string rather than dropping it, and "from": "" is a payload Resend
+    # rejects outright.
+    return os.environ.get("RESEND_FROM_EMAIL", "").strip() or "noreply@bolodb.dev"
 
 
-async def send_email(to: str, subject: str, html: str) -> bool:
-    """Send an email via Resend. Returns True on success, False on failure."""
+async def send_email(
+    to: str | list[str],
+    subject: str,
+    html: str,
+    attachments: list[dict] | None = None,
+) -> bool:
+    """Send an email via Resend. Returns True on success, False on failure.
+
+    ``to`` accepts a list for reports that go to several recipients at once.
+    ``attachments`` follows Resend's shape — ``{"filename": ..., "content": ...}``
+    where content is base64 — see ``attachment_from_text`` for building one.
+
+    Attachments push a report well past the 10s that suits a verification code,
+    so the timeout scales with the payload rather than being one fixed value.
+    """
     api_key = _get_api_key()
     if not api_key:
         log.warning("RESEND_API_KEY not configured — skipping email send")
         return False
 
+    recipients = [to] if isinstance(to, str) else list(to)
+    if not recipients:
+        log.warning("send_email called with no recipients — skipping")
+        return False
+
     payload = {
         "from": _get_from_email(),
-        "to": [to],
+        "to": recipients,
         "subject": subject,
         "html": html,
     }
+    timeout = TIMEOUT_SECONDS
+    if attachments:
+        payload["attachments"] = attachments
+        timeout = ATTACHMENT_TIMEOUT_SECONDS
 
     try:
-        async with httpx.AsyncClient(timeout=TIMEOUT_SECONDS) as client:
+        async with httpx.AsyncClient(timeout=timeout) as client:
             r = await client.post(
                 RESEND_API_URL,
                 json=payload,
                 headers={"Authorization": f"Bearer {api_key}"},
             )
             r.raise_for_status()
-            log.info("Email sent to %s — subject: %s", to, subject)
+            # Count only, on both paths. A scheduled report goes to up to 25
+            # people and its subject is rendered from query results, so neither
+            # the addresses nor the subject belong in the logs.
+            log.info("Email sent to %d recipient(s)", len(recipients))
             return True
     except (httpx.HTTPError, ValueError) as e:
-        log.error("Failed to send email to %s: %s", to, e)
+        log.error("Failed to send email to %d recipient(s): %s", len(recipients), e)
         return False
+
+
+def attachment_from_text(filename: str, content: str) -> dict:
+    """Build a Resend attachment from text (CSV, say)."""
+    return {
+        "filename": filename,
+        "content": base64.b64encode(content.encode("utf-8")).decode("ascii"),
+    }
 
 
 async def send_verification_email(to: str, code: str) -> bool:

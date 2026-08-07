@@ -35,6 +35,7 @@ from backend.app.routes import (
     workspaces,
     dashboards,
     saved_queries,
+    schedules,
     slack,
 )
 
@@ -96,9 +97,29 @@ async def lifespan(app):
 
         cleanup_task = asyncio.create_task(activity_cleanup_loop())
 
+    # Scheduled queries: run saved SQL on a cron and email the results. Same
+    # single-process assumption as the cleanup loop, but the loop additionally
+    # claims each due schedule with a compare-and-swap on next_run_at, so a
+    # second process would lose the race rather than send the report twice.
+    scheduler_task = None
+    if cfgmod.SCHEDULED_QUERIES_ENABLED:
+        from backend.app.services.scheduler import scheduler_loop
+
+        scheduler_task = asyncio.create_task(scheduler_loop(app))
+
     try:
         yield
     finally:
+        # Scheduler first, before anything is drained: it is the one loop that
+        # *starts* new database work and new emails on a timer, so leaving it
+        # running through the drain below would let it queue fresh work behind
+        # the work we are trying to finish. Cancelling also gives run_schedule
+        # the chance to record the interruption in the run history rather than
+        # leaving an unexplained gap.
+        if scheduler_task:
+            scheduler_task.cancel()
+            with suppress(asyncio.CancelledError):
+                await scheduler_task
         # Slack queries run in the background after /ask has already returned,
         # so they are the one piece of work that can still be mid-flight here.
         # Drain before disposing the database they are querying through.
@@ -192,6 +213,7 @@ def create_app(initial_db_url="", readonly=True):
     app.include_router(workspaces.router)
     app.include_router(dashboards.router)
     app.include_router(saved_queries.router)
+    app.include_router(schedules.router)
     app.include_router(slack.router)
 
     # Catch-all for API 404app

@@ -141,6 +141,47 @@ def _statement_violation(stmt, dialect, depth=0):
     return None
 
 
+def readonly_violation(sql, dialect=""):
+    """Return an error string if `sql` is not a safe read-only query, else None.
+
+    Primary check parses the SQL into an AST (sqlglot) and rejects anything
+    that isn't a single SELECT/WITH/EXPLAIN or that contains a modifying node
+    anywhere in the tree (e.g. a DELETE inside a CTE, or SELECT INTO). This is
+    precise: identifiers that merely *contain* a keyword (e.g. `updates_log`)
+    are not flagged. If the statement can't be parsed, we fall back to the
+    conservative keyword regex so unparseable SQL is never executed blindly.
+
+    The per-statement checks live in ``_statement_violation`` so that the body
+    of an EXPLAIN can be run through the same ones.
+
+    Module-level and connection-free so callers that need to vet SQL before it
+    is ever run — scheduled queries, checked when they are created rather than
+    at 9am when they fire — get the same verdict as the execution path, from the
+    same code. `DatabaseManager._readonly_violation` is the connected wrapper.
+    """
+    cleaned = (sql or "").strip()
+    if not cleaned:
+        return "Empty statement."
+    glot = glot_dialect(dialect)
+    try:
+        stmts = sqlglot.parse(cleaned, dialect=glot)
+    except Exception:
+        # Fallback: couldn't build an AST — apply the conservative regex guard.
+        first = cleaned.split()[0].upper() if cleaned else ""
+        if first not in ("SELECT", "WITH", "EXPLAIN"):
+            return "Only SELECT queries are allowed (read-only mode)."
+        if ";" in cleaned or WRITE_KEYWORDS.search(cleaned):
+            return "Only read-only SELECT queries are allowed."
+        return None
+
+    stmts = [s for s in stmts if s is not None]
+    if len(stmts) > 1:
+        return "Only one statement is allowed (no stacked queries)."
+    if not stmts:
+        return "Empty statement."
+    return _statement_violation(stmts[0], glot)
+
+
 def _redact_secret_params(url):
     """Mask query parameters whose value is itself a credential.
 
@@ -858,39 +899,16 @@ class DatabaseManager:
         return "\n".join(lines)
 
     def _readonly_violation(self, workspace_id, cleaned, db_id=None):
-        """Return an error string if `cleaned` is not a safe read-only query, else None.
+        """Return an error string if `cleaned` is not read-only, else None.
 
-        Primary check parses the SQL into an AST (sqlglot) and rejects anything
-        that isn't a single SELECT/WITH/EXPLAIN or that contains a modifying node
-        anywhere in the tree (e.g. a DELETE inside a CTE, or SELECT INTO). This is
-        precise: identifiers that merely *contain* a keyword (e.g. `updates_log`)
-        are not flagged. If the statement can't be parsed, we fall back to the
-        conservative keyword regex so unparseable SQL is never executed blindly.
-
-        The per-statement checks live in ``_statement_violation`` so that the body
-        of an EXPLAIN can be run through the same ones.
+        Resolves the connection's dialect and defers to `readonly_violation`, so
+        the execution path and the pre-flight checks (scheduled queries) share
+        one implementation of the guard.
         """
         if not cleaned:
             return "Empty statement."
         c = self._get(workspace_id, db_id)
-        dialect = glot_dialect(c["dialect"])
-        try:
-            stmts = sqlglot.parse(cleaned, dialect=dialect)
-        except Exception:
-            # Fallback: couldn't build an AST — apply the conservative regex guard.
-            first = cleaned.split()[0].upper() if cleaned else ""
-            if first not in ("SELECT", "WITH", "EXPLAIN"):
-                return "Only SELECT queries are allowed (read-only mode)."
-            if ";" in cleaned or WRITE_KEYWORDS.search(cleaned):
-                return "Only read-only SELECT queries are allowed."
-            return None
-
-        stmts = [s for s in stmts if s is not None]
-        if len(stmts) > 1:
-            return "Only one statement is allowed (no stacked queries)."
-        if not stmts:
-            return "Empty statement."
-        return _statement_violation(stmts[0], dialect)
+        return readonly_violation(cleaned, c["dialect"])
 
     def _apply_statement_timeout(self, conn, dialect):
         """Best-effort server-enforced per-statement timeout on ``conn``.

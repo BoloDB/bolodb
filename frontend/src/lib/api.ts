@@ -420,6 +420,65 @@ export async function downloadWorkspaceActivity(
   URL.revokeObjectURL(url);
 }
 
+// --- Scheduled queries ---
+
+export async function getSchedules(): Promise<any> {
+  return apiCall("/api/schedules");
+}
+
+export async function getSchedule(id: string): Promise<any> {
+  return apiCall(`/api/schedules/${id}`);
+}
+
+export async function createSchedule(
+  payload: Record<string, any>,
+): Promise<any> {
+  return apiCall("/api/schedules", payload, "POST");
+}
+
+export async function updateSchedule(
+  id: string,
+  payload: Record<string, any>,
+): Promise<any> {
+  return apiCall(`/api/schedules/${id}`, payload, "PATCH");
+}
+
+export async function deleteSchedule(id: string): Promise<any> {
+  return apiCall(`/api/schedules/${id}`, undefined, "DELETE");
+}
+
+/** Toggle a schedule between paused and active. */
+export async function toggleSchedule(id: string): Promise<any> {
+  return apiCall(`/api/schedules/${id}/pause`, {}, "POST");
+}
+
+/** Run a schedule now and email the result, as a delivery test. */
+export async function runScheduleNow(id: string): Promise<any> {
+  return apiCall(`/api/schedules/${id}/run`, {}, "POST");
+}
+
+export async function getScheduleHistory(id: string): Promise<any> {
+  return apiCall(`/api/schedules/${id}/history`);
+}
+
+/**
+ * Validate a cron expression and get its next firing times.
+ *
+ * The server owns cron semantics; the dialog calls this on every edit so the
+ * preview can never drift from what the scheduler will do.
+ */
+export async function previewCron(
+  cron: string,
+  startsAt?: string,
+  endsAt?: string,
+): Promise<any> {
+  return apiCall(
+    "/api/schedules/preview",
+    { cron, starts_at: startsAt ?? null, ends_at: endsAt ?? null },
+    "POST",
+  );
+}
+
 // --- Databases ---
 
 export async function listDatabases(): Promise<any[]> {
