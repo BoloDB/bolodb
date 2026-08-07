@@ -1,61 +1,97 @@
 <script lang="ts">
   let {
-    message = 'Loading…',
-    submessage = '',
-    variant = 'default',
+    message = "Loading…",
+    submessage = "",
+    variant = "default",
+    progress = null,
   }: {
     message?: string;
     submessage?: string;
-    /** 'default' | 'connect' | 'query' */
-    variant?: 'default' | 'connect' | 'query';
+    /**
+     * Retained so existing call sites keep working. The design uses a single
+     * loading treatment for every context, so this no longer swaps the mark.
+     */
+    variant?: "default" | "connect" | "query";
+    /**
+     * 0–100 for a determinate bar. Left null, the bar sweeps instead — most
+     * call sites have no real progress to report, and a fake percentage that
+     * jumps to 90% and waits is worse than an honest indeterminate one.
+     */
+    progress?: number | null;
   } = $props();
+
+  const determinate = $derived(
+    progress !== null && progress !== undefined && Number.isFinite(progress),
+  );
+  const pct = $derived(Math.min(100, Math.max(0, progress ?? 0)));
 </script>
 
-<div class="loading-root" aria-live="polite" aria-label={message}>
-  <!-- Radial glow blobs -->
-  <div class="blob blob-a"></div>
-  <div class="blob blob-b"></div>
+<!--
+  No aria-label here: the region already contains the message and submessage as
+  text, and naming a live region makes some screen readers announce the name in
+  place of the contents — which would swallow the submessage entirely.
+-->
+<div class="loading-root" role="status" aria-live="polite" aria-busy="true">
+  <!--
+    The mark draws itself stroke by stroke rather than spinning. Each shape
+    runs the same dash animation on a stagger so the outline, the disc and the
+    two bands appear in the order you would draw them by hand.
+  -->
+  <svg
+    class="mark"
+    width="60"
+    height="60"
+    viewBox="0 0 256 256"
+    fill="none"
+    aria-hidden="true"
+  >
+    <path
+      pathLength="1"
+      d="M 52 44 Q 52 30 66 30 L 190 30 Q 204 30 204 44 L 204 138 Q 204 152 190 152 L 116 152 L 88 176 L 92 152 L 66 152 Q 52 152 52 138 Z"
+      stroke="var(--brand)"
+      stroke-width="6"
+      fill="none"
+    />
+    <ellipse
+      pathLength="1"
+      cx="128"
+      cy="66"
+      rx="34"
+      ry="11"
+      stroke="var(--brand)"
+      stroke-width="6"
+      fill="none"
+    />
+    <path
+      pathLength="1"
+      d="M 94 66 L 94 108 Q 94 119 128 119 Q 162 119 162 108 L 162 66"
+      stroke="var(--brand)"
+      stroke-width="6"
+      stroke-linecap="round"
+      fill="none"
+    />
+    <path
+      pathLength="1"
+      d="M 94 87 Q 94 98 128 98 Q 162 98 162 87"
+      stroke="var(--brand)"
+      stroke-width="6"
+      stroke-linecap="round"
+      fill="none"
+    />
+  </svg>
 
-  <div class="loading-card">
-    <!-- Animated icon -->
-    <div class="icon-wrap">
-      {#if variant === 'connect'}
-        <!-- DB icon with orbit rings -->
-        <div class="orbit-ring ring-1"></div>
-        <div class="orbit-ring ring-2"></div>
-        <svg class="icon-svg" width="28" height="28" viewBox="0 0 24 24" fill="none">
-          <ellipse cx="12" cy="6" rx="8" ry="3" stroke="currentColor" stroke-width="1.8"/>
-          <path d="M4 6v6c0 1.66 3.58 3 8 3s8-1.34 8-3V6M4 12v6c0 1.66 3.58 3 8 3s8-1.34 8-3v-6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
-        </svg>
-      {:else if variant === 'query'}
-        <!-- Brain / sparkle icon for LLM thinking -->
-        <div class="orbit-ring ring-1"></div>
-        <div class="orbit-ring ring-2"></div>
-        <svg class="icon-svg" width="26" height="26" viewBox="0 0 24 24" fill="none">
-          <path d="M12 2l1.09 3.26L16.5 5l-2.5 2.27.82 3.23L12 8.77l-2.82 1.73.82-3.23L7.5 5l3.41.26L12 2z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
-          <path d="M5 15.5a2.5 2.5 0 0 1 2.5-2.5h9A2.5 2.5 0 0 1 19 15.5v1a2.5 2.5 0 0 1-2.5 2.5h-9A2.5 2.5 0 0 1 5 16.5v-1z" stroke="currentColor" stroke-width="1.6"/>
-          <path d="M8.5 13V10M12 13V9M15.5 13V11" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
-        </svg>
+  <div class="copy">
+    <span class="msg">{message}</span>
+    {#if submessage}
+      <span class="sub">{submessage}</span>
+    {/if}
+    <div class="track">
+      {#if determinate}
+        <div class="fill" style="width:{pct}%"></div>
       {:else}
-        <!-- Default: dots loader -->
-        <div class="dots">
-          <span class="dot"></span>
-          <span class="dot"></span>
-          <span class="dot"></span>
-        </div>
+        <div class="fill sweep"></div>
       {/if}
     </div>
-
-    <!-- Progress bar -->
-    <div class="progress-track">
-      <div class="progress-bar"></div>
-    </div>
-
-    <!-- Text -->
-    <p class="loading-msg">{message}</p>
-    {#if submessage}
-      <p class="loading-sub">{submessage}</p>
-    {/if}
   </div>
 </div>
 
@@ -63,175 +99,138 @@
   .loading-root {
     position: absolute;
     inset: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
     z-index: 30;
-    overflow: hidden;
-    /* Matches the app background */
-    background: var(--bg);
-    animation: fadeIn 0.22s ease both;
-  }
-
-  @keyframes fadeIn {
-    from { opacity: 0; }
-    to   { opacity: 1; }
-  }
-
-  /* ---- ambient blobs ---- */
-  .blob {
-    position: absolute;
-    border-radius: 50%;
-    filter: blur(72px);
-    pointer-events: none;
-  }
-  .blob-a {
-    width: 420px;
-    height: 420px;
-    background: radial-gradient(circle, rgba(var(--glow-rgb), 0.18) 0%, transparent 70%);
-    top: -100px;
-    right: -60px;
-    animation: driftA 7s ease-in-out infinite alternate;
-  }
-  .blob-b {
-    width: 320px;
-    height: 320px;
-    background: radial-gradient(circle, rgba(var(--glow-rgb), 0.10) 0%, transparent 70%);
-    bottom: -80px;
-    left: -60px;
-    animation: driftB 9s ease-in-out infinite alternate;
-  }
-  @keyframes driftA {
-    from { transform: translate(0, 0) scale(1); }
-    to   { transform: translate(-30px, 30px) scale(1.1); }
-  }
-  @keyframes driftB {
-    from { transform: translate(0, 0) scale(1); }
-    to   { transform: translate(20px, -20px) scale(1.08); }
-  }
-
-  /* ---- card ---- */
-  .loading-card {
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 18px;
-    padding: 40px 48px;
-    background: var(--card);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-xl, 26px);
-    box-shadow: var(--shadow-lg);
-    max-width: 340px;
-    width: 90%;
-    animation: cardPop 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) both;
-    position: relative;
-    z-index: 1;
-  }
-  @keyframes cardPop {
-    from { opacity: 0; transform: scale(0.88) translateY(16px); }
-    to   { opacity: 1; transform: scale(1) translateY(0); }
-  }
-
-  /* ---- icon area ---- */
-  .icon-wrap {
-    position: relative;
-    width: 64px;
-    height: 64px;
-    display: flex;
-    align-items: center;
     justify-content: center;
+    gap: 30px;
+    overflow: hidden;
+    background:
+      radial-gradient(
+        1000px 600px at 50% -10%,
+        rgba(var(--glow-rgb), 0.1) 0%,
+        transparent 60%
+      ),
+      var(--bg);
+    animation: riseIn 0.4s both;
   }
 
-  .icon-svg {
-    color: var(--brand);
-    position: relative;
-    z-index: 2;
-    animation: iconPulse 2.4s ease-in-out infinite;
-  }
-  @keyframes iconPulse {
-    0%, 100% { opacity: 1; transform: scale(1); }
-    50%       { opacity: 0.75; transform: scale(0.92); }
-  }
-
-  /* orbit rings */
-  .orbit-ring {
-    position: absolute;
-    inset: 0;
-    border-radius: 50%;
-    border: 1.5px solid transparent;
-    border-top-color: var(--brand);
-    animation: orbit 1.5s linear infinite;
-  }
-  .ring-1 {
-    inset: 0;
-    opacity: 0.55;
-  }
-  .ring-2 {
-    inset: 8px;
-    animation-direction: reverse;
-    animation-duration: 2.2s;
-    border-top-color: var(--accent, var(--brand));
-    opacity: 0.35;
-  }
-  @keyframes orbit {
-    to { transform: rotate(360deg); }
+  @keyframes riseIn {
+    from {
+      opacity: 0;
+      transform: translateY(14px);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
   }
 
-  /* ---- dots ---- */
-  .dots {
+  .mark {
+    overflow: visible;
+  }
+  .mark > * {
+    stroke-dasharray: 1;
+    animation: signDraw 2.6s cubic-bezier(0.65, 0, 0.35, 1) infinite;
+  }
+  .mark > *:nth-child(2) {
+    animation-delay: 0.15s;
+  }
+  .mark > *:nth-child(3) {
+    animation-delay: 0.3s;
+  }
+  .mark > *:nth-child(4) {
+    animation-delay: 0.45s;
+  }
+
+  @keyframes signDraw {
+    0%,
+    100% {
+      stroke-dashoffset: 1;
+    }
+    50% {
+      stroke-dashoffset: 0;
+    }
+  }
+
+  .copy {
     display: flex;
-    gap: 8px;
+    flex-direction: column;
     align-items: center;
-  }
-  .dot {
-    width: 10px;
-    height: 10px;
-    border-radius: 50%;
-    background: var(--brand);
-    animation: dotBounce 1.2s ease-in-out infinite;
-  }
-  .dot:nth-child(1) { animation-delay: 0s; }
-  .dot:nth-child(2) { animation-delay: 0.18s; }
-  .dot:nth-child(3) { animation-delay: 0.36s; }
-  @keyframes dotBounce {
-    0%, 80%, 100% { transform: scale(0.7); opacity: 0.45; }
-    40%           { transform: scale(1.1); opacity: 1; }
+    gap: 12px;
+    padding: 0 24px;
   }
 
-  /* ---- progress bar ---- */
-  .progress-track {
-    width: 100%;
-    height: 3px;
-    background: var(--surface-3, var(--border));
+  .msg {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--ink-2);
+    letter-spacing: -0.005em;
+    text-align: center;
+  }
+
+  .sub {
+    font-size: 12.5px;
+    color: var(--faint);
+    line-height: 1.5;
+    text-align: center;
+    max-width: 260px;
+  }
+
+  .track {
+    width: 120px;
+    height: 1px;
+    background: var(--border);
     border-radius: 99px;
     overflow: hidden;
   }
-  .progress-bar {
+
+  .fill {
     height: 100%;
-    width: 40%;
-    background: linear-gradient(90deg, transparent, var(--brand), var(--accent, var(--brand)), transparent);
+    background: var(--brand);
     border-radius: 99px;
-    animation: progressSweep 1.6s ease-in-out infinite;
-  }
-  @keyframes progressSweep {
-    0%   { transform: translateX(-200%); }
-    100% { transform: translateX(350%); }
+    transition: width 0.5s cubic-bezier(0.65, 0, 0.35, 1);
   }
 
-  /* ---- text ---- */
-  .loading-msg {
-    margin: 0;
-    font-size: 15px;
-    font-weight: 700;
-    color: var(--ink);
-    letter-spacing: -0.015em;
-    text-align: center;
+  .fill.sweep {
+    width: 40%;
+    animation: sweep 1.6s ease-in-out infinite;
   }
-  .loading-sub {
-    margin: -8px 0 0;
-    font-size: 12.5px;
-    color: var(--muted);
-    text-align: center;
-    line-height: 1.5;
+
+  @keyframes sweep {
+    0% {
+      transform: translateX(-120%);
+    }
+    100% {
+      transform: translateX(320%);
+    }
+  }
+
+  /*
+    The mark is the only thing conveying "still working", so it keeps a gentle
+    pulse rather than freezing completely when motion is reduced.
+  */
+  @media (prefers-reduced-motion: reduce) {
+    .loading-root {
+      animation: none;
+    }
+    .mark > * {
+      stroke-dasharray: none;
+      animation: fade 2.4s ease-in-out infinite;
+    }
+    .fill.sweep {
+      width: 100%;
+      animation: fade 2.4s ease-in-out infinite;
+    }
+    @keyframes fade {
+      0%,
+      100% {
+        opacity: 0.35;
+      }
+      50% {
+        opacity: 1;
+      }
+    }
   }
 </style>
