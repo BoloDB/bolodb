@@ -4,6 +4,7 @@ from pydantic import BaseModel
 from backend.app.models.user import UserSignup, UserLogin, SupabaseLogin
 import backend.app.controllers.auth
 from backend.app.dependencies import get_current_user
+from backend.app import tokens
 from backend.app.ratelimit import limiter
 from backend.app.secrets import get_jwt_secret, get_cookie_secure, get_frontend_url
 import jwt
@@ -52,6 +53,11 @@ async def refresh_jwt(refresh_token: str = Cookie(None)):
         raise HTTPException(status_code=401, detail="Access Denied")
     try:
         token = jwt.decode(refresh_token, get_jwt_secret(), algorithms=["HS256"])
+        # Only a refresh token buys a new access token. An access token presented
+        # here would otherwise renew itself indefinitely, and its one-hour life is
+        # the whole point of having two kinds.
+        if not tokens.is_kind(token, tokens.REFRESH):
+            raise HTTPException(status_code=401, detail="Invalid Token")
         response = JSONResponse({"message": "Token Set successfully"})
         new_token = backend.app.controllers.auth.create_access_jwt(
             user_id=token["user_id"], role=token["role"]
