@@ -26,13 +26,12 @@
   const pct = $derived(Math.min(100, Math.max(0, progress ?? 0)));
 </script>
 
-<div
-  class="loading-root"
-  role="status"
-  aria-live="polite"
-  aria-label={message}
-  aria-busy="true"
->
+<!--
+  No aria-label here: the region already contains the message and submessage as
+  text, and naming a live region makes some screen readers announce the name in
+  place of the contents — which would swallow the submessage entirely.
+-->
+<div class="loading-root" role="status" aria-live="polite" aria-busy="true">
   <!--
     The mark draws itself stroke by stroke rather than spinning. Each shape
     runs the same dash animation on a stagger so the outline, the disc and the
