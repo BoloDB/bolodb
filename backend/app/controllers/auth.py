@@ -18,6 +18,7 @@ from backend.app.pgdatabase import (
     get_user_by_supabase_id,
     get_user_by_id,
     update_user,
+    set_password_and_revoke_sessions,
     UserAlreadyExistsError,
 )
 from backend.app.models.auth_token import PasswordResetToken
@@ -126,19 +127,28 @@ async def login(email: EmailStr, password: str):
     if not user_details.get("hashed_pass"):
         raise HTTPException(status_code=401, detail="Invalid credentials")
     if await verify_password(password, user_details["hashed_pass"]):
-        return create_jwt(str(user_details["_id"]), user_details["role"])
+        return create_jwt(
+            str(user_details["_id"]),
+            user_details["role"],
+            user_details.get("token_version", 0),
+        )
     raise HTTPException(status_code=401, detail="Invalid credentials")
 
 
-def create_access_jwt(user_id, role):
+def create_access_jwt(user_id, role, token_version=0):
     ALGORITHM = "HS256"
-    data = {"user_id": user_id, "role": role, tokens.TYPE_CLAIM: tokens.ACCESS}
+    data = {
+        "user_id": user_id,
+        "role": role,
+        tokens.TYPE_CLAIM: tokens.ACCESS,
+        tokens.VERSION_CLAIM: token_version,
+    }
     expiry = datetime.now(UTC) + timedelta(minutes=60)
     data.update({"exp": expiry})
     return jwt.encode(data, get_jwt_secret(), algorithm=ALGORITHM)
 
 
-def create_jwt(user_id, role):
+def create_jwt(user_id, role, token_version=0):
     """Mint the access/refresh pair issued on a successful sign-in.
 
     The two differ by more than their expiry: each names its own kind, so the
@@ -148,8 +158,9 @@ def create_jwt(user_id, role):
     """
     ALGORITHM = "HS256"
     secret = get_jwt_secret()
-    data = {"user_id": user_id, "role": role, tokens.TYPE_CLAIM: tokens.ACCESS}
-    refresh_data = {"user_id": user_id, "role": role, tokens.TYPE_CLAIM: tokens.REFRESH}
+    common = {"user_id": user_id, "role": role, tokens.VERSION_CLAIM: token_version}
+    data = {**common, tokens.TYPE_CLAIM: tokens.ACCESS}
+    refresh_data = {**common, tokens.TYPE_CLAIM: tokens.REFRESH}
     access_expiry = datetime.now(UTC) + timedelta(hours=1)
     refresh_expiry = datetime.now(UTC) + timedelta(days=7)
     data.update({"exp": access_expiry})
@@ -267,14 +278,18 @@ async def supabase_google_login(access_token: str):
 
         existing = await get_user_by_supabase_id(supabase_id)
         if existing:
-            return create_jwt(str(existing["_id"]), existing["role"])
+            return create_jwt(
+                str(existing["_id"]), existing["role"], existing.get("token_version", 0)
+            )
 
         if provider == "google" and email_verified is True:
             existing_by_email = await get_user_by_email(email)
             if existing_by_email:
                 await update_user(existing_by_email["_id"], supabase_id=supabase_id)
                 return create_jwt(
-                    str(existing_by_email["_id"]), existing_by_email["role"]
+                    str(existing_by_email["_id"]),
+                    existing_by_email["role"],
+                    existing_by_email.get("token_version", 0),
                 )
 
         user_in_db = UserInDB(email=email, role=Role.user, supabase_id=supabase_id)
@@ -285,7 +300,11 @@ async def supabase_google_login(access_token: str):
                 supabase_id
             ) or await get_user_by_email(email)
             if existing:
-                return create_jwt(str(existing["_id"]), existing["role"])
+                return create_jwt(
+                    str(existing["_id"]),
+                    existing["role"],
+                    existing.get("token_version", 0),
+                )
             raise HTTPException(status_code=409, detail="Account already exists")
         return create_jwt(uid, Role.user.value)
     except HTTPException:
@@ -320,10 +339,12 @@ async def change_password(user_id, old_password, new_password):
         )
     if await verify_password(old_password, user_details["hashed_pass"]):
         user_details["hashed_pass"] = await hash_password(new_password)
-        await update_user(
-            user_id,
-            hashed_pass=user_details["hashed_pass"],
-        )
+        # One transaction: whoever else was holding a session on this account
+        # stops holding one, and that happens if and only if the password
+        # actually changed. A password change is often a response to suspecting
+        # exactly that, and until now it did nothing to them — their token
+        # outlived the password it was obtained with.
+        await set_password_and_revoke_sessions(user_id, user_details["hashed_pass"])
         return True
     raise HTTPException(status_code=401, detail="Incorrect Password, Please try again")
 
@@ -363,7 +384,7 @@ async def verify_email_code(email: str, code: str):
     # Mark email as verified
     await update_user(user["_id"], email_verified=True)
 
-    return create_jwt(str(user["_id"]), user["role"])
+    return create_jwt(str(user["_id"]), user["role"], user.get("token_version", 0))
 
 
 async def resend_verification_email(email: str):
@@ -545,5 +566,10 @@ async def reset_password(token: str, new_password: str):
         )
 
     new_hashed = await hash_password(new_password)
-    await update_user(user_id, hashed_pass=new_hashed)
+    # Recovery has to actually recover the account: ending every session is the
+    # point of resetting a password you believe someone else has used. Done in
+    # one transaction so it cannot half-happen — a new password with the old
+    # sessions still live is worse than neither, because the user is told they
+    # are safe.
+    await set_password_and_revoke_sessions(user_id, new_hashed)
     return True

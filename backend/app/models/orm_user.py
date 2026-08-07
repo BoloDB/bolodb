@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime
 from typing import Optional
 
-from sqlalchemy import Boolean, String, DateTime
+from sqlalchemy import Boolean, DateTime, Integer, String
 from sqlalchemy.dialects.postgresql import UUID as PgUUID, JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -29,6 +29,11 @@ class User(Base):
         "metadata", JSONB, nullable=True, default=dict
     )
     tour_completed: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    # Bumped whenever every existing session for this user must stop working —
+    # a password change or a reset. Tokens carry the value they were minted
+    # with, so raising it here invalidates all of them at once without the
+    # server having to remember which tokens it issued.
+    token_version: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=_utcnow
     )

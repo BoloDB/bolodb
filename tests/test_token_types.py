@@ -25,6 +25,17 @@ USER_ID = "11111111-1111-1111-1111-111111111111"
 @pytest.fixture(autouse=True)
 def jwt_secret(monkeypatch):
     monkeypatch.setenv("JWT_SECRET", SECRET)
+    # These tests are about which *kind* of token is accepted where. The
+    # separate token-version check needs a database; stub it out so a failure
+    # here means what it says. Revocation has its own tests.
+    import backend.app.dependencies as deps
+    import backend.app.routes.auth as auth_routes
+
+    async def _current(_claims):
+        return True
+
+    monkeypatch.setattr(deps, "_token_version_is_current", _current)
+    monkeypatch.setattr(auth_routes, "_token_version_is_current", _current)
 
 
 def _encode(claims):
