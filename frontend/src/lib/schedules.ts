@@ -70,7 +70,12 @@ export function runStatusLabel(status: string): string {
   return RUN_STATUS_LABELS[status] || status;
 }
 
-/** Format an ISO timestamp for display, or a dash when there isn't one. */
+/** Format an ISO timestamp for display, or a dash when there isn't one.
+ *
+ * Rendered in UTC, because the cron fields the user typed are UTC and the pages
+ * showing these say so. Left to the viewer's locale, a schedule set for 09:00
+ * would read as 14:30 in Kolkata and contradict the row above it.
+ */
 export function formatWhen(iso?: string | null): string {
   if (!iso) return "—";
   const when = new Date(iso);
@@ -80,5 +85,6 @@ export function formatWhen(iso?: string | null): string {
     day: "numeric",
     hour: "2-digit",
     minute: "2-digit",
+    timeZone: "UTC",
   });
 }

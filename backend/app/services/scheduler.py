@@ -78,6 +78,20 @@ def _manage_url() -> str | None:
     return f"{base}/schedules" if base else None
 
 
+def _wait_timeout(app) -> float:
+    """How long to await one run before giving up on it.
+
+    ``asyncio.wait_for`` only stops *awaiting* the run — the SQL itself is in a
+    threadpool worker and keeps going until the server-side ``statement_timeout``
+    kills it. So this has to stay the outer of the two bounds; configure it below
+    the statement timeout and every slow query would leak a busy worker while the
+    run is already recorded as timed out. The floor makes that unconfigurable.
+    """
+    configured = float(cfgmod.SCHEDULE_QUERY_TIMEOUT_SECONDS)
+    server_side = getattr(getattr(app.state, "db", None), "statement_timeout", 0) or 0
+    return max(configured, float(server_side) + 5)
+
+
 def should_send(
     condition: str, threshold: int | None, row_count: int
 ) -> tuple[bool, str]:
@@ -123,7 +137,7 @@ async def run_schedule(app, schedule: dict, manual: bool = False) -> dict:
         async with _run_slots():
             outcome = await asyncio.wait_for(
                 _execute_and_deliver(app, schedule, manual),
-                timeout=cfgmod.SCHEDULE_QUERY_TIMEOUT_SECONDS,
+                timeout=_wait_timeout(app),
             )
         status = outcome["status"]
         detail = outcome.get("detail")
@@ -132,7 +146,7 @@ async def run_schedule(app, schedule: dict, manual: bool = False) -> dict:
     except asyncio.TimeoutError:
         detail = (
             f"The query did not finish within "
-            f"{int(cfgmod.SCHEDULE_QUERY_TIMEOUT_SECONDS)}s and was stopped."
+            f"{int(_wait_timeout(app))}s and was stopped."
         )
         log.warning("Scheduled query %s (%s) timed out", schedule_id, name)
     except asyncio.CancelledError:
@@ -169,7 +183,12 @@ async def run_schedule(app, schedule: dict, manual: bool = False) -> dict:
             manual=manual,
         )
 
-    await _write_back_state(schedule, status, detail)
+    # "Run now" is a delivery test, so it stays out of the failure counter: a
+    # failed test must not auto-pause a healthy schedule (or fire the paused
+    # alert at every recipient), and a successful one must not paper over a real
+    # failure streak. record_run above still logs it either way.
+    if not manual:
+        await _write_back_state(schedule, status, detail)
 
     return {
         "status": status,
@@ -339,7 +358,8 @@ async def tick(app, now: datetime | None = None) -> int:
         return 0
 
     grace = timedelta(seconds=cfgmod.SCHEDULE_MISFIRE_GRACE_SECONDS)
-    started = 0
+    runs = []
+    claimed_ids = []
 
     for schedule in due:
         slot = _parse_dt(schedule.get("next_run_at"))
@@ -357,13 +377,20 @@ async def tick(app, now: datetime | None = None) -> int:
         )
 
         # Claim first, whatever we decide to do with the occurrence. Losing the
-        # CAS means another tick (or another process) already took it.
-        claimed = await mdb_sched.claim_schedule(
-            schedule_id=schedule["id"],
-            expected_next_run_at=slot,
-            new_next_run_at=upcoming,
-            now=moment,
-        )
+        # CAS means another tick (or another process) already took it. A claim
+        # that errors outright is treated the same way — one unreachable row
+        # must not abandon the schedules already queued behind it, which would
+        # leave their coroutines never awaited.
+        try:
+            claimed = await mdb_sched.claim_schedule(
+                schedule_id=schedule["id"],
+                expected_next_run_at=slot,
+                new_next_run_at=upcoming,
+                now=moment,
+            )
+        except Exception:
+            log.exception("Could not claim scheduled query %s", schedule["id"])
+            continue
         if not claimed:
             continue
 
@@ -395,10 +422,27 @@ async def tick(app, now: datetime | None = None) -> int:
                 )
             continue
 
-        await run_schedule(app, schedule)
-        started += 1
+        runs.append(run_schedule(app, schedule))
+        claimed_ids.append(schedule["id"])
 
-    return started
+    if not runs:
+        return 0
+
+    # Claim every due schedule first, then run them together. Awaiting each one
+    # in the loop above would leave the semaphore in _run_slots with nothing to
+    # limit, and would let a single slow report hold up every other schedule —
+    # and the next tick — for the length of its timeout.
+    outcomes = await asyncio.gather(*runs, return_exceptions=True)
+    for schedule, outcome in zip(claimed_ids, outcomes):
+        # run_schedule records its own failures, so anything surfacing here got
+        # past that and would otherwise vanish into the gather.
+        if isinstance(outcome, BaseException):
+            log.error(
+                "Scheduled query %s raised out of run_schedule",
+                schedule,
+                exc_info=outcome,
+            )
+    return len(runs)
 
 
 async def scheduler_loop(app, interval_seconds: float | None = None) -> None:

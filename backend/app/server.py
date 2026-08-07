@@ -110,6 +110,16 @@ async def lifespan(app):
     try:
         yield
     finally:
+        # Scheduler first, before anything is drained: it is the one loop that
+        # *starts* new database work and new emails on a timer, so leaving it
+        # running through the drain below would let it queue fresh work behind
+        # the work we are trying to finish. Cancelling also gives run_schedule
+        # the chance to record the interruption in the run history rather than
+        # leaving an unexplained gap.
+        if scheduler_task:
+            scheduler_task.cancel()
+            with suppress(asyncio.CancelledError):
+                await scheduler_task
         # Slack queries run in the background after /ask has already returned,
         # so they are the one piece of work that can still be mid-flight here.
         # Drain before disposing the database they are querying through.
@@ -117,14 +127,6 @@ async def lifespan(app):
 
         with suppress(Exception):
             await drain_pending_queries()
-        # Cancelled before the cleanup loop and the engine: a scheduled run
-        # holds a database session and an in-flight email, and cancelling it
-        # gives run_schedule the chance to record the interruption in the run
-        # history rather than leaving an unexplained gap.
-        if scheduler_task:
-            scheduler_task.cancel()
-            with suppress(asyncio.CancelledError):
-                await scheduler_task
         if cleanup_task:
             cleanup_task.cancel()
             with suppress(asyncio.CancelledError):

@@ -4,8 +4,13 @@ Backs the scheduled reports feature: a workspace-scoped SQL statement that
 re-runs on a cron schedule and emails its results, plus a row per execution so
 the UI can show why a report did or didn't arrive.
 
+Also merges the two heads left behind by the token-version and OTP-attempt
+migrations, which were authored in parallel off the same parent. Both only add
+a column, to different tables, so they carry no ordering between them — this
+revision just rejoins them so ``upgrade head`` resolves to one revision again.
+
 Revision ID: d5c8b41a97e2
-Revises: f7a2c1934d80
+Revises: a7f3e91c4b58, d4c8b17e6a20
 Create Date: 2026-08-01 00:00:00.000000
 """
 
@@ -16,7 +21,7 @@ import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
 
 revision: str = "d5c8b41a97e2"
-down_revision: Union[str, None] = "f7a2c1934d80"
+down_revision: Union[str, Sequence[str], None] = ("a7f3e91c4b58", "d4c8b17e6a20")
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

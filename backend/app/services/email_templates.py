@@ -90,7 +90,10 @@ def render_subject(
         text = text.replace("{{" + key + "}}", value).replace(
             "{{ " + key + " }}", value
         )
-    return text[:300]
+    # A subject is a single line by definition. Resend takes JSON rather than
+    # raw SMTP, so this is not header injection — it just keeps a pasted
+    # multi-line template from rendering as a broken subject.
+    return " ".join(text.split())[:300]
 
 
 def _table_html(columns: list[str], rows: list[dict]) -> str:
@@ -323,7 +326,9 @@ def build_csv(columns: list[str], rows: list[dict]) -> str:
     """Full result set as CSV text, for the optional attachment."""
     buffer = io.StringIO()
     writer = csv.writer(buffer, lineterminator="\n")
-    writer.writerow(columns)
+    # Header row too — column names come from the customer's schema, so a column
+    # literally called "=cmd|..." is as much a formula to Excel as a cell value is.
+    writer.writerow([_csv_safe(col) for col in columns])
     for row in rows:
         writer.writerow([_csv_safe(row.get(col)) for col in columns])
     return buffer.getvalue()

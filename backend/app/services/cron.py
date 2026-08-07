@@ -308,7 +308,9 @@ def describe(expression: str) -> str:
 
     minute, hour, dom, month, dow = schedule.expression.split()
 
-    if minute == "*" and hour == "*":
+    # Every field, not just minute and hour: "* * 1 * *" runs every minute on the
+    # 1st, which "Every minute" would overstate by a factor of thirty.
+    if minute == hour == dom == month == dow == "*":
         return "Every minute"
 
     if (

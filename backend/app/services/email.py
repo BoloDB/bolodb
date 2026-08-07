@@ -22,7 +22,10 @@ def _get_api_key() -> str | None:
 
 
 def _get_from_email() -> str:
-    return os.environ.get("RESEND_FROM_EMAIL", "noreply@bolodb.dev")
+    # Blank counts as unset: docker-compose substitutes an undefined variable to
+    # an empty string rather than dropping it, and "from": "" is a payload Resend
+    # rejects outright.
+    return os.environ.get("RESEND_FROM_EMAIL", "").strip() or "noreply@bolodb.dev"
 
 
 async def send_email(
@@ -69,12 +72,13 @@ async def send_email(
                 headers={"Authorization": f"Bearer {api_key}"},
             )
             r.raise_for_status()
-            log.info(
-                "Email sent to %d recipient(s) — subject: %s", len(recipients), subject
-            )
+            # Count only, on both paths. A scheduled report goes to up to 25
+            # people and its subject is rendered from query results, so neither
+            # the addresses nor the subject belong in the logs.
+            log.info("Email sent to %d recipient(s)", len(recipients))
             return True
     except (httpx.HTTPError, ValueError) as e:
-        log.error("Failed to send email to %s: %s", ", ".join(recipients), e)
+        log.error("Failed to send email to %d recipient(s): %s", len(recipients), e)
         return False
 
 

@@ -7,7 +7,6 @@ question worth answering at creation time rather than discovering at 9am.
 
 from __future__ import annotations
 
-import logging
 import re
 from datetime import datetime, timezone
 
@@ -24,8 +23,6 @@ from backend.app.pgdatabase.schedules import (
 )
 from backend.app.database import readonly_violation
 from backend.app.services import cron
-
-log = logging.getLogger(__name__)
 
 MAX_RECIPIENTS = 25
 
@@ -171,6 +168,16 @@ def validate_payload(data: dict, *, partial: bool = False) -> dict:
                 raise _bad("condition_value cannot be negative.")
         else:
             clean["condition_value"] = None
+    elif "condition_value" in clean and clean["condition_value"] is not None:
+        # A PATCH that retunes the threshold without restating send_condition.
+        # It skips the branch above, so it needs the same coercion — otherwise a
+        # string or a negative number goes to the column unchecked.
+        try:
+            clean["condition_value"] = int(clean["condition_value"])
+        except (TypeError, ValueError):
+            raise _bad("condition_value must be a whole number.") from None
+        if clean["condition_value"] < 0:
+            raise _bad("condition_value cannot be negative.")
 
     if "display_columns" in clean and clean["display_columns"] is not None:
         columns = clean["display_columns"]

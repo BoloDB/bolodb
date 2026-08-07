@@ -2,7 +2,7 @@
 
 from datetime import datetime, timezone
 
-from sqlalchemy import delete, func, select, update
+from sqlalchemy import delete, func, select, text, update
 
 from backend.app.models.base import _utcnow
 from backend.app.models.scheduled_query import ScheduledQuery, ScheduleRun
@@ -40,8 +40,16 @@ async def create_schedule(workspace_id: str, created_by: str | None, **kwargs):
 
     async with async_session() as session:
         try:
-            # Counted in the same session as the insert so a workspace can't slip
-            # past the cap by firing several creates at once.
+            # Serialise concurrent creates for this workspace before counting.
+            # Sharing a session with the insert is not enough: under READ
+            # COMMITTED the count is just a read, so two callers at 99 both see
+            # 99 and both insert. The lock is transaction-scoped — released by
+            # the commit or the rollback below — and keyed on the workspace, so
+            # creates in different workspaces still run in parallel.
+            await session.execute(
+                text("SELECT pg_advisory_xact_lock(hashtextextended(:k, 0))"),
+                {"k": f"schedule-cap:{wid}"},
+            )
             existing = await session.execute(
                 select(func.count())
                 .select_from(ScheduledQuery)

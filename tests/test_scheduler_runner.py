@@ -6,11 +6,13 @@ an alert that fires when it shouldn't, and untrusted database content landing
 unescaped in an HTML email.
 """
 
+import asyncio
 from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 
 import pytest
 
+from backend.app.services import email as email_svc
 from backend.app.services import email_templates as tpl
 from backend.app.services import scheduler
 
@@ -180,6 +182,40 @@ async def test_manual_run_ignores_the_condition(app_with_db, patched):
     assert outcome["status"] == "success"
     assert len(patched.sent) == 1
     assert patched.sent[0]["subject"].startswith("[Test]")
+
+
+@pytest.mark.asyncio
+async def test_a_failed_manual_run_does_not_touch_the_failure_counter(
+    app_with_db, patched, monkeypatch
+):
+    """A test send that fails must not auto-pause a schedule that is fine."""
+    monkeypatch.setattr(scheduler.cfgmod, "SCHEDULE_MAX_FAILURES", 3)
+    patched.result = {"error": "boom"}
+
+    outcome = await scheduler.run_schedule(
+        app_with_db, make_schedule(consecutive_failures=2), manual=True
+    )
+
+    assert outcome["status"] == "failed"
+    # Recorded in the history...
+    assert patched.recorded[0]["manual"] is True
+    # ...but the counter is untouched, so nothing paused and nobody was mailed
+    # a "we stopped your report" notice over a button press.
+    assert patched.finished == []
+    assert patched.sent == []
+
+
+@pytest.mark.asyncio
+async def test_a_successful_manual_run_does_not_clear_a_failure_streak(
+    app_with_db, patched
+):
+    """Otherwise "Run now" would silently hide an ongoing scheduled failure."""
+    outcome = await scheduler.run_schedule(
+        app_with_db, make_schedule(consecutive_failures=2), manual=True
+    )
+
+    assert outcome["status"] == "success"
+    assert patched.finished == []
 
 
 @pytest.mark.asyncio
@@ -383,6 +419,55 @@ async def test_tick_with_nothing_due_does_nothing(tick_env):
     assert tick_env.claims == []
 
 
+@pytest.mark.asyncio
+async def test_due_schedules_run_concurrently_not_one_after_another(
+    tick_env, monkeypatch
+):
+    """One slow report must not hold up the others, or the next tick."""
+    tick_env.due = [make_schedule(id=f"sched-{i}") for i in range(3)]
+
+    in_flight = 0
+    peak = 0
+
+    async def fake_run(app, schedule, manual=False):
+        nonlocal in_flight, peak
+        in_flight += 1
+        peak = max(peak, in_flight)
+        await asyncio.sleep(0)
+        in_flight -= 1
+        return {"status": "success"}
+
+    monkeypatch.setattr(scheduler, "run_schedule", fake_run)
+
+    started = await scheduler.tick(tick_env.app, now=NOW)
+
+    assert started == 3
+    # Sequential awaits would never put more than one run in flight, which is
+    # what made SCHEDULE_MAX_CONCURRENT a no-op.
+    assert peak > 1
+
+
+@pytest.mark.asyncio
+async def test_one_failing_run_does_not_abort_the_rest_of_the_tick(
+    tick_env, monkeypatch
+):
+    tick_env.due = [make_schedule(id=f"sched-{i}") for i in range(3)]
+    ran = []
+
+    async def fake_run(app, schedule, manual=False):
+        ran.append(schedule["id"])
+        if schedule["id"] == "sched-1":
+            raise RuntimeError("this one blew up")
+        return {"status": "success"}
+
+    monkeypatch.setattr(scheduler, "run_schedule", fake_run)
+
+    started = await scheduler.tick(tick_env.app, now=NOW)
+
+    assert started == 3
+    assert sorted(ran) == ["sched-0", "sched-1", "sched-2"]
+
+
 # ── Rendering ──────────────────────────────────────────────────────
 
 
@@ -470,6 +555,11 @@ class TestRendering:
         csv_text = tpl.build_csv(["f"], [{"f": "=cmd|'/c calc'!A1"}])
         assert "\n'=cmd" in csv_text
 
+    def test_csv_neutralises_formula_injection_in_the_header_too(self):
+        """Column names come from the customer's schema, so they need it as much."""
+        csv_text = tpl.build_csv(["=1+1", "ok"], [])
+        assert csv_text.splitlines()[0] == "'=1+1,ok"
+
     def test_csv_leaves_ordinary_values_alone(self):
         csv_text = tpl.build_csv(["a", "b"], [{"a": "hi", "b": 3}])
         assert csv_text.splitlines()[1] == "hi,3"
@@ -478,3 +568,19 @@ class TestRendering:
         name = tpl.csv_filename("Weekly / Report: Q3", datetime(2026, 8, 1, 9, 30))
         assert name == "Weekly-Report-Q3-20260801-0930.csv"
         assert "/" not in name
+
+
+# ── Mail transport ─────────────────────────────────────────────────
+
+
+class TestSenderAddress:
+    def test_a_blank_from_address_falls_back_to_the_default(self, monkeypatch):
+        """docker-compose substitutes an unset variable to "", not to nothing."""
+        monkeypatch.setenv("RESEND_FROM_EMAIL", "")
+        assert email_svc._get_from_email() == "noreply@bolodb.dev"
+        monkeypatch.setenv("RESEND_FROM_EMAIL", "   ")
+        assert email_svc._get_from_email() == "noreply@bolodb.dev"
+
+    def test_a_configured_address_is_used(self, monkeypatch):
+        monkeypatch.setenv("RESEND_FROM_EMAIL", "reports@acme.com")
+        assert email_svc._get_from_email() == "reports@acme.com"

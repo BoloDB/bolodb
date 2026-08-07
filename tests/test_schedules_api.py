@@ -148,6 +148,16 @@ class TestValidation:
         )
         assert clean["condition_value"] is None
 
+    def test_a_threshold_sent_alone_on_patch_is_still_validated(self):
+        """A PATCH can retune the threshold without restating send_condition."""
+        clean = ctrl.validate_payload({"condition_value": "12"}, partial=True)
+        assert clean["condition_value"] == 12
+
+        with pytest.raises(HTTPException):
+            ctrl.validate_payload({"condition_value": -1}, partial=True)
+        with pytest.raises(HTTPException):
+            ctrl.validate_payload({"condition_value": "lots"}, partial=True)
+
     def test_display_columns_must_be_strings(self):
         with pytest.raises(HTTPException):
             ctrl.validate_payload(valid_payload(display_columns=[1, 2]))
@@ -371,7 +381,8 @@ def test_read_routes_require_schedules_view(client, granted, monkeypatch):
     monkeypatch.setattr(ctrl, "list_schedules", AsyncMock(return_value=[]))
     granted.side_effect = lambda workspace, key: False
 
-    assert client.get("/api/schedules").status_code == 403
+    response = client.get("/api/schedules")
+    assert response.status_code == 403
 
 
 def test_list_returns_schedules_and_the_cap(client, monkeypatch):
@@ -409,12 +420,14 @@ def test_create_surfaces_validation_errors_as_400(client, monkeypatch):
 
 def test_get_missing_schedule_is_404(client, monkeypatch):
     monkeypatch.setattr(ctrl, "get_schedule", AsyncMock(return_value=None))
-    assert client.get(f"/api/schedules/{SCHEDULE_ID}").status_code == 404
+    response = client.get(f"/api/schedules/{SCHEDULE_ID}")
+    assert response.status_code == 404
 
 
 def test_delete_missing_schedule_is_404(client, monkeypatch):
     monkeypatch.setattr(ctrl, "delete_schedule", AsyncMock(return_value=False))
-    assert client.delete(f"/api/schedules/{SCHEDULE_ID}").status_code == 404
+    response = client.delete(f"/api/schedules/{SCHEDULE_ID}")
+    assert response.status_code == 404
 
 
 def test_pause_toggles_the_active_flag(client, monkeypatch):
@@ -447,7 +460,8 @@ def test_history_is_scoped_to_an_existing_schedule(client, monkeypatch):
 
 def test_history_for_a_missing_schedule_is_404(client, monkeypatch):
     monkeypatch.setattr(ctrl, "get_schedule", AsyncMock(return_value=None))
-    assert client.get(f"/api/schedules/{SCHEDULE_ID}/history").status_code == 404
+    response = client.get(f"/api/schedules/{SCHEDULE_ID}/history")
+    assert response.status_code == 404
 
 
 def test_run_now_reports_the_outcome(client, monkeypatch):
@@ -463,7 +477,8 @@ def test_run_now_reports_the_outcome(client, monkeypatch):
 
 def test_run_now_on_a_missing_schedule_is_404(client, monkeypatch):
     monkeypatch.setattr(ctrl, "run_now", AsyncMock(return_value={"found": False}))
-    assert client.post(f"/api/schedules/{SCHEDULE_ID}/run").status_code == 404
+    response = client.post(f"/api/schedules/{SCHEDULE_ID}/run")
+    assert response.status_code == 404
 
 
 def test_preview_route_does_not_collide_with_the_id_route(client):

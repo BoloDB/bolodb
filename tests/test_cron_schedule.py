@@ -202,6 +202,10 @@ class TestWindow:
         ("0 0 1 1 *", "Yearly on 1/1 at 00:00 UTC"),
         # Anything without a single clock time falls back to the raw form.
         ("0 9,17 * * *", "Cron: 0 9,17 * * *"),
+        # "Every minute" only when every field really is unrestricted — these
+        # run every minute of one day, not every minute.
+        ("* * 1 * *", "Cron: * * 1 * *"),
+        ("* * * * MON", "Cron: * * * * MON"),
     ],
 )
 def test_describe(expression, expected):

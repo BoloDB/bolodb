@@ -127,6 +127,8 @@
       : [...selectedColumns, column];
   }
 
+  // UTC, to match the cron fields entered above this preview and the "Times are
+  // UTC" note beside them. In local time the preview would contradict both.
   function formatRun(iso: string): string {
     const when = new Date(iso);
     return when.toLocaleString(undefined, {
@@ -135,6 +137,7 @@
       day: "numeric",
       hour: "2-digit",
       minute: "2-digit",
+      timeZone: "UTC",
     });
   }
 
@@ -161,8 +164,12 @@
     saving = true;
     try {
       // Only send a column list when it is actually a subset — null means
-      // "whatever the query returns", which survives the query changing.
-      const allSelected = selectedColumns.length === columns.length;
+      // "whatever the query returns", which survives the query changing. An
+      // empty selection is "all columns" too, as the hint under the picker
+      // promises; sending [] would ask the backend for a report with no columns.
+      const allSelected =
+        selectedColumns.length === 0 ||
+        selectedColumns.length === columns.length;
 
       await createSchedule({
         name: name.trim(),
@@ -189,7 +196,11 @@
 
       appState.showToast({
         title: "Schedule created",
-        body: `"${name.trim()}" will be emailed ${(cronDescription || "").toLowerCase()}.`,
+        // The description comes from a debounced preview call, so it can still
+        // be empty here. Naming the cron beats "will be emailed ."
+        body: cronDescription
+          ? `"${name.trim()}" will be emailed ${cronDescription.toLowerCase()}.`
+          : `"${name.trim()}" is scheduled (${cron}).`,
       });
       onCreated?.();
       onClose();

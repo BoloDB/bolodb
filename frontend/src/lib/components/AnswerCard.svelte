@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { Turn, ThinkingArtifact } from "$lib/types";
+  import { appState } from "$lib/appState.svelte";
   import { wrongReasons, capitalize, formatTime } from "$lib/data";
   import ConfidenceBadge from "$lib/components/ui/ConfidenceBadge.svelte";
   import ResultTable from "$lib/components/ui/ResultTable.svelte";
@@ -45,6 +46,14 @@
   let copyFeedback = $state<"response" | "prompt" | null>(null);
   let showSaveDialog = $state(false);
   let showScheduleDialog = $state(false);
+
+  // Creating a schedule is gated on schedules.manage server-side, which admins
+  // and owners hold by default. Matching that here keeps members from opening a
+  // dialog whose save can only 403.
+  const canSchedule = $derived(
+    appState.activeWorkspace?.role === "admin" ||
+      appState.activeWorkspace?.role === "owner",
+  );
 
   const stringRows = $derived((turn.rows || []).map((r) => r.map(String)));
 
@@ -643,11 +652,12 @@
             /></svg
           >
         </button>
-        <button
-          class="tb-btn"
-          onclick={() => (showScheduleDialog = true)}
-          title="Schedule &amp; email"
-        >
+        {#if canSchedule}
+          <button
+            class="tb-btn"
+            onclick={() => (showScheduleDialog = true)}
+            title="Schedule &amp; email"
+          >
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none"
             ><rect
               x="3"
@@ -671,6 +681,7 @@
             /></svg
           >
         </button>
+        {/if}
       {/if}
       <button
         class="tb-btn"

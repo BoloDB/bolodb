@@ -63,7 +63,10 @@
     }
     expanded = id;
     if (history[id]) return;
+    await loadHistory(id);
+  }
 
+  async function loadHistory(id: string) {
     historyLoading = id;
     try {
       const res = await getScheduleHistory(id);
@@ -101,9 +104,13 @@
     busy = id;
     try {
       const outcome = await runScheduleNow(id);
-      // Refresh so last_run_at and the history reflect the run just made.
-      delete history[id];
+      // Refresh so last_run_at and the history reflect the run just made. The
+      // panel may be open right now, in which case dropping the cache alone
+      // would empty the table into "has not run yet" — refetch it instead.
+      const { [id]: _dropped, ...rest } = history;
+      history = rest;
       await fetchSchedules();
+      if (expanded === id) await loadHistory(id);
 
       if (outcome.status === "success") {
         appState.showToast({
