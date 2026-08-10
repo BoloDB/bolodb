@@ -20,7 +20,7 @@ idna==3.18
 iniconfig==2.3.0
 openai==2.46.0
 oracledb==4.0.2
-packaging==26.2
+packaging==26.3
 pluggy==1.6.0
 psycopg2-binary==2.9.12
 pycparser==3.0
