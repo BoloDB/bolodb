@@ -367,7 +367,8 @@ async def change_password(user_id, old_password, new_password):
         new_password: The replacement password.
 
     Returns:
-        bool: `True` when the password is changed successfully.
+        dict: A fresh ``access_token``/``refresh_token`` pair for the caller,
+            already carrying the post-revocation token version.
     """
     validate_password_strength(new_password)
     user_details = await get_user_by_id(user_id)
@@ -385,8 +386,23 @@ async def change_password(user_id, old_password, new_password):
         # actually changed. A password change is often a response to suspecting
         # exactly that, and until now it did nothing to them — their token
         # outlived the password it was obtained with.
-        await set_password_and_revoke_sessions(user_id, user_details["hashed_pass"])
-        return True
+        new_version = await set_password_and_revoke_sessions(
+            user_id, user_details["hashed_pass"]
+        )
+        if new_version is None:
+            raise HTTPException(status_code=404, detail="User not found")
+        # The revocation is indiscriminate, and the caller is holding one of the
+        # sessions it just retired. Without a replacement pair the person who
+        # changed the password is logged out by their own request — and not
+        # recoverably, because /refresh re-checks the version too, so the
+        # refresh token died with the access token. Re-issue here rather than
+        # exempting the current session from the bump: the point is that every
+        # token minted against the old password stops working, and this one was.
+        return create_jwt(
+            user_id=user_id,
+            role=user_details.get("role"),
+            token_version=new_version,
+        )
     raise HTTPException(status_code=401, detail="Incorrect Password, Please try again")
 
 

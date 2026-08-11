@@ -86,6 +86,108 @@ async def test_a_stale_refresh_token_cannot_mint_a_fresh_session(stored_version)
     assert exc.value.status_code == 401
 
 
+@pytest.fixture
+def changed_password(monkeypatch, stored_version):
+    """Drive the real change-password flow with the DB write stubbed out.
+
+    The stub bumps the same box ``stored_version`` reads, so a token this flow
+    hands back is checked against the version its own revocation landed on.
+    """
+    import backend.app.controllers.auth as auth_ctl
+
+    async def _get_user(_user_id):
+        return {"id": USER_ID, "hashed_pass": "stored-hash", "role": "user"}
+
+    async def _verify(plain, _hashed):
+        return plain == "old-password"
+
+    async def _hash(_plain):
+        return "new-hash"
+
+    async def _set_and_revoke(_user_id, _hashed):
+        stored_version["value"] += 1
+        return stored_version["value"]
+
+    monkeypatch.setattr(auth_ctl, "get_user_by_id", _get_user)
+    monkeypatch.setattr(auth_ctl, "verify_password", _verify)
+    monkeypatch.setattr(auth_ctl, "hash_password", _hash)
+    monkeypatch.setattr(auth_ctl, "validate_password_strength", lambda _p: None)
+    monkeypatch.setattr(auth_ctl, "set_password_and_revoke_sessions", _set_and_revoke)
+    return auth_ctl
+
+
+@pytest.mark.asyncio
+async def test_changing_your_own_password_does_not_sign_you_out(changed_password):
+    """The revocation is indiscriminate, so the caller is one of its casualties.
+
+    Returning 200 without new cookies logs the person out by their own request:
+    every later call 401s and there is no way back, because /refresh checks the
+    version too and the refresh token died with the access token.
+    """
+    import backend.app.routes.auth as auth_routes
+
+    old = create_jwt(USER_ID, "user", token_version=0)
+    assert await deps.get_current_user(old["access_token"])  # signed in before
+
+    req = auth_routes.ChangePasswordReq(
+        old_password="old-password", new_password="new-password"
+    )
+    response = await auth_routes.change_password(req, {"user_id": USER_ID})
+
+    assert response.status_code == 200
+    cookies = response.headers.getlist("set-cookie")
+    issued = {
+        name: value
+        for name, _, value in (c.split(";")[0].partition("=") for c in cookies)
+    }
+    assert "access_token" in issued and "refresh_token" in issued
+
+    # The old pair is gone...
+    with pytest.raises(HTTPException):
+        await deps.get_current_user(old["access_token"])
+    # ...and the pair handed back in its place is a working session.
+    assert (await deps.get_current_user(issued["access_token"]))["user_id"] == USER_ID
+
+
+@pytest.mark.asyncio
+async def test_the_replacement_refresh_token_can_still_renew(changed_password):
+    """Half a fix is no fix: a dead refresh token means a one-hour account."""
+    import backend.app.routes.auth as auth_routes
+
+    req = auth_routes.ChangePasswordReq(
+        old_password="old-password", new_password="new-password"
+    )
+    response = await auth_routes.change_password(req, {"user_id": USER_ID})
+    cookies = response.headers.getlist("set-cookie")
+    issued = {
+        name: value
+        for name, _, value in (c.split(";")[0].partition("=") for c in cookies)
+    }
+
+    async def _get_me(_user_id):
+        return {"id": USER_ID, "email_verified": True}
+
+    changed_password.get_me = _get_me
+    renewed = await auth_routes.refresh_jwt(issued["refresh_token"])
+    assert renewed.status_code == 200
+
+
+@pytest.mark.asyncio
+async def test_a_wrong_current_password_changes_nothing(changed_password):
+    """The revocation must not fire before the old password is proven."""
+    import backend.app.routes.auth as auth_routes
+
+    req = auth_routes.ChangePasswordReq(
+        old_password="not-the-password", new_password="new-password"
+    )
+    with pytest.raises(HTTPException) as exc:
+        await auth_routes.change_password(req, {"user_id": USER_ID})
+    assert exc.value.status_code == 401
+
+    old = create_jwt(USER_ID, "user", token_version=0)
+    assert await deps.get_current_user(old["access_token"])  # still signed in
+
+
 @pytest.mark.asyncio
 async def test_a_token_predating_the_claim_is_not_revoked(stored_version):
     """Absent reads as 0 — the generation every user starts at.
