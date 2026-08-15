@@ -93,7 +93,7 @@ def changed_password(monkeypatch, stored_version):
     The stub bumps the same box ``stored_version`` reads, so a token this flow
     hands back is checked against the version its own revocation landed on.
     """
-    import backend.app.controllers.auth as auth_ctl
+    from backend.app.controllers import auth as auth_ctl
 
     async def _get_user(_user_id):
         return {"id": USER_ID, "hashed_pass": "stored-hash", "role": "user"}
@@ -141,6 +141,12 @@ async def test_changing_your_own_password_does_not_sign_you_out(changed_password
         for name, _, value in (c.split(";")[0].partition("=") for c in cookies)
     }
     assert "access_token" in issued and "refresh_token" in issued
+    # Replacing the session cookies must not quietly downgrade them: a
+    # replacement readable from JavaScript, or sent on cross-site requests,
+    # would be a worse cookie than the one the password change retired.
+    for cookie in cookies:
+        assert "HttpOnly" in cookie, cookie
+        assert "samesite=lax" in cookie.lower(), cookie
 
     # The old pair is gone...
     with pytest.raises(HTTPException):
@@ -150,7 +156,9 @@ async def test_changing_your_own_password_does_not_sign_you_out(changed_password
 
 
 @pytest.mark.asyncio
-async def test_the_replacement_refresh_token_can_still_renew(changed_password):
+async def test_the_replacement_refresh_token_can_still_renew(
+    changed_password, monkeypatch
+):
     """Half a fix is no fix: a dead refresh token means a one-hour account."""
     import backend.app.routes.auth as auth_routes
 
@@ -167,7 +175,10 @@ async def test_the_replacement_refresh_token_can_still_renew(changed_password):
     async def _get_me(_user_id):
         return {"id": USER_ID, "email_verified": True}
 
-    changed_password.get_me = _get_me
+    # Via monkeypatch, not a bare attribute assignment: this replaces a name on
+    # the real controller module, and left in place it would answer
+    # "verified" for every user in every test that runs after this one.
+    monkeypatch.setattr(changed_password, "get_me", _get_me)
     renewed = await auth_routes.refresh_jwt(issued["refresh_token"])
     assert renewed.status_code == 200
 
