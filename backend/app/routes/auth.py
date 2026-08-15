@@ -194,12 +194,30 @@ async def change_password(
         user_token: Authentication data for the current user.
 
     Returns:
-        JSONResponse: A success message confirming the password change.
+        JSONResponse: A success message, with the caller's session cookies
+            replaced by ones the password change did not invalidate.
     """
-    await backend.app.controllers.auth.change_password(
+    # Named so as not to shadow the `tokens` module imported above.
+    session_tokens = await backend.app.controllers.auth.change_password(
         user_token["user_id"], req.old_password, req.new_password
     )
-    return JSONResponse({"message": "Password changed successfully"})
+    response = JSONResponse({"message": "Password changed successfully"})
+    secure = get_cookie_secure()
+    response.set_cookie(
+        key="access_token",
+        value=session_tokens["access_token"],
+        httponly=True,
+        secure=secure,
+        samesite="lax",
+    )
+    response.set_cookie(
+        key="refresh_token",
+        value=session_tokens["refresh_token"],
+        httponly=True,
+        secure=secure,
+        samesite="lax",
+    )
+    return response
 
 
 @router.post("/forgot-password")

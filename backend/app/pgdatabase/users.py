@@ -153,7 +153,9 @@ async def update_user(user_id: str, **fields):
             raise
 
 
-async def set_password_and_revoke_sessions(user_id: str, hashed_pass: str) -> bool:
+async def set_password_and_revoke_sessions(
+    user_id: str, hashed_pass: str
+) -> Optional[int]:
     """Change the password and retire every existing session, in one transaction.
 
     Both or neither. Committed separately — as two awaits, which is the obvious
@@ -166,11 +168,17 @@ async def set_password_and_revoke_sessions(user_id: str, hashed_pass: str) -> bo
     already been consumed, so a user who hits that failure cannot simply retry
     the link — they have to request a new one. Rolling the password back with
     the bump at least leaves their old password working in the meantime.
+
+    Returns the version the bump landed on, so a caller that wants to keep the
+    current session alive can mint a replacement for it. Read back with
+    ``RETURNING`` rather than a follow-up ``SELECT``: a second revocation racing
+    this one would make the re-read describe a bump that is not this one, and
+    the caller would hand out a token for a session it never authorised.
     """
     try:
         uid = _to_uuid(user_id)
     except (ValueError, TypeError):
-        return False
+        return None
     async with async_session() as session:
         try:
             result = await session.execute(
@@ -180,9 +188,11 @@ async def set_password_and_revoke_sessions(user_id: str, hashed_pass: str) -> bo
                     hashed_pass=hashed_pass,
                     token_version=User.token_version + 1,
                 )
+                .returning(User.token_version)
             )
+            new_version = result.scalar_one_or_none()
             await session.commit()
-            return result.rowcount > 0
+            return new_version
         except Exception:
             await session.rollback()
             raise
