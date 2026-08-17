@@ -56,7 +56,7 @@ sqlalchemy-bigquery==1.17.1
 
 # ── Shared transitive dependencies ──
 boto3==1.43.56
-botocore==1.43.56
+botocore==1.43.71
 charset-normalizer==3.4.9
 jmespath==1.1.0
 numpy==2.4.6
