@@ -38,7 +38,7 @@ et_xmlfile==2.0.0
 openpyxl==3.1.5
 
 # ── BigQuery ──
-google-api-core==2.33.0
+google-api-core==2.34.0
 google-auth==2.56.2
 google-cloud-bigquery==3.42.2
 google-cloud-core==2.6.0
