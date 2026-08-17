@@ -32,7 +32,7 @@
     "echarts": "^6.1.0",
     "gsap": "^3.15.0",
     "lenis": "^1.3.25",
-    "posthog-js": "^1.404.1",
+    "posthog-js": "^1.417.0",
     "typesafe-i18n": "^5.27.1"
   },
   "overrides": {
