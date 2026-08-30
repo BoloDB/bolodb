@@ -16,6 +16,11 @@
     detectChartData,
     planChart,
   } from "$lib/components/charts/chartUtils";
+  import {
+    applyView,
+    createTableView,
+    hasActiveView,
+  } from "$lib/components/ui/tableFilter";
 
   let {
     turn,
@@ -56,6 +61,16 @@
   );
 
   const stringRows = $derived((turn.rows || []).map((r) => r.map(String)));
+
+  // The turn owns the table's sort/filter/search rather than the table itself:
+  // flipping to the chart unmounts the table, and filters you set to find
+  // something shouldn't evaporate on the way back. The chart draws the same
+  // rows the table is showing, minus the paging.
+  const tableView = $state(createTableView());
+  const viewRows = $derived(applyView(turn.columns || [], stringRows, tableView));
+  const filtersHideEverything = $derived(
+    viewRows.length === 0 && hasActiveView(tableView),
+  );
 
   // The model picks the chart from the SQL it wrote, so trust it when it made a
   // call; the local heuristic only covers turns that have no chart spec.
@@ -326,7 +341,11 @@
           >
             {@render rerunButton()}
           </div>
-          <ResultTable columns={turn.columns || []} rows={turn.rows || []} />
+          <ResultTable
+            columns={turn.columns || []}
+            rows={turn.rows || []}
+            view={tableView}
+          />
         {/if}
         {#if turn.resultTruncated}
           <div style="font-size:11.5px;color:var(--faint);margin-top:6px">
@@ -442,13 +461,26 @@
             {/if}
           </div>
           {#if effectiveView === "chart" && hasChartData}
-            <ResultChart
-              columns={turn.columns || []}
-              rows={stringRows}
-              spec={turn.chart}
-            />
+            {#if filtersHideEverything}
+              <div
+                style="padding:22px 18px;text-align:center;color:var(--muted);background:var(--surface-2);border:1px dashed var(--border-2);border-radius:var(--radius);font-size:14px"
+              >
+                No rows match the filters you've applied — switch to the table to
+                change them.
+              </div>
+            {:else}
+              <ResultChart
+                columns={turn.columns || []}
+                rows={viewRows}
+                spec={turn.chart}
+              />
+            {/if}
           {:else}
-            <ResultTable columns={turn.columns || []} rows={turn.rows || []} />
+            <ResultTable
+              columns={turn.columns || []}
+              rows={turn.rows || []}
+              view={tableView}
+            />
           {/if}
           {#if turn.resultTruncated}
             <div style="font-size:11.5px;color:var(--faint);margin-top:6px">
