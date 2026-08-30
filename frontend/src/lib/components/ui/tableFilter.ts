@@ -246,7 +246,8 @@ export function pageOf(rows: string[][], view: TableView): string[][] {
 export function toCSV(columns: string[], rows: string[][]): string {
   const cell = (v: unknown) => {
     let s = String(v ?? "");
-    if (/^[\s\x00-\x1f]*[=+\-@]/.test(s)) s = "'" + s;
+    const isNumber = s.trim() !== "" && Number.isFinite(Number(s));
+    if (!isNumber && /^[\s\x00-\x1f]*[=+\-@]/.test(s)) s = "'" + s;
     return s.includes(",") || s.includes('"') || s.includes("\n")
       ? `"${s.replace(/"/g, '""')}"`
       : s;

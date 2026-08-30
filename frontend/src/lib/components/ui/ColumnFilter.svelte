@@ -66,7 +66,8 @@
     <div class="cf-row">
       <!-- svelte-ignore a11y_autofocus -->
       <input
-        type="number"
+        type="text"
+        inputmode="decimal"
         bind:value={min}
         placeholder="Min"
         aria-label="Minimum {column}"
@@ -74,7 +75,8 @@
       />
       <span class="cf-dash">–</span>
       <input
-        type="number"
+        type="text"
+        inputmode="decimal"
         bind:value={max}
         placeholder="Max"
         aria-label="Maximum {column}"
@@ -83,7 +85,8 @@
   {:else}
     <!-- svelte-ignore a11y_autofocus -->
     <input
-      type={kind === "number" ? "number" : "text"}
+      type="text"
+      inputmode={kind === "number" ? "decimal" : undefined}
       bind:value
       placeholder={kind === "number" ? "Value" : "Filter value"}
       aria-label="Filter value for {column}"

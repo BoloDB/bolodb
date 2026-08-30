@@ -64,7 +64,7 @@
   }
 
   function downloadCSV() {
-    const blob = new Blob([toCSV(columns, rows)], {
+    const blob = new Blob([`\uFEFF${toCSV(columns, rows)}`], {
       type: "text/csv;charset=utf-8",
     });
     const url = URL.createObjectURL(blob);
@@ -74,7 +74,7 @@
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+    setTimeout(() => URL.revokeObjectURL(url), 100);
   }
 
   function clearAll() {

@@ -218,7 +218,15 @@
                 class:num={ci > 0 && kinds[ci] === "number"}
                 class:tnum={ci > 0 && kinds[ci] === "number"}
                 class:first={ci === 0}
+                role="button"
+                tabindex="0"
                 onclick={() => copyCell(String(cell ?? ""), key)}
+                onkeydown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    copyCell(String(cell ?? ""), key);
+                  }
+                }}
                 >{cell}{#if copiedCell === key}<span class="rt-copied">Copied!</span>{/if}</td
               >
             {/each}
