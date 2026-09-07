@@ -71,11 +71,14 @@ def test_complete_sends_correct_messages(mock_openai):
     mock_client = AsyncMock()
     mock_openai.return_value = mock_client
     mock_client.chat.completions.create.return_value = type(
-        "obj", (),
-        {"choices": [type("obj", (),
-                         {"message": type("obj", (),
-                                          {"content": "Hello"})()})()],
-         "usage": None}
+        "obj",
+        (),
+        {
+            "choices": [
+                type("obj", (), {"message": type("obj", (), {"content": "Hello"})()})()
+            ],
+            "usage": None,
+        },
     )()
 
     p = OpenRouterProvider(api_key="sk-test")
@@ -95,11 +98,14 @@ def test_complete_passes_json_schema(mock_openai):
     mock_client = AsyncMock()
     mock_openai.return_value = mock_client
     mock_client.chat.completions.create.return_value = type(
-        "obj", (),
-        {"choices": [type("obj", (),
-                         {"message": type("obj", (),
-                                          {"content": "{}"})()})()],
-         "usage": None}
+        "obj",
+        (),
+        {
+            "choices": [
+                type("obj", (), {"message": type("obj", (), {"content": "{}"})()})()
+            ],
+            "usage": None,
+        },
     )()
 
     p = OpenRouterProvider(api_key="sk-test")
@@ -115,6 +121,7 @@ def test_complete_raises_llm_error_on_api_error(mock_openai):
     mock_client = AsyncMock()
     mock_openai.return_value = mock_client
     from openai import APIError
+
     mock_client.chat.completions.create.side_effect = APIError(
         message="Bad request", request=None, body=None
     )
@@ -129,11 +136,14 @@ def test_health_check_ok(mock_openai):
     mock_client = AsyncMock()
     mock_openai.return_value = mock_client
     mock_client.chat.completions.create.return_value = type(
-        "obj", (),
-        {"choices": [type("obj", (),
-                         {"message": type("obj", (),
-                                          {"content": "ok"})()})()],
-         "usage": None}
+        "obj",
+        (),
+        {
+            "choices": [
+                type("obj", (), {"message": type("obj", (), {"content": "ok"})()})()
+            ],
+            "usage": None,
+        },
     )()
 
     p = OpenRouterProvider(api_key="sk-test")
@@ -585,16 +595,12 @@ async def generate_sql(
 
 In `shortlist_tables`, remove `thinking_budget=0` from the `provider.complete()` call:
 ```python
-raw = await provider.complete(
-    system, question, json_mode=True, schema=SHORTLIST_SCHEMA
-)
+raw = await provider.complete(system, question, json_mode=True, schema=SHORTLIST_SCHEMA)
 ```
 
 In `explain_sql`, remove `thinking_budget=0`:
 ```python
-raw = await provider.complete(
-    system, sql, json_mode=True, schema=EXPLAIN_SCHEMA
-)
+raw = await provider.complete(system, sql, json_mode=True, schema=EXPLAIN_SCHEMA)
 ```
 
 In `suggest_catalog`, remove `thinking_budget=0`:
@@ -737,11 +743,13 @@ def test_legacy_data_is_dropped(tmp_path):
     with _paths(tmp_path) as config_dir:
         config_dir.mkdir(exist_ok=True)
         (config_dir / "config.json").write_text(
-            json.dumps({
-                "provider": "gemini",
-                "model": "gemini-flash-latest",
-                "api_keys": {"user-1": {"gemini": "AIza-old"}},
-            })
+            json.dumps(
+                {
+                    "provider": "gemini",
+                    "model": "gemini-flash-latest",
+                    "api_keys": {"user-1": {"gemini": "AIza-old"}},
+                }
+            )
         )
         cfg = load_config()
         assert "api_keys" not in cfg
@@ -840,6 +848,7 @@ def _db_url_fernet():
     CONFIG_DIR.mkdir(parents=True, exist_ok=True)
     import base64
     import hashlib
+
     if _DB_URL_KEY_FILE.exists():
         secret = _DB_URL_KEY_FILE.read_text().strip()
     else:
@@ -977,6 +986,7 @@ async def get_health(pg_status="unknown"):
     if supabase_url:
         try:
             import httpx
+
             jwks_url = f"{supabase_url}/auth/v1/.well-known/jwks.json"
             async with httpx.AsyncClient(timeout=5) as client:
                 resp = await client.get(jwks_url)
@@ -1143,6 +1153,7 @@ async def health():
     pg_status = "connected"
     try:
         from backend.app.pgdatabase import get_engine
+
         engine = get_engine()
         async with engine.connect() as conn:
             await conn.execute(text("SELECT 1"))
