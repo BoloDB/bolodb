@@ -105,6 +105,7 @@ so no frontend changes are needed.
 In `server.py`:
 ```python
 from backend.app.pgdatabase.knowledge import KnowledgeService
+
 kbs = KnowledgeService(async_session)
 app.state.kbs = kbs
 ```

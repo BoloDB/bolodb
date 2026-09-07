@@ -332,7 +332,9 @@ to:
 ```python
 def test_save_config_writes_plain_dict(tmp_path):
     with _paths(tmp_path) as config_dir:
-        save_config({"openrouter_key": "sk-or-v1-secret", "last_db_url": "sqlite:///test.db"})
+        save_config(
+            {"openrouter_key": "sk-or-v1-secret", "last_db_url": "sqlite:///test.db"}
+        )
         saved = json.loads((config_dir / "config.json").read_text())
         assert "openrouter_key" not in saved
         assert saved["last_db_url"] == "sqlite:///test.db"
@@ -469,16 +471,18 @@ Do the same for the replacement block at line 1668.
 
 In `docs/superpowers/plans/2026-07-17-openrouter-migration-plan.md:979-981`, change:
 ```python
-            import httpx
-            jwks_url = f"{supabase_url}/auth/v1/.well-known/jwks.json"
-            resp = await httpx.AsyncClient(timeout=5).get(jwks_url)
+import httpx
+
+jwks_url = f"{supabase_url}/auth/v1/.well-known/jwks.json"
+resp = await httpx.AsyncClient(timeout=5).get(jwks_url)
 ```
 to:
 ```python
-            import httpx
-            jwks_url = f"{supabase_url}/auth/v1/.well-known/jwks.json"
-            async with httpx.AsyncClient(timeout=5) as client:
-                resp = await client.get(jwks_url)
+import httpx
+
+jwks_url = f"{supabase_url}/auth/v1/.well-known/jwks.json"
+async with httpx.AsyncClient(timeout=5) as client:
+    resp = await client.get(jwks_url)
 ```
 
 - [ ] **Step 4: Commit**

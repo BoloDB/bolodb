@@ -162,8 +162,14 @@ In the `User` class (around line 56), add after `email_verified`:
 Ensure `Index` is imported from sqlalchemy:
 ```python
 from sqlalchemy import (
-    Boolean, String, Integer, UniqueConstraint, ForeignKey,
-    Text, DateTime, Index,
+    Boolean,
+    String,
+    Integer,
+    UniqueConstraint,
+    ForeignKey,
+    Text,
+    DateTime,
+    Index,
 )
 ```
 
@@ -172,11 +178,20 @@ from sqlalchemy import (
 Add all new models to the imports and `__all__`:
 ```python
 from backend.app.pgdatabase.models import (
-    Base, User, Conversation, QueryHistory, RecentConnection,
-    PasswordResetToken, OtpCode,
-    VerifiedQA, Glossary,
-    CatalogColumn, CatalogMetric, CatalogJoin,
-    CatalogSynonym, CatalogValueMapping,
+    Base,
+    User,
+    Conversation,
+    QueryHistory,
+    RecentConnection,
+    PasswordResetToken,
+    OtpCode,
+    VerifiedQA,
+    Glossary,
+    CatalogColumn,
+    CatalogMetric,
+    CatalogJoin,
+    CatalogSynonym,
+    CatalogValueMapping,
 )
 ```
 
@@ -220,9 +235,13 @@ from difflib import SequenceMatcher
 from sqlalchemy import select, delete, func
 
 from backend.app.pgdatabase.models import (
-    VerifiedQA, Glossary,
-    CatalogColumn, CatalogMetric, CatalogJoin,
-    CatalogSynonym, CatalogValueMapping,
+    VerifiedQA,
+    Glossary,
+    CatalogColumn,
+    CatalogMetric,
+    CatalogJoin,
+    CatalogSynonym,
+    CatalogValueMapping,
 )
 from backend.app.utils import _tokens
 
@@ -250,21 +269,32 @@ class KnowledgeService:
             tb = _tokens(question)
             b_lower = question.lower()
             for e in existing:
-                if _similarity(e["question"], question, tb, b_lower) > DUPLICATE_THRESHOLD:
+                if (
+                    _similarity(e["question"], question, tb, b_lower)
+                    > DUPLICATE_THRESHOLD
+                ):
                     return
-            session.add(VerifiedQA(
-                user_id=user_id, db_id=db_id, question=question,
-                sql=sql, restatement=restatement, created_at=time.time(),
-            ))
+            session.add(
+                VerifiedQA(
+                    user_id=user_id,
+                    db_id=db_id,
+                    question=question,
+                    sql=sql,
+                    restatement=restatement,
+                    created_at=time.time(),
+                )
+            )
             await session.commit()
 
     async def get_verified(self, user_id, db_id):
         async with self._session_factory() as session:
             result = await session.execute(
-                select(VerifiedQA).where(
+                select(VerifiedQA)
+                .where(
                     VerifiedQA.user_id == user_id,
                     VerifiedQA.db_id == db_id,
-                ).order_by(VerifiedQA.created_at.desc())
+                )
+                .order_by(VerifiedQA.created_at.desc())
             )
             return [
                 {"question": r.question, "sql": r.sql, "restatement": r.restatement}
@@ -300,11 +330,15 @@ class KnowledgeService:
                 )
             )
             for t in terms:
-                session.add(Glossary(
-                    user_id=user_id, db_id=db_id,
-                    term=t.get("term", ""), maps_to=t.get("maps_to", ""),
-                    sql_hint=t.get("sql_hint", ""),
-                ))
+                session.add(
+                    Glossary(
+                        user_id=user_id,
+                        db_id=db_id,
+                        term=t.get("term", ""),
+                        maps_to=t.get("maps_to", ""),
+                        sql_hint=t.get("sql_hint", ""),
+                    )
+                )
             await session.commit()
 
     async def get_glossary(self, user_id, db_id):
@@ -320,11 +354,31 @@ class KnowledgeService:
             ]
 
     _CATALOG_CLASSES = {
-        "column_descriptions": (CatalogColumn, ("table_name", "column_name", "description"), ("table", "column", "description")),
-        "metrics": (CatalogMetric, ("name", "description", "sql_expression"), ("name", "description", "sql_expression")),
-        "joins": (CatalogJoin, ("tables", "join_condition", "description"), ("tables", "join_condition", "description")),
-        "synonyms": (CatalogSynonym, ("term", "entity_type", "entity_name"), ("term", "entity_type", "entity_name")),
-        "value_maps": (CatalogValueMapping, ("table_name", "column_name", "db_value", "business_label"), ("table", "column", "db_value", "business_label")),
+        "column_descriptions": (
+            CatalogColumn,
+            ("table_name", "column_name", "description"),
+            ("table", "column", "description"),
+        ),
+        "metrics": (
+            CatalogMetric,
+            ("name", "description", "sql_expression"),
+            ("name", "description", "sql_expression"),
+        ),
+        "joins": (
+            CatalogJoin,
+            ("tables", "join_condition", "description"),
+            ("tables", "join_condition", "description"),
+        ),
+        "synonyms": (
+            CatalogSynonym,
+            ("term", "entity_type", "entity_name"),
+            ("term", "entity_type", "entity_name"),
+        ),
+        "value_maps": (
+            CatalogValueMapping,
+            ("table_name", "column_name", "db_value", "business_label"),
+            ("table", "column", "db_value", "business_label"),
+        ),
     }
 
     async def set_catalog(self, user_id, db_id, catalog):
@@ -369,13 +423,25 @@ class KnowledgeService:
     async def trust_level(self, user_id, db_id):
         n = await self.count_verified(user_id, db_id)
         if n >= 7:
-            return {"level": "Trusted", "verified": n, "pct": 100,
-                    "note": "Answers shown directly; reasoning on tap."}
+            return {
+                "level": "Trusted",
+                "verified": n,
+                "pct": 100,
+                "note": "Answers shown directly; reasoning on tap.",
+            }
         if n >= 3:
-            return {"level": "Assisted", "verified": n, "pct": 55,
-                    "note": "Confident answers shown; novel ones get a second look."}
-        return {"level": "Supervised", "verified": n, "pct": max(8, n * 7),
-                "note": "Every answer waits for your confirmation while it learns."}
+            return {
+                "level": "Assisted",
+                "verified": n,
+                "pct": 55,
+                "note": "Confident answers shown; novel ones get a second look.",
+            }
+        return {
+            "level": "Supervised",
+            "verified": n,
+            "pct": max(8, n * 7),
+            "note": "Every answer waits for your confirmation while it learns.",
+        }
 ```
 
 - [ ] **Step 2: Create `tests/test_knowledge_service.py`**
@@ -478,9 +544,9 @@ async def test_set_and_get_glossary(kbs):
     kbs._session_factory.return_value.__aenter__.return_value = session
     session.execute.return_value.scalars.return_value.all.return_value = []
 
-    await kbs.set_glossary(USER_ID, DB_ID, [
-        {"term": "revenue", "maps_to": "orders.total", "sql_hint": ""}
-    ])
+    await kbs.set_glossary(
+        USER_ID, DB_ID, [{"term": "revenue", "maps_to": "orders.total", "sql_hint": ""}]
+    )
 
     session.add.assert_called_once()
 
@@ -547,6 +613,7 @@ Add `"KnowledgeService"` to `__all__`.
 Replace:
 ```python
 from backend.app.knowledge import KnowledgeBase
+
 ...
 kb = KnowledgeBase(cfgmod.KB_FILE)
 ...
@@ -557,6 +624,7 @@ With:
 ```python
 from backend.app.pgdatabase import KnowledgeService
 from backend.app.pgdatabase.engine import async_session
+
 ...
 kbs = KnowledgeService(async_session)
 ...
@@ -623,7 +691,9 @@ After:
 result["trust"] = await kb.trust_level(user_id, db_id)
 result["glossary"] = await kb.get_glossary(user_id, db_id)
 result["has_knowledge"] = await kb.count_verified(user_id, db_id) > 0
-result["starters"] = [v["question"] for v in (await kb.get_verified(user_id, db_id))[:6]]
+result["starters"] = [
+    v["question"] for v in (await kb.get_verified(user_id, db_id))[:6]
+]
 ```
 
 The `connect_sample` function already has `user_id` as a parameter. Add `user_id`
@@ -657,7 +727,13 @@ retrieved = await kb.retrieve_similar(user_id, db_id, q, k=3)
 
 In `feedback` (line 221):
 ```python
-await kb.add_verified(user_id, db.get_db_id(user_id), req_data.question, req_data.sql, req_data.restatement)
+await kb.add_verified(
+    user_id,
+    db.get_db_id(user_id),
+    req_data.question,
+    req_data.sql,
+    req_data.restatement,
+)
 ```
 And line 224:
 ```python
@@ -670,7 +746,13 @@ v["question"] for v in (await kb.get_verified(user_id, db.get_db_id(user_id)))[:
 
 In `verify` (lines 235-238):
 ```python
-await kb.add_verified(user_id, db.get_db_id(user_id), req_data.question, req_data.sql, req_data.restatement)
+await kb.add_verified(
+    user_id,
+    db.get_db_id(user_id),
+    req_data.question,
+    req_data.sql,
+    req_data.restatement,
+)
 return {"ok": True, "trust": await kb.trust_level(user_id, db.get_db_id(user_id))}
 ```
 
@@ -731,15 +813,16 @@ git commit -m "feat: update controllers for KnowledgeService (user_id + await)"
 async def get_state(user_id, db, cfg, kb, session_factory):
     s = {"connected": db.connected(user_id), "config": cfgmod.public_config(cfg)}
     if db.connected(user_id):
-        s["database"] = {
-            ...
-        }
+        s["database"] = {...}
         ...
     # Fetch tour_completed from user record
     from backend.app.pgdatabase.models import User
     from sqlalchemy import select
+
     async with session_factory() as session:
-        result = await session.execute(select(User.tour_completed).where(User.id == user_id))
+        result = await session.execute(
+            select(User.tour_completed).where(User.id == user_id)
+        )
         s["tour_completed"] = result.scalar() or False
     return s
 ```
@@ -751,6 +834,7 @@ Note: `get_state` needs a `session_factory` param. Update its callers.
 ```python
 from backend.app.pgdatabase.engine import async_session
 
+
 @router.post("/api/tour-complete")
 async def tour_complete(
     user_token=Depends(get_current_user),
@@ -758,6 +842,7 @@ async def tour_complete(
 ):
     from backend.app.pgdatabase.models import User
     from sqlalchemy import update
+
     uid = user_token["user_id"]
     async with async_session() as session:
         await session.execute(
@@ -775,6 +860,7 @@ dependency or pass it. Simplest: pass `request.app.state.async_session`.
 Actually, `async_session` is already importable from `pgdatabase.engine`:
 ```python
 from backend.app.pgdatabase.engine import async_session
+
 
 @router.get("/api/state")
 async def get_state_route(
